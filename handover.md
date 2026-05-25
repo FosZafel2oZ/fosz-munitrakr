@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.netlify.app**. Current version: **v66**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v67**.
 
 ---
 
@@ -37,7 +37,7 @@ ProjectExpenses/
 
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
-- **Deploy:** drop `public/` onto Netlify (existing site). SW auto-updates on next open.
+- **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
 - **Tests:** `node tests/run.js` → must print `93/93 passed, 0 failed`.
 
 ---
@@ -200,14 +200,14 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls (`frankfurter`) bypass the SW.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v66` / `munitrakr-v66`.
-- Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → drop `public/` onto Netlify → on phone, Settings → App version → Check for updates.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v67` / `munitrakr-v67`.
+- Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
 
 ## 9. Key conventions & gotchas
 
-- **No git repo.** The folder is the source of truth.
+- **Git repo at https://github.com/FosZafel2oZ/fosz-munitrakr** (public, `main` branch). Cloudflare Pages auto-deploys from `main` on every push.
 - **String dates everywhere** (`YYYY-MM-DD`). Cadence math in `recurring.js` is string-based to avoid `new Date(string)` UTC-vs-local pitfalls that bit the iOS date input.
 - **`createdAt` is numeric ms** — sort comparator uses arithmetic. Migration in `loadStore` coerces any legacy string values.
 - **Categories matched by NAME on records**, but renames propagate via stable `id` through `reconcileRenames(oldS, newS, records)` (in `finance-helpers.js`) inside the shim `PUT /settings`.
