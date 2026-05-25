@@ -1,0 +1,9 @@
+{
+  "name": "finance-tracker",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Offline personal finance tracker (PWA). All data stored on-device. No server.",
+  "scripts": {
+    "start": "node serve.js"
+  }
+}

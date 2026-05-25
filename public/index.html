@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0b0d12" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="MuniTrakr" />
+<title>MuniTrakr</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" type="image/png" href="./icon.png" />
+<link rel="apple-touch-icon" href="./icon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png" />
+<link rel="stylesheet" href="./styles.css" />
+<script src="./vendor/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- Fixed background layer (doesn't scroll) -->
+<div id="bgLayer" aria-hidden="true"></div>
+
+<!-- Animated fireworks backdrop (Yoimiya theme only) -->
+<canvas id="fxCanvas" aria-hidden="true"></canvas>
+
+<!-- APP -->
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <img id="headerIcon" class="header-icon" src="./icon.png" alt="" />
+    <div>
+      <div class="title-switcher">
+        <button type="button" id="modeSwitcher" class="title-btn hello" aria-haspopup="true" aria-expanded="false">
+          <span id="helloName">MuniTrakr</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div id="modeMenu" class="rn-menu hidden">
+          <button type="button" data-mode="finance" class="mode-opt active">
+            <span class="mode-ico">$</span><span>MuniTrakr</span>
+          </button>
+          <button type="button" data-mode="debt" class="mode-opt">
+            <span class="mode-ico">⇄</span><span>DebtTrakr</span>
+          </button>
+        </div>
+      </div>
+      <div class="topbar-sub" id="todayDate"></div>
+    </div>
+  </header>
+
+  <button id="settingsBtn" class="float-btn" aria-label="Settings">
+    <span id="settingsIco"></span>
+  </button>
+
+  <!-- DASHBOARD VIEW (per active type) -->
+  <main id="view-dashboard" class="view">
+    <div id="confirmBanner" class="confirm-banner hidden"></div>
+    <div class="summary-row">
+      <button class="summary-card active" id="cardExpense" data-type="expense">
+        <span class="muted">Expenses</span>
+        <strong id="sumExpense" class="amt-out">0</strong>
+      </button>
+      <button class="summary-card" id="cardInvest" data-type="investment">
+        <span class="muted">Investments</span>
+        <strong id="sumInvest" class="amt-in">0</strong>
+      </button>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title" id="chartTitle">Expenses by Category</div>
+          <div class="muted" id="chartSub">Tap a slice to drill down</div>
+        </div>
+        <button class="btn-mini hidden" id="chartBack">&larr; Back</button>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="donut"></canvas>
+        <div class="chart-center">
+          <span class="muted" id="chartCenterLabel">Total</span>
+          <strong id="chartTotal">0</strong>
+          <span class="chart-pct" id="chartPct"></span>
+        </div>
+      </div>
+      <div id="dashEmpty" class="empty hidden">No records in this range.</div>
+    </div>
+
+    <div class="records-head">
+      <h2 id="dashListTitle">Expense Records</h2>
+      <span class="muted" id="dashRecordCount">0</span>
+    </div>
+    <div id="dashRecordsList" class="records-list"></div>
+    <div id="dashRecordsEmpty" class="empty hidden">No records here yet. Tap + to add one.</div>
+    <button class="btn-primary" id="viewAllBtn" style="width:100%;margin-top:14px">View all records</button>
+  </main>
+
+  <!-- DEBTTRAKR DASHBOARD (only visible when currentMode === "debt") -->
+  <main id="view-debt-dashboard" class="view hidden">
+    <div class="summary-row">
+      <div class="summary-card" id="dbtTotalLendCard">
+        <span class="muted">Total Lend</span>
+        <strong id="dbtTotalLend" class="amt-in">0</strong>
+      </div>
+      <div class="summary-card" id="dbtTotalBorrowCard">
+        <span class="muted">Total Borrow</span>
+        <strong id="dbtTotalBorrow" class="amt-out">0</strong>
+      </div>
+    </div>
+    <div id="dbtPersonList" class="dbt-person-list"></div>
+    <div id="dbtEmpty" class="empty hidden">No outstanding debts. Tap + to add one.</div>
+    <button class="btn-primary" id="viewAllDebtBtn" style="width:100%;margin-top:14px">View all records</button>
+  </main>
+
+  <!-- DEBTTRAKR RECORDS VIEW (bulk management — parallel to MuniTrakr's view-records) -->
+  <main id="view-debt-records" class="view hidden">
+    <div class="summary-row">
+      <div class="summary-card" id="dbtRecCardLend">
+        <span class="muted">Total Lend</span>
+        <strong id="dbtRecTotalLend" class="amt-in">0</strong>
+      </div>
+      <div class="summary-card" id="dbtRecCardBorrow">
+        <span class="muted">Total Borrow</span>
+        <strong id="dbtRecTotalBorrow" class="amt-out">0</strong>
+      </div>
+    </div>
+
+    <div class="records-head">
+      <div class="rh-left">
+        <button class="rec-back" id="dbtRecBack" aria-label="Back to dashboard">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="rec-back" id="dbtRecFilterBtn" aria-label="Filter by person">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 5h18l-7 8v6l-4-2v-4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="filter-menu hidden" id="dbtRecFilterMenu"></div>
+      </div>
+      <h2>Debt Records</h2>
+      <span class="muted" id="dbtRecCount">0</span>
+    </div>
+    <div class="muted hidden" id="dbtSelCount" style="margin-bottom:10px">0 selected</div>
+
+    <div id="dbtRecList" class="records-list"></div>
+    <div id="dbtRecEmpty" class="empty hidden">No debt records yet.</div>
+  </main>
+
+  <!-- PER-PERSON HISTORY (DebtTrakr drill-in) -->
+  <main id="view-person-history" class="view hidden">
+    <div class="history-head">
+      <button type="button" id="phBack" class="rec-back" aria-label="Back">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="ph-ic" id="phIc"></span>
+      <div class="ph-meta">
+        <h2 id="phName">—</h2>
+        <span id="phOutstanding" class="ph-outstanding">—</span>
+      </div>
+    </div>
+    <div id="phList" class="records-list"></div>
+    <div id="phEmpty" class="empty hidden">No debt records with this person yet.</div>
+  </main>
+
+  <!-- RECORDS VIEW (bulk management) -->
+  <main id="view-records" class="view hidden">
+    <div class="summary-row">
+      <button class="summary-card active" id="recCardExpense" data-type="expense">
+        <span class="muted">Expenses</span>
+        <strong id="totExp" class="amt-out">0</strong>
+      </button>
+      <button class="summary-card" id="recCardInvest" data-type="investment">
+        <span class="muted">Investments</span>
+        <strong id="totInv" class="amt-in">0</strong>
+      </button>
+    </div>
+
+    <div class="records-head">
+      <div class="rh-left">
+        <button class="rec-back" id="recBack" aria-label="Back to dashboard">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="rec-back" id="recFilterBtn" aria-label="Filter by category">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 5h18l-7 8v6l-4-2v-4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="filter-menu hidden" id="recFilterMenu"></div>
+      </div>
+      <h2 id="bulkListTitle">Expense Records</h2>
+      <span class="muted" id="bulkRecordCount">0</span>
+    </div>
+    <div class="muted hidden" id="selCount" style="margin-bottom:10px">0 selected</div>
+
+    <div id="bulkList" class="records-list"></div>
+    <div id="bulkEmpty" class="empty hidden">No records in this range.</div>
+  </main>
+
+  <!-- SETTINGS VIEW -->
+  <main id="view-settings" class="view hidden">
+    <div class="records-head"><h2>Settings</h2></div>
+
+    <div class="settings-block" id="settingsPeople" data-mode="debt">
+      <div class="block-title">People</div>
+      <div class="muted" style="margin-bottom:12px">
+        Track debts to/from specific people.
+      </div>
+      <div id="peopleList" class="people-list"></div>
+      <div class="add-cat-label">Add a new person</div>
+      <div class="add-cat add-person-row">
+        <input id="newPersonColor" type="color" value="#7c5cff" />
+        <input id="newPersonName" type="text" placeholder="Person name" />
+        <button class="btn-mini" id="addPersonBtn">Add</button>
+      </div>
+    </div>
+
+    <div class="settings-block" data-mode="finance">
+      <div class="block-title">Recurring</div>
+      <div class="muted" style="margin-bottom:12px">
+        Rules that auto-create records on their due date.
+      </div>
+      <div id="recurringList" class="recurring-list"></div>
+      <button class="btn-primary" id="addRecurringBtn">+ Add rule</button>
+    </div>
+
+    <div class="settings-block" data-mode="finance">
+      <div class="block-title">Categories</div>
+      <div class="seg" id="catTypeSeg">
+        <button data-t="expense" class="active">Expense</button>
+        <button data-t="investment">Investment</button>
+      </div>
+      <div id="catManager"></div>
+      <div class="add-cat-label">Add a new category</div>
+      <div class="add-cat">
+        <input id="newCatColor" type="color" value="#7c5cff" />
+        <input id="newCatName" type="text" placeholder="Category name" />
+        <button class="btn-mini" id="addCatBtn">Add</button>
+      </div>
+      <button class="btn-primary" id="saveSettings">Save Categories</button>
+      <div id="settingsMsg" class="form-error"></div>
+    </div>
+
+    <div class="settings-block" data-mode="any">
+      <div class="block-title">Preferences</div>
+      <label>Your name
+        <div class="inline-edit">
+          <input id="setUserName" type="text" maxlength="40" placeholder="Me" />
+          <button class="btn-mini" id="saveUserName">Save</button>
+        </div>
+      </label>
+      <div class="muted" style="margin-top:8px">
+        Shown on shared debt-image tags so the recipient knows who's involved
+        (e.g. "Bill borrowed from Boat").
+      </div>
+      <div id="userNameMsg" class="form-error"></div>
+
+      <label style="margin-top:16px">Debt share image language
+        <div class="inline-edit">
+          <select id="setDebtShareLanguage">
+            <option value="en">English</option>
+            <option value="th">ไทย</option>
+          </select>
+          <button class="btn-mini" id="saveDebtShareLanguage">Save</button>
+        </div>
+      </label>
+      <div class="muted" style="margin-top:8px">
+        Controls the text rendered on debt record images you share.
+      </div>
+      <div id="debtShareLanguageMsg" class="form-error"></div>
+
+    </div>
+
+    <div class="settings-block" data-mode="any">
+      <div class="block-title">Currencies</div>
+      <label>Default currency
+        <div class="inline-edit">
+          <select id="setDefCurrency"></select>
+          <button class="btn-mini" id="saveDefCurrency">Save</button>
+        </div>
+      </label>
+      <div class="muted" style="margin-top:8px">
+        Records in another currency are auto-converted to this using the
+        exchange rate on the record's date. The original amount is kept too.
+      </div>
+      <div id="defCurrencyMsg" class="form-error"></div>
+      <div class="muted" style="margin-top:12px;margin-bottom:12px">
+        Drag to reorder (this is the order shown when adding a record).
+      </div>
+      <div id="curManager"></div>
+      <div class="add-cat-label">Add a currency</div>
+      <div class="add-cat">
+        <input id="newCurCode" type="text" maxlength="3"
+          placeholder="3-letter code, e.g. SGD" autocapitalize="characters" />
+        <button class="btn-mini" id="addCurBtn">Add</button>
+      </div>
+      <button class="btn-primary" id="saveCurrencies">Save Currencies</button>
+      <div id="curMsg" class="form-error"></div>
+    </div>
+
+    <div class="settings-block" data-mode="any">
+      <div class="block-title">Theme</div>
+      <label>App theme
+        <div class="inline-edit">
+          <select id="setTheme">
+            <option value="default">Default</option>
+            <option value="aero">Aero</option>
+            <option value="yoimiya">Yoimiya</option>
+          </select>
+        </div>
+      </label>
+      <div class="muted" style="margin-top:8px">
+        Transform your interface. New look applies instantly.
+      </div>
+
+      <label style="display:block;margin-top:18px;margin-bottom:8px">Header icon (MuniTrakr)</label>
+      <div class="hicon-row">
+        <img id="hiPreviewFinance" class="header-icon" src="./icon.png" alt="" />
+        <div class="hicon-btns">
+          <label class="btn-primary file-btn" for="hiInputFinance">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+            Upload
+          </label>
+          <input id="hiInputFinance" type="file"
+            accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+            class="visually-hidden" />
+          <button class="btn-primary" id="hiResetFinance">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <label style="display:block;margin-top:18px;margin-bottom:8px">Header icon (DebtTrakr)</label>
+      <div class="hicon-row">
+        <img id="hiPreviewDebt" class="header-icon" src="./icon.png" alt="" />
+        <div class="hicon-btns">
+          <label class="btn-primary file-btn" for="hiInputDebt">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+            Upload
+          </label>
+          <input id="hiInputDebt" type="file"
+            accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+            class="visually-hidden" />
+          <button class="btn-primary" id="hiResetDebt">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <div id="hiMsg" class="form-error"></div>
+    </div>
+
+    <div class="settings-block" data-mode="any">
+      <div class="block-title">Backup &amp; Restore</div>
+      <div class="muted" style="margin-bottom:14px">
+        All your data is stored only on this device. Back it up regularly —
+        clearing your browser or losing the device will erase it.
+      </div>
+      <div class="backup-actions">
+        <button class="btn-primary" id="shareBackupBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+          Back up
+        </button>
+        <label class="btn-primary file-btn" for="restoreInput">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restore
+        </label>
+      </div>
+      <input id="restoreInput" type="file" accept="application/json,.json"
+        class="visually-hidden" />
+      <div id="backupMsg" class="form-error"></div>
+    </div>
+
+    <div class="settings-block" data-mode="any">
+      <div class="block-title">App version</div>
+      <div class="muted" id="appVer">MuniTrakr</div>
+      <div class="muted" style="margin:4px 0 14px;font-style:italic">Vibe coded by FosZ</div>
+      <button class="btn-primary" id="checkUpdateBtn">Check for updates</button>
+      <div id="updateMsg" class="form-error"></div>
+    </div>
+  </main>
+
+  <!-- FLOATING ADD BUTTON -->
+  <button id="fab" class="fab" aria-label="Add new record">
+    <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+  </button>
+
+  <!-- Enter multi-select (records page only) -->
+  <button id="multiBtn" class="fab fab-2 hidden" aria-label="Select records">
+    <svg viewBox="0 0 24 24" width="24" height="24"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+
+  <!-- Multi-select action bar (replaces FAB while selecting) -->
+  <div id="multiBar" class="multi-bar hidden">
+    <button id="msCancel" class="ms-btn" aria-label="Cancel">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </button>
+    <button id="msCat" class="ms-btn" disabled>Change Category</button>
+    <button id="msDelete" class="ms-btn" disabled aria-label="Delete selected">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="msType" class="ms-btn" disabled>Switch Type</button>
+    <button id="msAll" class="ms-btn" aria-label="Select all">
+      <svg viewBox="0 0 24 24" width="22" height="22"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 12l3 3 5-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <!-- Debt records multi-select FAB + bar (parallel to #multiBtn / #multiBar) -->
+  <button id="dbtMultiBtn" class="fab fab-2 hidden" aria-label="Select debt records">
+    <svg viewBox="0 0 24 24" width="24" height="24"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <div id="dbtMultiBar" class="multi-bar hidden">
+    <button id="dbtMsCancel" class="ms-btn" aria-label="Cancel">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </button>
+    <button id="dbtMsDelete" class="ms-btn" disabled aria-label="Delete selected">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="dbtMsAll" class="ms-btn" aria-label="Select all">
+      <svg viewBox="0 0 24 24" width="22" height="22"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 12l3 3 5-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <!-- BOTTOM RANGE DOCK -->
+  <div class="range-dock" id="rangeDock">
+    <div class="custom-range hidden" id="customRange">
+      <input id="customStart" type="date" />
+      <span class="muted">to</span>
+      <input id="customEnd" type="date" />
+      <button class="btn-mini" id="customApply">Apply</button>
+    </div>
+    <div class="range-nav" id="rangeNav">
+      <button class="rn-arrow" id="rangePrev" aria-label="Previous">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="rn-center">
+        <button class="rn-label" id="rangeLabelBtn">
+          <span id="rangeText">This Month</span>
+          <svg viewBox="0 0 24 24" width="13" height="13"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="rn-menu hidden" id="rangeMenu">
+          <button data-range="today">Today</button>
+          <button data-range="week">This Week</button>
+          <button data-range="month" class="active">This Month</button>
+          <button data-range="year">This Year</button>
+          <button data-range="custom">Custom range</button>
+        </div>
+      </div>
+      <button class="rn-arrow" id="rangeNext" aria-label="Next">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- RECORD MODAL -->
+<div id="modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalTitle">Add New Record</h3>
+      <button class="ghost-btn" id="modalClose">✕</button>
+    </div>
+    <form id="recordForm">
+      <div class="type-toggle">
+        <button type="button" data-type="expense" class="active">Expense</button>
+        <button type="button" data-type="investment">Investment</button>
+      </div>
+
+      <label class="amount-label">Amount *
+        <div class="amount-input big">
+          <select id="fCurrency" aria-label="Currency"></select>
+          <input id="fAmount" type="number" inputmode="decimal"
+            step="0.01" min="0" placeholder="0.00" required />
+        </div>
+      </label>
+
+      <div class="field hidden" id="manualRateField">
+        <span class="lbl" id="manualRateLbl">Conversion rate</span>
+        <input id="fManualRate" type="number" inputmode="decimal"
+          step="any" min="0" placeholder="e.g. 0.027" />
+        <div class="hint" id="manualRateHint"></div>
+      </div>
+
+      <label>Date *
+        <input id="fDate" type="date" required />
+      </label>
+
+      <div class="field" id="freqField">
+        <span class="lbl">Most frequent</span>
+        <div class="freq-cats" id="freqCats"></div>
+      </div>
+
+      <div class="cat-sub-row">
+        <div class="field">
+          <span class="lbl">Category *</span>
+          <div class="picker" id="catPicker">
+            <button type="button" class="picker-btn" id="catPickBtn">
+              <span class="picker-val" id="catPickVal">Select a category</span>
+              <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="picker-menu hidden" id="catPickMenu"></div>
+          </div>
+          <input type="hidden" id="fCategory" />
+        </div>
+
+        <div class="field" id="subField">
+          <span class="lbl">Sub-category</span>
+          <div class="picker" id="subPicker">
+            <button type="button" class="picker-btn" id="subPickBtn">
+              <span class="picker-val" id="subPickVal">None</span>
+              <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="picker-menu hidden" id="subPickMenu"></div>
+          </div>
+          <input type="hidden" id="fSub" />
+        </div>
+      </div>
+
+      <label>Notes
+        <textarea id="fNotes" rows="2" placeholder="Optional notes"></textarea>
+      </label>
+
+      <!-- New category/sub colour assignment -->
+      <div id="newColorPanel" class="new-color-panel hidden">
+        <div class="block-title">Assign colors to new items</div>
+        <div id="newColorList"></div>
+      </div>
+
+      <!-- Recurring section: three states routed by record.ruleId at openModal time -->
+      <div id="recRecurringSection" class="rec-recurring">
+        <!-- State B: record is linked to an existing rule -->
+        <div id="recRecurringLinked" class="rec-link-chip hidden">
+          <span class="rec-link-ico" aria-hidden="true">↻</span>
+          <span class="rec-link-body">
+            Linked to recurring rule:
+            <strong id="recRecurringLinkedName">—</strong>
+          </span>
+          <button type="button" id="recRecurringEditLink" class="rec-link-action">Edit rule</button>
+        </div>
+
+        <!-- State C: record was generated by a now-deleted rule -->
+        <div id="recRecurringOrphan" class="rec-orphan-chip hidden">
+          <div class="rec-orphan-head">
+            <span class="rec-orphan-ico" aria-hidden="true">!</span>
+            <span class="rec-orphan-text">This record was generated by a rule that no longer exists.</span>
+            <button type="button" id="recRecurringOrphanDismiss" class="rec-orphan-dismiss" title="Stop showing this for this record" aria-label="Dismiss">×</button>
+          </div>
+          <button type="button" id="recRecurringRecreateBtn" class="btn-secondary rec-orphan-recreate">Make a new rule from this record</button>
+        </div>
+
+        <!-- State A: no rule yet — toggle expands to cadence sub-form -->
+        <details id="recRecurringDetails">
+        <summary>
+          <label class="row-toggle">
+            <input type="checkbox" id="recRecurringToggle" />
+            <span>Make this recurring</span>
+          </label>
+        </summary>
+        <div class="rec-recurring-body">
+          <label>Cadence
+            <div class="seg" id="recCadence">
+              <button type="button" data-v="daily" class="seg-on active">Daily</button>
+              <button type="button" data-v="weekly">Weekly</button>
+              <button type="button" data-v="monthly">Monthly</button>
+              <button type="button" data-v="yearly">Yearly</button>
+            </div>
+          </label>
+          <label class="rec-cad-sub hidden" id="recWeeklyWrap">Weekday
+            <select id="recWeekday">
+              <option value="0">Sun</option><option value="1">Mon</option><option value="2">Tue</option>
+              <option value="3">Wed</option><option value="4">Thu</option><option value="5">Fri</option>
+              <option value="6">Sat</option>
+            </select>
+          </label>
+          <label class="rec-cad-sub hidden" id="recMonthlyWrap">Day of month <input type="number" id="recDayOfMonth" min="1" max="31" value="1" /></label>
+          <div class="rec-cad-sub hidden" id="recYearlyWrap">
+            <label>Month <select id="recYearMonth"></select></label>
+            <label>Day <input type="number" id="recYearDay" min="1" max="31" value="1" /></label>
+          </div>
+          <label>End condition
+            <div class="seg" id="recEnd">
+              <button type="button" data-v="none" class="seg-on active">None</button>
+              <button type="button" data-v="date">End date</button>
+              <button type="button" data-v="count">After N</button>
+            </div>
+          </label>
+          <label class="rec-end-sub hidden" id="recEndDateWrap">End date <input type="date" id="recEndDate" /></label>
+          <label class="rec-end-sub hidden" id="recEndCountWrap">Occurrences <input type="number" id="recEndCount" min="1" value="12" /></label>
+          <label class="row-toggle"><input type="checkbox" id="recAutoConfirm" checked /> <span>Auto-confirm new records</span></label>
+        </div>
+      </details>
+      </div>
+
+      <div id="modalError" class="form-error"></div>
+
+      <div class="modal-actions">
+        <button type="button" id="deleteBtn" class="btn-danger hidden">Delete</button>
+        <button type="submit" class="btn-primary" id="saveBtn">Save Record</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- BULK EDIT MODAL -->
+<div id="bulkModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="bulkModalTitle">Change category</h3>
+      <button class="ghost-btn" id="bulkModalClose">✕</button>
+    </div>
+    <div class="field">
+      <span class="lbl">Category *</span>
+      <div class="picker" id="bulkCatPicker">
+        <button type="button" class="picker-btn" id="bulkCatBtn">
+          <span class="picker-val placeholder" id="bulkCatVal">Select a category</span>
+          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="picker-menu hidden" id="bulkCatMenu"></div>
+      </div>
+      <input type="hidden" id="bulkCat" />
+    </div>
+
+    <div class="field" id="bulkSubField">
+      <span class="lbl">Sub-category</span>
+      <div class="picker" id="bulkSubPicker">
+        <button type="button" class="picker-btn" id="bulkSubBtn">
+          <span class="picker-val" id="bulkSubVal">None</span>
+          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="picker-menu hidden" id="bulkSubMenu"></div>
+      </div>
+      <input type="hidden" id="bulkSub" />
+    </div>
+
+    <div id="bulkModalError" class="form-error"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="bulkApply">Apply to selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- RULE EDITOR MODAL -->
+<div id="ruleModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="ruleModalTitle">New recurring rule</h3>
+      <button class="ghost-btn" id="ruleModalClose">✕</button>
+    </div>
+    <form id="ruleForm" onsubmit="return false">
+
+      <label>Type
+        <div class="seg" id="ruleType">
+          <button type="button" data-v="expense" class="seg-on active">Expense</button>
+          <button type="button" data-v="investment">Investment</button>
+        </div>
+      </label>
+
+      <div class="cat-sub-row">
+        <div class="field">
+          <span class="lbl">Category *</span>
+          <div class="picker" id="rulCatPicker">
+            <button type="button" class="picker-btn" id="rulCatPickBtn">
+              <span class="picker-val placeholder" id="rulCatPickVal">Select a category</span>
+              <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="picker-menu hidden" id="rulCatPickMenu"></div>
+          </div>
+          <input type="hidden" id="ruleCategory" />
+        </div>
+        <div class="field" id="rulSubField">
+          <span class="lbl">Sub-category</span>
+          <div class="picker" id="rulSubPicker">
+            <button type="button" class="picker-btn" id="rulSubPickBtn">
+              <span class="picker-val" id="rulSubPickVal">None</span>
+              <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="picker-menu hidden" id="rulSubPickMenu"></div>
+          </div>
+          <input type="hidden" id="ruleSubcategory" />
+        </div>
+      </div>
+
+      <label>Amount *
+        <div class="amount-input">
+          <select id="ruleCurrency" aria-label="Currency"></select>
+          <input type="number" id="ruleAmount" inputmode="decimal" step="0.01" min="0" placeholder="0.00" />
+        </div>
+      </label>
+      <label>Notes
+        <input type="text" id="ruleNotes" placeholder="Optional notes" />
+      </label>
+
+      <label>Start date
+        <input type="date" id="ruleStartDate" />
+      </label>
+
+      <label>Cadence
+        <div class="seg" id="ruleCadence">
+          <button type="button" data-v="daily" class="seg-on active">Daily</button>
+          <button type="button" data-v="weekly">Weekly</button>
+          <button type="button" data-v="monthly">Monthly</button>
+          <button type="button" data-v="yearly">Yearly</button>
+        </div>
+      </label>
+
+      <label class="rule-cad-sub hidden" id="ruleWeeklyWrap">Weekday
+        <select id="ruleWeekday">
+          <option value="0">Sun</option><option value="1">Mon</option><option value="2">Tue</option>
+          <option value="3">Wed</option><option value="4">Thu</option><option value="5">Fri</option>
+          <option value="6">Sat</option>
+        </select>
+      </label>
+      <label class="rule-cad-sub hidden" id="ruleMonthlyWrap">Day of month
+        <input type="number" id="ruleDayOfMonth" min="1" max="31" value="1" />
+        <span class="hint">29–31 falls back to last day of month.</span>
+      </label>
+      <div class="rule-cad-sub hidden" id="ruleYearlyWrap">
+        <label>Month <select id="ruleYearMonth"></select></label>
+        <label>Day <input type="number" id="ruleYearDay" min="1" max="31" value="1" /></label>
+        <span class="hint">Feb 29 falls back to Feb 28 in non-leap years.</span>
+      </div>
+
+      <label>End condition
+        <div class="seg" id="ruleEnd">
+          <button type="button" data-v="none" class="seg-on active">None</button>
+          <button type="button" data-v="date">End date</button>
+          <button type="button" data-v="count">After N</button>
+        </div>
+      </label>
+      <label class="rule-end-sub hidden" id="ruleEndDateWrap">End date <input type="date" id="ruleEndDate" /></label>
+      <label class="rule-end-sub hidden" id="ruleEndCountWrap">Occurrences <input type="number" id="ruleEndCount" min="1" value="12" /></label>
+
+      <label class="row-toggle">
+        <input type="checkbox" id="ruleAutoConfirm" checked />
+        <span>Auto-confirm new records</span>
+      </label>
+
+      <div id="ruleError" class="form-error"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-danger hidden" id="ruleDelete">Delete</button>
+        <button type="button" class="btn-primary" id="ruleSave">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- FLOODGATE MODAL — confirm past backfill on new rule save -->
+<div id="floodgateModal" class="modal-overlay hidden">
+  <div class="modal modal-narrow">
+    <div class="modal-head">
+      <h3>Backfill past records?</h3>
+      <button type="button" class="ghost-btn" id="floodgateClose" aria-label="Cancel">✕</button>
+    </div>
+    <p id="floodgateBody" class="floodgate-body">
+      This rule has a start date in the past. It will create
+      <strong id="floodgateCount">N</strong> records right now to catch up.
+    </p>
+    <div class="modal-actions floodgate-actions">
+      <button type="button" class="btn-secondary" id="floodgateStartToday">Start from today</button>
+      <button type="button" class="btn-primary" id="floodgateGenerate">Generate all</button>
+    </div>
+  </div>
+</div>
+
+<!-- Person icon-picker modal (used by Settings → People AND by the Add Debt mini-form) -->
+<div id="personIconModal" class="modal-overlay hidden">
+  <div class="modal modal-narrow">
+    <div class="modal-head">
+      <h3>Choose icon</h3>
+      <button type="button" class="ghost-btn" id="personIconClose">✕</button>
+    </div>
+    <div id="personIconGrid" class="icon-grid"></div>
+  </div>
+</div>
+
+<!-- ADD DEBT MODAL -->
+<div id="debtModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="debtModalTitle">Add Debt</h3>
+      <button type="button" class="ghost-btn" id="debtModalClose">✕</button>
+    </div>
+    <form id="debtForm" onsubmit="return false">
+
+      <div class="type-toggle" id="debtTypeToggle"></div>
+
+      <label class="amount-label">Amount *
+        <div class="amount-input big">
+          <select id="dbtCurrency" aria-label="Currency"></select>
+          <input id="dbtAmount" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required />
+        </div>
+      </label>
+
+      <div class="field hidden" id="dbtManualRateField">
+        <span class="lbl" id="dbtManualRateLbl">Conversion rate</span>
+        <input id="dbtManualRate" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 0.027" />
+        <div class="hint" id="dbtManualRateHint"></div>
+      </div>
+
+      <button type="button" id="dbtMatchOutstanding" class="btn-secondary sm hidden" style="margin-bottom:10px"></button>
+
+      <label>Date *
+        <input id="dbtDate" type="date" required />
+      </label>
+
+      <div class="field">
+        <span class="lbl">Who *</span>
+        <div class="picker" id="dbtPersonPicker">
+          <button type="button" class="picker-btn" id="dbtPersonBtn">
+            <span class="picker-val placeholder" id="dbtPersonVal">Select a person</span>
+            <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="picker-menu hidden" id="dbtPersonMenu"></div>
+        </div>
+        <input type="hidden" id="dbtPersonId" />
+        <button type="button" id="dbtAddPersonBtn" class="btn-secondary sm" style="margin-top:8px">+ Add new person</button>
+        <div id="dbtAddPersonForm" class="add-person-inline hidden">
+          <input type="color" id="dbtNewPersonColor" value="#7c5cff" />
+          <input type="text" id="dbtNewPersonName" placeholder="Name" />
+          <button type="button" class="btn-mini" id="dbtNewPersonSave">Save</button>
+          <button type="button" class="btn-mini" id="dbtNewPersonCancel">Cancel</button>
+        </div>
+      </div>
+
+      <label>Notes
+        <textarea id="dbtNotes" rows="2" placeholder="Optional notes"></textarea>
+      </label>
+
+      <div id="debtError" class="form-error"></div>
+
+      <div class="modal-actions">
+        <button type="button" id="dbtDelete" class="btn-danger hidden">Delete</button>
+        <button type="button" id="dbtSave" class="btn-primary">Save Debt</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="debtSplitModal" class="modal-overlay hidden">
+  <div class="modal modal-narrow">
+    <div class="modal-head">
+      <h3>Split into 2 records?</h3>
+      <button type="button" class="ghost-btn" id="debtSplitClose">✕</button>
+    </div>
+    <p id="debtSplitMsg" class="floodgate-body"></p>
+    <div id="debtSplitPreview" class="dbt-split-preview"></div>
+    <div class="floodgate-actions" style="margin-top:14px">
+      <button type="button" class="btn-secondary" id="debtSplitCancel">Cancel</button>
+      <button type="button" class="btn-primary" id="debtSplitConfirm">Split</button>
+    </div>
+  </div>
+</div>
+
+<script src="./recurring.js"></script>
+<script src="./finance-helpers.js"></script>
+<script src="./debts.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

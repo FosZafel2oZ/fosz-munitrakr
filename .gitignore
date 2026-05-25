@@ -1,0 +1,21 @@
+# Dependencies (none expected — project is zero-dep, but just in case)
+node_modules/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Stale archive — public/ is the deployable folder
+MuniTrakr-pwa.zip
