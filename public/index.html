@@ -201,6 +201,8 @@
       <div id="peopleList" class="people-list"></div>
       <div class="add-cat-label">Add a new person</div>
       <div class="add-cat add-person-row">
+        <button type="button" class="icon-pick" id="newPersonIcon"
+          style="background:#7c5cff" aria-label="Choose icon"></button>
         <input id="newPersonColor" type="color" value="#7c5cff" />
         <input id="newPersonName" type="text" placeholder="Person name" />
         <button class="btn-mini" id="addPersonBtn">Add</button>
@@ -225,6 +227,8 @@
       <div id="catManager"></div>
       <div class="add-cat-label">Add a new category</div>
       <div class="add-cat">
+        <button type="button" class="icon-pick" id="newCatIcon"
+          style="background:#7c5cff" aria-label="Choose icon"></button>
         <input id="newCatColor" type="color" value="#7c5cff" />
         <input id="newCatName" type="text" placeholder="Category name" />
         <button class="btn-mini" id="addCatBtn">Add</button>
@@ -765,6 +769,17 @@
       <button type="button" class="ghost-btn" id="personIconClose">✕</button>
     </div>
     <div id="personIconGrid" class="icon-grid"></div>
+  </div>
+</div>
+
+<!-- Category icon-picker modal (used by Settings → Categories — list rows AND add form) -->
+<div id="catIconModal" class="modal-overlay hidden">
+  <div class="modal modal-narrow">
+    <div class="modal-head">
+      <h3>Choose icon</h3>
+      <button type="button" class="ghost-btn" id="catIconClose">✕</button>
+    </div>
+    <div id="catIconGrid" class="icon-grid"></div>
   </div>
 </div>
 

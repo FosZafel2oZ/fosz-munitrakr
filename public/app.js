@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v67"; // keep in step with sw.js CACHE
+const APP_VERSION = "v68"; // keep in step with sw.js CACHE
 let displayName = "Me";
 let records = [];
 let settings = { expense: [], investment: [] };
@@ -2450,24 +2450,14 @@ function renderCatManager() {
         <button type="button" class="cat-toggle">Subs (${cat.subs.length})</button>
         <button type="button" class="cat-del">✕</button>
       </div>
-      <div class="icon-grid hidden">
-        ${ICON_IDS.map(
-          (id) =>
-            `<button type="button" class="icon-opt${
-              id === cat.icon ? " active" : ""
-            }" data-icon="${id}">${iconSvg(id)}</button>`
-        ).join("")}
-      </div>
       <div class="subs"></div>`;
     const iconBtn = row.querySelector(".icon-pick");
-    const grid = row.querySelector(".icon-grid");
-    iconBtn.addEventListener("click", () => grid.classList.toggle("hidden"));
-    grid.querySelectorAll(".icon-opt").forEach((b) =>
-      b.addEventListener("click", () => {
-        cat.icon = b.dataset.icon;
-        renderCatManager();
-      })
-    );
+    iconBtn.addEventListener("click", () => {
+      openCatIconPicker(cat.icon, (next) => {
+        cat.icon = next;
+        iconBtn.innerHTML = iconSvg(cat.icon, "ip-svg");
+      });
+    });
     const subsBox = row.querySelector(".subs");
     cat.subs.forEach((s, si) => {
       const sr = document.createElement("div");
@@ -2530,6 +2520,64 @@ function renderCatManager() {
     })
   );
 }
+// Category icon-picker modal — reusable. Mirrors openPersonIconPicker.
+function openCatIconPicker(currentIconId, onPick) {
+  const m = document.getElementById("catIconModal");
+  const grid = document.getElementById("catIconGrid");
+  if (!m || !grid) return;
+  grid.innerHTML = ICON_IDS.map((id) =>
+    '<button type="button" data-id="' + id + '" class="' + (id === currentIconId ? "active" : "") + '">' +
+      iconSvg(id) +
+    '</button>'
+  ).join("");
+  grid.querySelectorAll("button").forEach((b) => {
+    b.addEventListener("click", () => {
+      grid.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x === b));
+      onPick(b.dataset.id);
+      closeCatIconPicker();
+    });
+  });
+  m.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+function closeCatIconPicker() {
+  const m = document.getElementById("catIconModal");
+  if (m) m.classList.add("hidden");
+  const otherModalIds = ["modal", "ruleModal", "personIconModal"];
+  const anyOpen = otherModalIds.some((id) => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains("hidden");
+  });
+  if (!anyOpen) document.body.classList.remove("modal-open");
+}
+document.getElementById("catIconClose")?.addEventListener("click", closeCatIconPicker);
+
+// Icon picker state for the "Add a new category" row.
+let _newCatIconId = "tag";
+function _paintNewCatIconTile() {
+  const tile = document.getElementById("newCatIcon");
+  if (!tile) return;
+  tile.innerHTML = iconSvg(_newCatIconId, "ip-svg");
+  const color = document.getElementById("newCatColor");
+  if (color) tile.style.background = color.value || "#7c5cff";
+}
+(function wireNewCatIcon() {
+  const tile = document.getElementById("newCatIcon");
+  if (!tile) return;
+  _paintNewCatIconTile();
+  tile.addEventListener("click", () => {
+    openCatIconPicker(_newCatIconId, (next) => {
+      _newCatIconId = next;
+      _paintNewCatIconTile();
+    });
+  });
+  const colorInp = document.getElementById("newCatColor");
+  if (colorInp) {
+    colorInp.addEventListener("input", () => {
+      tile.style.background = colorInp.value;
+    });
+  }
+})();
 $("#addCatBtn").addEventListener("click", () => {
   const name = $("#newCatName").value.trim();
   if (!name) return;
@@ -2537,10 +2585,12 @@ $("#addCatBtn").addEventListener("click", () => {
     id: "c" + Date.now(),
     name,
     color: $("#newCatColor").value,
-    icon: "tag",
+    icon: _newCatIconId,
     subs: [],
   });
   $("#newCatName").value = "";
+  _newCatIconId = "tag";
+  _paintNewCatIconTile();
   renderCatManager();
 });
 $("#saveUserName")?.addEventListener("click", async () => {
@@ -3555,6 +3605,33 @@ function renderPeopleSection() {
   }
 }
 
+// Icon picker state for the "Add a new person" row.
+let _newPersonIconId = "person";
+function _paintNewPersonIconTile() {
+  const tile = document.getElementById("newPersonIcon");
+  if (!tile) return;
+  tile.innerHTML = personIconSvg(_newPersonIconId, "ip-svg");
+  const color = document.getElementById("newPersonColor");
+  if (color) tile.style.background = color.value || "#7c5cff";
+}
+(function wireNewPersonIcon() {
+  const tile = document.getElementById("newPersonIcon");
+  if (!tile) return;
+  _paintNewPersonIconTile();
+  tile.addEventListener("click", () => {
+    openPersonIconPicker(_newPersonIconId, (id) => {
+      _newPersonIconId = id;
+      _paintNewPersonIconTile();
+    });
+  });
+  const colorInp = document.getElementById("newPersonColor");
+  if (colorInp) {
+    colorInp.addEventListener("input", () => {
+      tile.style.background = colorInp.value;
+    });
+  }
+})();
+
 // Add button — wired at script-load time.
 (function wirePeopleAdd() {
   const btn = document.getElementById("addPersonBtn");
@@ -3566,10 +3643,12 @@ function renderPeopleSection() {
     loadStore();
     store.settings.people.push({
       id: "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6),
-      name, color, icon: "person",
+      name, color, icon: _newPersonIconId,
     });
     saveStore();
     document.getElementById("newPersonName").value = "";
+    _newPersonIconId = "person";
+    _paintNewPersonIconTile();
     renderPeopleSection();
   });
 })();
@@ -3597,7 +3676,7 @@ function openPersonIconPicker(currentIconId, onPick) {
 function closePersonIconPicker() {
   const m = document.getElementById("personIconModal");
   if (m) m.classList.add("hidden");
-  const otherModalIds = ["modal", "ruleModal"];
+  const otherModalIds = ["modal", "ruleModal", "catIconModal"];
   const anyOpen = otherModalIds.some((id) => {
     const el = document.getElementById(id);
     return el && !el.classList.contains("hidden");

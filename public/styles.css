@@ -1276,11 +1276,13 @@ body.theme-yoimiya .rn-menu{
   -webkit-tap-highlight-color: transparent;
 }
 
-#personIconGrid {
+#personIconGrid,
+#catIconGrid {
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
   padding: 4px 0 8px;
 }
-#personIconGrid button {
+#personIconGrid button,
+#catIconGrid button {
   -webkit-appearance: none; appearance: none;
   width: 100%; aspect-ratio: 1/1;
   display: flex; align-items: center; justify-content: center;
@@ -1289,8 +1291,10 @@ body.theme-yoimiya .rn-menu{
   cursor: pointer; padding: 0;
   -webkit-tap-highlight-color: transparent;
 }
-#personIconGrid button.active { border-color: var(--accent); }
-#personIconGrid button svg { width: 22px; height: 22px; }
+#personIconGrid button.active,
+#catIconGrid button.active { border-color: var(--accent); }
+#personIconGrid button svg,
+#catIconGrid button svg { width: 22px; height: 22px; }
 
 .add-person-inline {
   display: flex; gap: 8px; align-items: center; margin-top: 8px;
