@@ -1007,13 +1007,31 @@ function renderDashboard(list) {
     selectedSlice ? labels.indexOf(selectedSlice) : -1
   );
 
-  // 10 most recent of the active type below the chart
-  const recent = typed.slice(0, 10);
-  $("#dashListTitle").textContent = "Recent " + label + " Records";
+  // Recent records below the chart — follows the chart selection:
+  // category tap (selectedSlice) or drill (drillCategory) filters by category;
+  // a sub-slice tap inside the drill narrows to that sub-category. The
+  // "No Sub-category" slice matches records with an empty subcategory.
+  let listFiltered = typed;
+  let listTitle = "Recent " + label + " Records";
+  if (drillCategory) {
+    listFiltered = typed.filter((r) => r.category === drillCategory);
+    listTitle = "Recent: " + drillCategory;
+    if (selectedSlice) {
+      listFiltered = listFiltered.filter(
+        (r) => (r.subcategory || "No Sub-category") === selectedSlice
+      );
+      listTitle = "Recent: " + drillCategory + " / " + selectedSlice;
+    }
+  } else if (selectedSlice) {
+    listFiltered = typed.filter((r) => r.category === selectedSlice);
+    listTitle = "Recent: " + selectedSlice;
+  }
+  const recent = listFiltered.slice(0, 10);
+  $("#dashListTitle").textContent = listTitle;
   $("#dashRecordCount").textContent =
-    typed.length > 10 ? "10 of " + typed.length : typed.length;
+    listFiltered.length > 10 ? "10 of " + listFiltered.length : listFiltered.length;
   const wrap = $("#dashRecordsList");
-  $("#dashRecordsEmpty").classList.toggle("hidden", typed.length > 0);
+  $("#dashRecordsEmpty").classList.toggle("hidden", listFiltered.length > 0);
   wrap.innerHTML = "";
   recent.forEach((r) => {
     const el = document.createElement("div");
