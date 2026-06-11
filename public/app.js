@@ -1958,6 +1958,7 @@ $$(".type-toggle button").forEach((b) =>
     buildCatMenu();
     buildFreqCats();
     setCategory("");
+    syncSplitSection();
   })
 );
 
@@ -2175,6 +2176,12 @@ function openModal(record) {
   $("#modal").classList.remove("hidden");
   syncModalLock();
   setRecRecurringSection(record);
+  splitPeople = [];
+  const splitToggleEl = document.getElementById("splitToggle");
+  if (splitToggleEl) splitToggleEl.checked = false;
+  const splitFormEl = document.getElementById("splitNewPersonForm");
+  if (splitFormEl) splitFormEl.classList.add("hidden");
+  syncSplitSection();
 }
 function closeModal() {
   $("#modal").classList.add("hidden");
@@ -2222,6 +2229,184 @@ function showColorPanel(items) {
   $("#newColorPanel").classList.remove("hidden");
   $("#saveBtn").textContent = "Confirm & Save";
 }
+
+/* ---------------- Split the bill (Add Record modal) ---------------- */
+// Others' shares only — the user's own share is always the remainder.
+let splitPeople = []; // [{ personId, amount|null }]
+
+function splitTotalAmount() {
+  return parseFloat($("#fAmount").value) || 0;
+}
+function splitOthersSum() {
+  return splitPeople.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+}
+function splitMyShare() {
+  return Math.round((splitTotalAmount() - splitOthersSum()) * 100) / 100;
+}
+
+// Show/hide/enable the whole section based on: add-vs-edit, record type,
+// recurring-toggle state (mutually exclusive), and whether a total is entered.
+function syncSplitSection() {
+  const section = document.getElementById("splitSection");
+  const toggle = document.getElementById("splitToggle");
+  const body = document.getElementById("splitBody");
+  const hint = document.getElementById("splitHint");
+  if (!section || !toggle || !body) return;
+  const recOn = !!document.getElementById("recRecurringToggle")?.checked;
+  const allowed = !editingId && modalType === "expense" && !recOn;
+  section.classList.toggle("hidden", !allowed);
+  if (!allowed && toggle.checked) {
+    toggle.checked = false;
+    splitPeople = [];
+  }
+  const hasAmount = splitTotalAmount() > 0;
+  toggle.disabled = !hasAmount;
+  if (hint) hint.classList.toggle("hidden", hasAmount);
+  if (!hasAmount && toggle.checked) {
+    toggle.checked = false;
+    splitPeople = [];
+  }
+  body.classList.toggle("hidden", !toggle.checked);
+  // Mutual exclusion: hide the recurring section while split is on.
+  const recSection = document.getElementById("recRecurringSection");
+  if (recSection) recSection.classList.toggle("hidden", toggle.checked);
+  if (toggle.checked) renderSplitRows();
+}
+
+function renderSplitRows() {
+  const box = document.getElementById("splitRows");
+  if (!box) return;
+  loadStore();
+  const peopleById = {};
+  for (const p of (store.settings.people || [])) peopleById[p.id] = p;
+  const myName = (store.profile && store.profile.displayName) || "Me";
+  const cur = $("#fCurrency").value || "";
+  const mine = splitMyShare();
+  let html =
+    '<div class="split-row split-row-me">' +
+      '<span class="pick-ico" style="background:var(--accent)">' + personIconSvg("person") + '</span>' +
+      '<span class="split-name">' + escapeHtml(myName) + ' <span class="split-you">(you)</span></span>' +
+      '<span class="split-amt-fixed' + (mine < 0 ? " neg" : "") + '" id="splitMyAmt">' + fmt(mine, cur) + '</span>' +
+    '</div>';
+  for (const row of splitPeople) {
+    const p = peopleById[row.personId];
+    if (!p) continue;
+    html +=
+      '<div class="split-row" data-pid="' + p.id + '">' +
+        '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
+        '<span class="split-name">' + escapeHtml(p.name) + '</span>' +
+        '<input type="number" class="split-amt" inputmode="decimal" step="0.01" min="0" placeholder="0.00" value="' + (row.amount != null ? row.amount : "") + '" />' +
+        '<button type="button" class="split-remove" aria-label="Remove">✕</button>' +
+      '</div>';
+  }
+  box.innerHTML = html;
+  box.querySelectorAll(".split-row[data-pid]").forEach((rowEl) => {
+    const pid = rowEl.dataset.pid;
+    // Partial update on input (no re-render — keeps the input focused).
+    rowEl.querySelector(".split-amt").addEventListener("input", (e) => {
+      const rec = splitPeople.find((r) => r.personId === pid);
+      if (rec) rec.amount = parseFloat(e.target.value);
+      updateSplitMyAmt();
+    });
+    rowEl.querySelector(".split-remove").addEventListener("click", () => {
+      splitPeople = splitPeople.filter((r) => r.personId !== pid);
+      renderSplitRows();
+    });
+  });
+}
+
+function updateSplitMyAmt() {
+  const el = document.getElementById("splitMyAmt");
+  if (!el) return;
+  const mine = splitMyShare();
+  el.textContent = fmt(mine, $("#fCurrency").value || "");
+  el.classList.toggle("neg", mine < 0);
+}
+
+// "+ Add person" menu: DebtTrakr people not yet added, plus "+ New person".
+function buildSplitPersonMenu() {
+  const menu = document.getElementById("splitPersonMenu");
+  if (!menu) return;
+  loadStore();
+  const taken = new Set(splitPeople.map((r) => r.personId));
+  const avail = (store.settings.people || []).filter((p) => !taken.has(p.id));
+  menu.innerHTML =
+    avail.map((p) =>
+      '<button type="button" class="picker-opt" data-pid="' + p.id + '">' +
+        '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
+        '<span>' + escapeHtml(p.name) + '</span>' +
+      '</button>'
+    ).join("") +
+    '<button type="button" class="picker-opt" data-new="1">+ New person</button>';
+  menu.querySelectorAll(".picker-opt").forEach((b) => {
+    b.addEventListener("click", () => {
+      menu.classList.add("hidden");
+      if (b.dataset.new) {
+        document.getElementById("splitNewPersonForm").classList.remove("hidden");
+        document.getElementById("splitNewPersonName").focus();
+        return;
+      }
+      splitPeople.push({ personId: b.dataset.pid, amount: null });
+      renderSplitRows();
+    });
+  });
+}
+
+(function wireSplitSection() {
+  const toggle = document.getElementById("splitToggle");
+  if (!toggle) return;
+  toggle.addEventListener("change", syncSplitSection);
+  $("#fAmount").addEventListener("input", () => {
+    syncSplitSection();
+    if (toggle.checked) updateSplitMyAmt();
+  });
+  $("#fCurrency").addEventListener("change", () => {
+    if (toggle.checked) updateSplitMyAmt();
+  });
+  // Mutual exclusion (other direction): recurring ON hides split.
+  const recToggle = document.getElementById("recRecurringToggle");
+  if (recToggle) recToggle.addEventListener("change", syncSplitSection);
+
+  // "+ Add person" menu open/close
+  const addBtn = document.getElementById("splitAddPersonBtn");
+  const menu = document.getElementById("splitPersonMenu");
+  addBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    buildSplitPersonMenu();
+    menu.classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#splitPersonPicker")) menu.classList.add("hidden");
+  });
+
+  // Split evenly: total / (me + others), remainder to me (index 0).
+  document.getElementById("splitEvenBtn").addEventListener("click", () => {
+    const total = splitTotalAmount();
+    if (!(total > 0) || splitPeople.length === 0) return;
+    const shares = evenShares(total, splitPeople.length + 1);
+    splitPeople.forEach((r, i) => { r.amount = shares[i + 1]; });
+    renderSplitRows();
+  });
+
+  // Inline new-person mini-form (same pattern as the Add Debt modal).
+  const form = document.getElementById("splitNewPersonForm");
+  document.getElementById("splitNewPersonCancel").addEventListener("click", () => {
+    form.classList.add("hidden");
+  });
+  document.getElementById("splitNewPersonSave").addEventListener("click", () => {
+    const name = document.getElementById("splitNewPersonName").value.trim();
+    if (!name) return;
+    const color = document.getElementById("splitNewPersonColor").value || "#7c5cff";
+    loadStore();
+    const newId = "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+    store.settings.people.push({ id: newId, name, color, icon: "person" });
+    saveStore();
+    document.getElementById("splitNewPersonName").value = "";
+    form.classList.add("hidden");
+    splitPeople.push({ personId: newId, amount: null });
+    renderSplitRows();
+  });
+})();
 
 $("#recordForm").addEventListener("submit", async (e) => {
   e.preventDefault();
