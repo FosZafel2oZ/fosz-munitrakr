@@ -83,13 +83,16 @@
       <div id="dashEmpty" class="empty hidden">No records in this range.</div>
     </div>
 
-    <div class="records-head">
+    <div class="records-head dash-head">
       <h2 id="dashListTitle">Expense Records</h2>
       <span class="muted" id="dashRecordCount">0</span>
+      <button type="button" class="view-all-btn" id="viewAllBtn">
+        View all
+        <svg viewBox="0 0 24 24" width="13" height="13"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
     <div id="dashRecordsList" class="records-list"></div>
     <div id="dashRecordsEmpty" class="empty hidden">No records here yet. Tap + to add one.</div>
-    <button class="btn-primary" id="viewAllBtn" style="width:100%;margin-top:14px">View all records</button>
   </main>
 
   <!-- DEBTTRAKR DASHBOARD (only visible when currentMode === "debt") -->
@@ -104,9 +107,15 @@
         <strong id="dbtTotalBorrow" class="amt-out">0</strong>
       </div>
     </div>
+    <div class="records-head dash-head">
+      <h2>People</h2>
+      <button type="button" class="view-all-btn" id="viewAllDebtBtn">
+        View all
+        <svg viewBox="0 0 24 24" width="13" height="13"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
     <div id="dbtPersonList" class="dbt-person-list"></div>
     <div id="dbtEmpty" class="empty hidden">No outstanding debts. Tap + to add one.</div>
-    <button class="btn-primary" id="viewAllDebtBtn" style="width:100%;margin-top:14px">View all records</button>
   </main>
 
   <!-- DEBTTRAKR RECORDS VIEW (bulk management — parallel to MuniTrakr's view-records) -->

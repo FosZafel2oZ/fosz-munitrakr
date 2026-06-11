@@ -299,7 +299,7 @@ label.btn-primary{cursor:pointer;box-sizing:border-box;
 .records-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
 .records-head h2{font-size:20px;font-weight:700}
 /* breathing room between the donut card and the records heading */
-#view-dashboard .records-head{margin-top:24px}
+#view-dashboard .records-head,#view-debt-dashboard .records-head{margin-top:24px}
 .records-list{display:flex;flex-direction:column;gap:10px}
 .rec{background:var(--card);border:1px solid var(--line);border-radius:16px;
   padding:14px 16px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
@@ -1447,3 +1447,18 @@ body.theme-yoimiya .rn-menu{
 .split-actions .picker { flex: 0 0 auto; }
 #splitPersonPicker .picker-menu { right: auto; }
 #splitPersonMenu { min-width: 210px; }
+
+/* ---- Dashboard list header: title + count left, view-all pill right ---- */
+.dash-head { gap: 8px; }
+.dash-head h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-head .muted { margin-right: auto; flex: 0 0 auto; }
+.view-all-btn {
+  -webkit-appearance: none; appearance: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 12px; border-radius: 999px; flex: 0 0 auto; align-self: center;
+  background: var(--card); color: var(--accent);
+  border: 1px solid var(--line);
+  font-size: 13px; font-weight: 600; line-height: 1;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.view-all-btn:active { transform: scale(.96); }
