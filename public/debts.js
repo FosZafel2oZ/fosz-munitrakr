@@ -203,7 +203,7 @@
   function evenShares(total, count) {
     const t = Number(total);
     const n = Math.floor(Number(count));
-    if (!Number.isFinite(t) || !(t > 0) || !(n >= 1)) return [];
+    if (!Number.isFinite(t) || !(t > 0) || !Number.isFinite(n) || !(n >= 1)) return [];
     const cents = Math.round(t * 100);
     const base = Math.floor(cents / n);
     const first = cents - base * (n - 1);

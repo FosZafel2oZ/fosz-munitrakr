@@ -463,4 +463,5 @@ test("evenShares: invalid input -> empty array", () => {
   assert.deepEqual(D.evenShares(-5, 3), []);
   assert.deepEqual(D.evenShares(100, 0), []);
   assert.deepEqual(D.evenShares(NaN, 2), []);
+  assert.deepEqual(D.evenShares(100, Infinity), []);
 });
