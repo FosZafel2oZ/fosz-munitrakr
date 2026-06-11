@@ -2443,6 +2443,41 @@ $("#recordForm").addEventListener("submit", async (e) => {
   if (!(payload.amount >= 0))
     return ($("#modalError").textContent = "Enter a valid amount");
 
+  // ----- Split the bill (Add flow only) -----
+  const splitOn =
+    !editingId &&
+    modalType === "expense" &&
+    !!document.getElementById("splitToggle")?.checked;
+  let splitPlan = null;
+  if (splitOn) {
+    if (splitPeople.length === 0)
+      return ($("#modalError").textContent = "Add at least one person to split with");
+    for (const r of splitPeople) {
+      if (!(Number(r.amount) > 0))
+        return ($("#modalError").textContent = "Every person needs a share greater than 0");
+    }
+    const mine = splitMyShare();
+    if (mine < 0)
+      return ($("#modalError").textContent = "Shares exceed the total amount");
+    loadStore();
+    const peopleById = {};
+    for (const p of (store.settings.people || [])) peopleById[p.id] = p;
+    const myName = (store.profile && store.profile.displayName) || "Me";
+    const parts = splitPeople.map((r) => ({
+      personId: r.personId,
+      name: (peopleById[r.personId] || {}).name || "?",
+      amount: Math.round(Number(r.amount) * 100) / 100,
+    }));
+    const breakdown =
+      "Split bill — total " + fmt(payload.amount, payload.currency) + ": " +
+      [myName + " " + fmt(mine, "")]
+        .concat(parts.map((p) => p.name + " " + fmt(p.amount, "")))
+        .join(" · ");
+    splitPlan = { mine, parts, total: payload.amount };
+    payload.amount = mine; // expense records the user's share only
+    payload.notes = (payload.notes ? payload.notes + "\n" : "") + breakdown;
+  }
+
   // step 1: detect new category/sub and ask for colours
   if (!pendingNew) {
     const news = detectNew(payload.type, payload.category, payload.subcategory);
@@ -2465,6 +2500,30 @@ $("#recordForm").addEventListener("submit", async (e) => {
     let savedRecord = null;
     if (editingId) savedRecord = await api("/records/" + editingId, "PUT", payload);
     else savedRecord = await api("/records", "POST", payload);
+    // Split: one "lend" debt per participant (independent records — no links).
+    if (splitPlan) {
+      const mrVisible = !$("#manualRateField").classList.contains("hidden");
+      const mr = mrVisible ? parseFloat($("#fManualRate").value) : null;
+      const userNotes = $("#fNotes").value.trim();
+      const debtNotes =
+        "Split bill (" + payload.category +
+        (payload.subcategory ? " / " + payload.subcategory : "") + ")" +
+        " — total " + fmt(splitPlan.total, payload.currency) +
+        (userNotes ? "\n" + userNotes : "");
+      loadStore();
+      for (const part of splitPlan.parts) {
+        const d = {
+          type: "lend",
+          personId: part.personId,
+          date: payload.date,
+          amount: part.amount,
+          currency: payload.currency,
+          notes: debtNotes,
+        };
+        try { await attachConversion(d, mr); } catch (_e) { d.rateUnavailable = true; }
+        insertSingleDebt(d);
+      }
+    }
     // "Make this recurring" — create a rule from the saved record.
     // Allowed when:
     //   (a) the record has no ruleId yet, OR
