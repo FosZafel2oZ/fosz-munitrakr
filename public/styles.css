@@ -663,6 +663,7 @@ body.theme-aero .ms-btn,
 body.theme-aero .picker-btn,
 body.theme-aero .picker-menu,
 body.theme-aero .filter-menu,
+body.theme-aero .view-all-btn,
 body.theme-aero .rn-label{
   background:linear-gradient(180deg,rgba(255,255,255,.85) 0%,rgba(255,255,255,.55) 55%,rgba(255,255,255,.7) 100%);
   -webkit-backdrop-filter:blur(18px) saturate(1.7);
@@ -1449,16 +1450,17 @@ body.theme-yoimiya .rn-menu{
 #splitPersonMenu { min-width: 210px; }
 
 /* ---- Dashboard list header: title + count left, view-all pill right ---- */
-.dash-head { gap: 8px; }
+.dash-head { gap: 8px; align-items: center; }
 .dash-head h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-head .muted { margin-right: auto; flex: 0 0 auto; }
 .view-all-btn {
   -webkit-appearance: none; appearance: none;
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 6px 12px; border-radius: 999px; flex: 0 0 auto; align-self: center;
+  padding: 6px 12px; border-radius: 999px; flex: 0 0 auto;
   background: var(--card); color: var(--accent);
   border: 1px solid var(--line);
   font-size: 13px; font-weight: 600; line-height: 1;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease;
 }
 .view-all-btn:active { transform: scale(.96); }
