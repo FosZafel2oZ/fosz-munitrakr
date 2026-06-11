@@ -2510,7 +2510,9 @@ $("#recordForm").addEventListener("submit", async (e) => {
         (payload.subcategory ? " / " + payload.subcategory : "") + ")" +
         " — total " + fmt(splitPlan.total, payload.currency) +
         (userNotes ? "\n" + userNotes : "");
-      loadStore();
+      // Convert everything first, then persist all debts in ONE saveStore()
+      // so a mid-loop interruption can't leave a partial split behind.
+      const newDebts = [];
       for (const part of splitPlan.parts) {
         const d = {
           type: "lend",
@@ -2521,8 +2523,17 @@ $("#recordForm").addEventListener("submit", async (e) => {
           notes: debtNotes,
         };
         try { await attachConversion(d, mr); } catch (_e) { d.rateUnavailable = true; }
-        insertSingleDebt(d);
+        newDebts.push(d);
       }
+      loadStore();
+      const base = Date.now();
+      newDebts.forEach((d, i) => {
+        d.id = "debt_" + (base + i).toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+        d.createdAt = base + i;
+        d.updatedAt = base + i;
+        store.debts.push(d);
+      });
+      saveStore();
     }
     // "Make this recurring" — create a rule from the saved record.
     // Allowed when:
