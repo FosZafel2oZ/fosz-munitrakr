@@ -4,6 +4,9 @@
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
 const APP_VERSION = "v70"; // keep in step with sw.js CACHE
+// Label used as both the donut slice AND the list-filter key for records
+// without a subcategory — single constant so the two can't drift apart.
+const NO_SUB_LABEL = "No Sub-category";
 let displayName = "Me";
 let records = [];
 let settings = { expense: [], investment: [] };
@@ -462,7 +465,7 @@ function subColor(type, catName, subName) {
     (x) => x.name.toLowerCase() === String(subName).toLowerCase()
   );
   if (s) return s.color;
-  if (subName === "No Sub-category") return "#3a4152";
+  if (subName === NO_SUB_LABEL) return "#3a4152";
   return catColor(type, catName);
 }
 function detectNew(type, category, subcategory) {
@@ -767,8 +770,14 @@ document.addEventListener("click", (e) => {
     !e.target.closest("#recFilterBtn")
   )
     $("#recFilterMenu") && $("#recFilterMenu").classList.add("hidden");
-  // tapping anywhere outside the donut clears the selected slice
-  if (selectedSlice && !e.target.closest("#donut")) {
+  // Tapping anywhere outside the donut clears the selected slice — except the
+  // recent-records list, which is filtered BY that selection (tapping a result
+  // shouldn't clear the filter it came from).
+  if (
+    selectedSlice &&
+    !e.target.closest("#donut") &&
+    !e.target.closest("#dashRecordsList")
+  ) {
     selectedSlice = null;
     refresh();
   }
@@ -958,7 +967,7 @@ function renderDashboard(list) {
     typed
       .filter((r) => r.category === drillCategory)
       .forEach((r) => {
-        const k = r.subcategory || "No Sub-category";
+        const k = r.subcategory || NO_SUB_LABEL;
         groups[k] = (groups[k] || 0) + dispAmt(r);
       });
     $("#chartTitle").textContent = drillCategory;
@@ -1009,9 +1018,8 @@ function renderDashboard(list) {
 
   // Recent records below the chart — follows the chart selection:
   // category tap (selectedSlice) or drill (drillCategory) filters by category;
-  // a sub-slice tap inside the drill narrows to that sub-category. The
-  // "No Sub-category" slice matches records with an empty subcategory — the
-  // literal must stay in sync with the grouping key in the drill branch above.
+  // a sub-slice tap inside the drill narrows to that sub-category (the
+  // NO_SUB_LABEL slice matches records with an empty subcategory).
   let listFiltered = typed;
   let listTitle = "Recent " + label + " Records";
   if (drillCategory) {
@@ -1019,7 +1027,7 @@ function renderDashboard(list) {
     listTitle = "Recent: " + drillCategory;
     if (selectedSlice) {
       listFiltered = listFiltered.filter(
-        (r) => (r.subcategory || "No Sub-category") === selectedSlice
+        (r) => (r.subcategory || NO_SUB_LABEL) === selectedSlice
       );
       listTitle = "Recent: " + drillCategory + " / " + selectedSlice;
     }
@@ -1038,9 +1046,7 @@ function renderDashboard(list) {
     const el = document.createElement("div");
     el.className = "rec";
     el.innerHTML = recordCardHTML(r);
-    // stopPropagation: keep the document-level slice-deselect handler from
-    // clearing the active chart filter when a row is tapped.
-    el.addEventListener("click", (e) => { e.stopPropagation(); openModal(r); });
+    el.addEventListener("click", () => openModal(r));
     bindRuleBadge(el, r);
     wrap.appendChild(el);
   });
