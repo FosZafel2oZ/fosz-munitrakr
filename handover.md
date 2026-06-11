@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v67**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v69**.
 
 ---
 
@@ -24,7 +24,7 @@ ProjectExpenses/
 │  ├─ icon.png / icon.svg          default app icon
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
-├─ tests/                          node tests/run.js — 93 unit tests
+├─ tests/                          node tests/run.js — 98 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
@@ -38,7 +38,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `93/93 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `98/98 passed, 0 failed`.
 
 ---
 
@@ -135,6 +135,9 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 ### Dashboard auto-fit
 - Big totals on the dashboard cards + donut center auto-shrink font when text overflows (so `THB 1,000,000,000,000,000` doesn't blow out the layout). Currency moved into the muted label (`"2026 Expenses · THB"`) to leave more horizontal room for the number itself.
 
+### Split the bill
+- Add Record modal (expense type, Add flow only): "Split the bill" checkbox above the recurring section (mutually exclusive with it). User's share is the auto-computed remainder; "Split evenly" uses `evenShares` (debts.js) with the rounding remainder going to the user. On save: the expense stores only the user's share (notes auto-append the full breakdown), and one `lend` debt per participant is created on the DebtTrakr side in a single batched `saveStore()` (same currency/date/manual-rate, notes carry category + total). Expense and debts are independent after creation.
+
 ---
 
 ## 5. DebtTrakr — features
@@ -200,7 +203,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls (`frankfurter`) bypass the SW.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v67` / `munitrakr-v67`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v69` / `munitrakr-v69`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -244,3 +247,5 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `computeOccurrences` / `applyEndChecks` / `buildRecordFromRule` / `unpauseRule` | recurring math (from `recurring.js`) |
 | `reconcileRenames` / `makeRateService` | shared helpers (from `finance-helpers.js`) |
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
+| `evenShares` | pure (from `debts.js`) — cent-exact even split, remainder to index 0 (the user) |
+| `splitPeople` / `syncSplitSection` / `renderSplitRows` | split-the-bill state + UI (Add Record modal) |

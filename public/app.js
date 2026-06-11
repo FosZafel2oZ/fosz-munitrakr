@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v68"; // keep in step with sw.js CACHE
+const APP_VERSION = "v69"; // keep in step with sw.js CACHE
 let displayName = "Me";
 let records = [];
 let settings = { expense: [], investment: [] };
