@@ -518,6 +518,32 @@
         <textarea id="fNotes" rows="2" placeholder="Optional notes"></textarea>
       </label>
 
+      <!-- Split the bill (Add flow only; expense type only) -->
+      <div id="splitSection" class="split-section">
+        <label class="row-toggle">
+          <input type="checkbox" id="splitToggle" />
+          <span>Split the bill
+            <span class="hint" id="splitHint">Enter the total amount first</span>
+          </span>
+        </label>
+        <div id="splitBody" class="hidden">
+          <div id="splitRows" class="split-rows"></div>
+          <div class="split-actions">
+            <div class="picker" id="splitPersonPicker">
+              <button type="button" class="btn-secondary sm" id="splitAddPersonBtn">+ Add person</button>
+              <div class="picker-menu hidden" id="splitPersonMenu"></div>
+            </div>
+            <button type="button" class="btn-secondary sm" id="splitEvenBtn">Split evenly</button>
+          </div>
+          <div id="splitNewPersonForm" class="add-person-inline hidden">
+            <input type="color" id="splitNewPersonColor" value="#7c5cff" />
+            <input type="text" id="splitNewPersonName" placeholder="Name" />
+            <button type="button" class="btn-mini" id="splitNewPersonSave">Save</button>
+            <button type="button" class="btn-mini" id="splitNewPersonCancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
       <!-- New category/sub colour assignment -->
       <div id="newColorPanel" class="new-color-panel hidden">
         <div class="block-title">Assign colors to new items</div>

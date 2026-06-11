@@ -1423,3 +1423,26 @@ body.theme-yoimiya .rn-menu{
   font-weight: 600;
   margin-left: 8px;
 }
+
+/* ---- Split the bill (Add Record modal) ---- */
+.split-section { margin-top: 8px; padding: 6px 0 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.split-rows { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 10px; }
+.split-row { display: flex; align-items: center; gap: 9px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 10px; }
+.split-row .pick-ico { width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff; }
+.split-row .pick-ico svg { width: 16px; height: 16px; }
+.split-name { flex: 1; min-width: 0; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.split-name .split-you { color: var(--muted); font-weight: 400; font-size: .85em; }
+.split-row input.split-amt { width: 110px; flex: 0 0 auto; margin: 0;
+  padding: 8px 10px; font-size: 14px; text-align: right; }
+.split-amt-fixed { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.split-amt-fixed.neg { color: var(--out); }
+.split-remove { -webkit-appearance: none; appearance: none; background: transparent;
+  border: 0; color: var(--out); font-size: 17px; line-height: 1; padding: 4px 6px;
+  cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; }
+.split-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+.split-actions .picker { flex: 0 0 auto; }
+#splitPersonMenu { min-width: 210px; }
