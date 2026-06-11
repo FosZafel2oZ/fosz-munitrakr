@@ -1425,7 +1425,7 @@ body.theme-yoimiya .rn-menu{
 }
 
 /* ---- Split the bill (Add Record modal) ---- */
-.split-section { margin-top: 8px; padding: 6px 0 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.split-section { margin-top: 8px; padding: 6px 0 0; border-top: 1px solid var(--line); }
 .split-rows { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 10px; }
 .split-row { display: flex; align-items: center; gap: 9px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -1445,4 +1445,5 @@ body.theme-yoimiya .rn-menu{
   cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; }
 .split-actions { display: flex; gap: 8px; margin-bottom: 10px; }
 .split-actions .picker { flex: 0 0 auto; }
+#splitPersonPicker .picker-menu { right: auto; }
 #splitPersonMenu { min-width: 210px; }
