@@ -1010,7 +1010,8 @@ function renderDashboard(list) {
   // Recent records below the chart — follows the chart selection:
   // category tap (selectedSlice) or drill (drillCategory) filters by category;
   // a sub-slice tap inside the drill narrows to that sub-category. The
-  // "No Sub-category" slice matches records with an empty subcategory.
+  // "No Sub-category" slice matches records with an empty subcategory — the
+  // literal must stay in sync with the grouping key in the drill branch above.
   let listFiltered = typed;
   let listTitle = "Recent " + label + " Records";
   if (drillCategory) {
@@ -1037,7 +1038,9 @@ function renderDashboard(list) {
     const el = document.createElement("div");
     el.className = "rec";
     el.innerHTML = recordCardHTML(r);
-    el.addEventListener("click", () => openModal(r));
+    // stopPropagation: keep the document-level slice-deselect handler from
+    // clearing the active chart filter when a row is tapped.
+    el.addEventListener("click", (e) => { e.stopPropagation(); openModal(r); });
     bindRuleBadge(el, r);
     wrap.appendChild(el);
   });
