@@ -196,5 +196,21 @@
     return amt > Math.abs(before);
   }
 
-  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot };
+  // Splits `total` into `count` shares, each rounded to 2 decimals, that sum
+  // cent-exactly to `total`. Index 0 absorbs the rounding remainder — callers
+  // put the payer there so other participants' shares stay clean numbers.
+  // Returns [] when total is not a positive finite number or count < 1.
+  function evenShares(total, count) {
+    const t = Number(total);
+    const n = Math.floor(Number(count));
+    if (!Number.isFinite(t) || !(t > 0) || !(n >= 1)) return [];
+    const cents = Math.round(t * 100);
+    const base = Math.floor(cents / n);
+    const first = cents - base * (n - 1);
+    const out = [first / 100];
+    for (let i = 1; i < n; i++) out.push(base / 100);
+    return out;
+  }
+
+  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares };
 });

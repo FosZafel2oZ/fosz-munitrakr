@@ -436,3 +436,31 @@ test("wouldOvershoot: uses convertedAmount when present", () => {
   };
   assert.equal(D.wouldOvershoot(debts, edited, "THB"), true);
 });
+
+/* ---------------- evenShares (split-the-bill) ---------------- */
+
+test("evenShares: splits evenly with no remainder", () => {
+  assert.deepEqual(D.evenShares(300, 3), [100, 100, 100]);
+});
+
+test("evenShares: rounding remainder goes to index 0", () => {
+  assert.deepEqual(D.evenShares(1000, 3), [333.34, 333.33, 333.33]);
+});
+
+test("evenShares: shares sum exactly to total (cent-exact)", () => {
+  const shares = D.evenShares(123.45, 7);
+  assert.equal(shares.length, 7);
+  const cents = shares.reduce((s, v) => s + Math.round(v * 100), 0);
+  assert.equal(cents, 12345);
+});
+
+test("evenShares: count 1 returns the whole total", () => {
+  assert.deepEqual(D.evenShares(55.5, 1), [55.5]);
+});
+
+test("evenShares: invalid input -> empty array", () => {
+  assert.deepEqual(D.evenShares(0, 3), []);
+  assert.deepEqual(D.evenShares(-5, 3), []);
+  assert.deepEqual(D.evenShares(100, 0), []);
+  assert.deepEqual(D.evenShares(NaN, 2), []);
+});
