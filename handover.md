@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v69**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v70**.
 
 ---
 
@@ -114,7 +114,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 ## 4. MuniTrakr — features
 
 ### Views
-- **Dashboard** — top buttons (Expenses / Investments, year total for selected range), donut chart with two-tap drill (category → subcategory), 10 most recent records of active type, "View all records" button, confirmation banner for pending recurring occurrences.
+- **Dashboard** — top buttons (Expenses / Investments, year total for selected range), donut chart with two-tap drill (category → subcategory), recent-records list (last 10) that follows the chart selection (category or sub-category filter; title shows `Recent: Food / Coffee`), compact "View all" pill in the list header, confirmation banner for pending recurring occurrences.
 - **Records** — full bulk list filtered by range. Filter button → multi-select category filter. Multi-select mode: Cancel / Change Category / Delete / Switch Type / Select-all.
 - **Settings** — collapsible sections (see §6).
 
@@ -143,7 +143,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 ## 5. DebtTrakr — features
 
 ### Views
-- **Dashboard** — top buttons (Total Lend / Total Borrow, signed totals across people). Vertical list of person cards (only those with non-zero outstanding). Each card: colored person icon + name, signed outstanding amount, repayment progress bar. "View all records" button at bottom.
+- **Dashboard** — top buttons (Total Lend / Total Borrow, signed totals across people). Vertical list of person cards (only those with non-zero outstanding). Each card: colored person icon + name, signed outstanding amount, repayment progress bar. "People" header row with a compact "View all" pill.
 - **Per-Person History** — drill in by tapping a person card. Header shows name + outstanding + direction-colored "They owe you / You owe" label. Records list shows every debt for that person newest-first, with direction badge, original currency line (if converted), and "Settled" badge on records that closed a cycle. Tap a row → edit modal. FAB pre-fills the person. Each row has a small share button that exports the record as an Aero-themed PNG card (with running outstanding math) via the iOS share sheet.
 - **All Debt Records** — bulk list across all people. Filter by person (multi-select). Multi-select mode: Cancel / Delete / Select-all (no Change-Person — kept clean intentionally). Each row also has a share button (hidden in multi-select mode) that exports the record as an Aero-themed PNG card via the iOS share sheet.
 
@@ -203,7 +203,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls (`frankfurter`) bypass the SW.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v69` / `munitrakr-v69`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v70` / `munitrakr-v70`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
