@@ -2393,6 +2393,13 @@ function buildSplitPersonMenu() {
   document.getElementById("splitNewPersonCancel").addEventListener("click", () => {
     form.classList.add("hidden");
   });
+  // Enter in the name field saves the person — not the whole record form.
+  document.getElementById("splitNewPersonName").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.getElementById("splitNewPersonSave").click();
+    }
+  });
   document.getElementById("splitNewPersonSave").addEventListener("click", () => {
     const name = document.getElementById("splitNewPersonName").value.trim();
     if (!name) return;
