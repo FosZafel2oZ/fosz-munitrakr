@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v71**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v72**.
 
 ---
 
@@ -44,7 +44,7 @@ ProjectExpenses/
 
 ## 2. Modes
 
-A single in-memory `currentMode: "finance" | "debt"` drives which UI surfaces are active. Mode is **not persisted** — every fresh boot lands on MuniTrakr. Switch via the dropdown menu on the topbar title.
+A single in-memory `currentMode: "finance" | "debt"` drives which UI surfaces are active. Mode is **not persisted** — every fresh boot lands on MuniTrakr. Tap the topbar title or header icon to toggle modes (no dropdown).
 
 `showView()` enforces mode-compatibility: requesting a debt-only view (`person-history`, `debt-records`) while in finance mode auto-redirects to dashboard (and vice versa for `records`). Prevents orphaned states on app reopen.
 
@@ -115,7 +115,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 ## 4. MuniTrakr — features
 
 ### Views
-- **Dashboard** — top buttons (Expenses / Investments, year total for selected range), donut chart with two-tap drill (category → subcategory), recent-records list (last 10) that follows the chart selection (category or sub-category filter; title shows `Recent: Food / Coffee`), compact "View all" pill in the list header, confirmation banner for pending recurring occurrences.
+- **Dashboard** — top buttons (Expenses / Investments, year total for selected range), donut chart with two-tap drill (category → subcategory), recent-records list (last 10) that follows the chart selection (category or sub-category filter; title shows `Recent: Coffee`), compact "View all" pill in the list header, confirmation banner for pending recurring occurrences.
 - **Records** — full bulk list filtered by range. Filter button → multi-select category filter. Multi-select mode: Cancel / Change Category / Delete / Switch Type / Select-all.
 - **Settings** — collapsible sections (see §6).
 
@@ -205,7 +205,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls (`frankfurter`) bypass the SW.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v71` / `munitrakr-v71`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v72` / `munitrakr-v72`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---

@@ -430,6 +430,28 @@ body.modal-open{overflow:hidden}
 .cur-del:active{background:rgba(255,107,129,.16)}
 #newCurCode{flex:1;text-transform:uppercase}
 .modal-actions{display:flex;gap:10px;margin-top:8px}
+/* Keep the Save row visible while the form scrolls (record/rule/debt modals).
+   The footer bleeds over the form's 12px right scroll-gutter so content
+   slides cleanly underneath. */
+#recordForm .modal-actions,
+#ruleForm .modal-actions,
+#debtForm .modal-actions{
+  position:sticky;bottom:0;z-index:3;
+  background:var(--card);
+  margin-right:-12px;padding:10px 12px 6px 0;
+}
+body.theme-aero #recordForm .modal-actions,
+body.theme-aero #ruleForm .modal-actions,
+body.theme-aero #debtForm .modal-actions{
+  background:rgba(255,255,255,.85);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
+body.theme-yoimiya #recordForm .modal-actions,
+body.theme-yoimiya #ruleForm .modal-actions,
+body.theme-yoimiya #debtForm .modal-actions{
+  background:rgba(38,22,46,.92);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
 .modal-actions .btn-primary{flex:1}
 .btn-danger{padding:14px 18px;border-radius:13px;font-weight:700;font-size:14px;
   background:linear-gradient(180deg,#ff7a8a,var(--out));color:#fff;
@@ -484,6 +506,7 @@ body.modal-open{overflow:hidden}
 .settings-block label:last-child{margin-bottom:0}
 .settings-block input[type=text],
 .settings-block input[type=password],
+.settings-block input[type=number],
 .settings-block select{width:100%;margin-top:8px;border-radius:13px;
   padding:13px 14px;background:var(--bg-2);border:1px solid var(--line);
   color:var(--text);font-size:15px;font-weight:600;outline:none;
@@ -497,6 +520,8 @@ body.modal-open{overflow:hidden}
 .settings-block .inline-edit select{margin-top:0;flex:0 0 auto;
   width:auto;min-width:130px}
 .inline-edit .btn-mini{flex-shrink:0;height:46px;padding:0 18px}
+/* Card FX markup: compact, same footprint as the language select above it */
+.settings-block .inline-edit input[type=number]{flex:0 0 auto;width:130px}
 
 /* circular premium colour swatches */
 input[type=color]{-webkit-appearance:none;appearance:none;border:none;
@@ -1190,31 +1215,6 @@ body.theme-yoimiya .rn-menu{
   -webkit-tap-highlight-color: transparent;
 }
 .title-btn svg { opacity: .75; }
-#modeMenu {
-  /* Anchored under the title (override the default bottom-positioning of .rn-menu). */
-  position: absolute;
-  top: calc(100% + 6px);
-  bottom: auto;
-  left: 0;
-  right: auto;
-  min-width: 180px;
-}
-.mode-opt {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%;
-  background: transparent !important; border: 0;
-  padding: 13px 14px; border-radius: 11px;
-  color: var(--text); font-size: 15px; font-weight: 600; text-align: left;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.mode-opt .mode-ico {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; border-radius: 6px;
-  background: var(--accent-soft); color: var(--accent); font-weight: 700;
-}
-.mode-opt.active { color: var(--accent); background: var(--accent-soft); }
-.mode-opt:active { background: var(--card); }
 
 .dbt-person-list { display: flex; flex-direction: column; gap: 10px; }
 .dbt-person-card {

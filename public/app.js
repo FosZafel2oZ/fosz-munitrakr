@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v71"; // keep in step with sw.js CACHE
+const APP_VERSION = "v72"; // keep in step with sw.js CACHE
 // Label used as both the donut slice AND the list-filter key for records
 // without a subcategory — single constant so the two can't drift apart.
 const NO_SUB_LABEL = "No Sub-category";
@@ -298,10 +298,6 @@ function setMode(next) {
   const title = next === "debt" ? "DebtTrakr" : "MuniTrakr";
   const helloEl = document.getElementById("helloName");
   if (helloEl) helloEl.textContent = title;
-  // Mode-menu active-row highlight
-  document.querySelectorAll("#modeMenu .mode-opt").forEach((b) => {
-    b.classList.toggle("active", b.dataset.mode === next);
-  });
   // Header icon — swap to the per-mode source
   if (typeof applyHeaderIcon === "function") applyHeaderIcon();
   // Hide the dashboard confirm banner in debt mode (banner is MuniTrakr-only)
@@ -1034,7 +1030,7 @@ function renderDashboard(list) {
       listFiltered = listFiltered.filter(
         (r) => (r.subcategory || NO_SUB_LABEL) === selectedSlice
       );
-      listTitle = "Recent: " + drillCategory + " / " + selectedSlice;
+      listTitle = "Recent: " + selectedSlice;
     }
   } else if (selectedSlice) {
     listFiltered = typed.filter((r) => r.category === selectedSlice);
@@ -3747,30 +3743,20 @@ async function createRuleFromAddRecord(savedRecord) {
   saveStore();
 }
 
-/* Mode switcher: title button toggles dropdown; outside click closes it. */
+/* Mode switcher: tapping the title (or the header icon) toggles modes. */
 (function wireModeSwitcher() {
   const btn = document.getElementById("modeSwitcher");
-  const menu = document.getElementById("modeMenu");
-  if (!btn || !menu) return;
-  btn.addEventListener("click", (e) => {
+  if (!btn) return;
+  const toggle = (e) => {
     e.stopPropagation();
-    const open = menu.classList.toggle("hidden");
-    btn.setAttribute("aria-expanded", String(!open));
-  });
-  menu.querySelectorAll(".mode-opt").forEach((opt) => {
-    opt.addEventListener("click", (e) => {
-      e.stopPropagation();
-      setMode(opt.dataset.mode);
-      menu.classList.add("hidden");
-      btn.setAttribute("aria-expanded", "false");
-    });
-  });
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".title-switcher")) {
-      menu.classList.add("hidden");
-      btn.setAttribute("aria-expanded", "false");
-    }
-  });
+    setMode(currentMode === "debt" ? "finance" : "debt");
+  };
+  btn.addEventListener("click", toggle);
+  const icon = document.getElementById("headerIcon");
+  if (icon) {
+    icon.style.cursor = "pointer";
+    icon.addEventListener("click", toggle);
+  }
 })();
 
 function renderDebtDashboard() {
