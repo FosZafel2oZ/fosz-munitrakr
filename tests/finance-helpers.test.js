@@ -191,6 +191,14 @@ test("getRate: both currency-api hosts failing -> null", async () => {
   assert.equal(await svc.getRate("VND", "THB", "2026-05-21"), null);
 });
 
+test("getRate: currency-api payload missing the target code -> null", async () => {
+  const svc = H.makeRateService({
+    fetch: async () => ({ ok: true, json: async () => ({ date: "2026-05-21", vnd: { usd: 0.00004 } }) }),
+    storage: mockStorage(), isEcb, now: fixedNow("2026-05-21"),
+  });
+  assert.equal(await svc.getRate("VND", "THB", "2026-05-21"), null);
+});
+
 test("getRate: mixed pair (one ECB, one not) uses currency-api, not Frankfurter", async () => {
   let seenUrl = "";
   const svc = H.makeRateService({

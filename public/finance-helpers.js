@@ -80,7 +80,7 @@
         );
         if (!res || !res.ok) return null;
         const j = await res.json();
-        const rate = j && j.rates && j.rates[to];
+        const rate = Number(j && j.rates && j.rates[to]);
         return rate && isFinite(rate) ? rate : null;
       } catch { return null; }
     }
@@ -101,7 +101,7 @@
           const res = await fetchFn(url);
           if (!res || !res.ok) continue;
           const j = await res.json();
-          const rate = j && j[f] && j[f][t];
+          const rate = Number(j && j[f] && j[f][t]);
           if (rate && isFinite(rate)) return rate;
         } catch {}
       }
@@ -154,6 +154,7 @@
       const base = await getRate(r.currency, def, r.date);
       if (base == null) { r.rateUnavailable = true; return r; }
       const pct = Number(markupPct) || 0;
+      // toPrecision strips binary-float noise (0.027 * 1.025 -> 0.027674999...).
       const effective = pct > 0 ? parseFloat((base * (1 + pct / 100)).toPrecision(10)) : base;
       r.convertedCurrency = def;
       r.convertedAmount = Math.round(r.amount * effective * 100) / 100;
