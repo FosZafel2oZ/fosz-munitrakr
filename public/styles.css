@@ -431,14 +431,22 @@ body.modal-open{overflow:hidden}
 #newCurCode{flex:1;text-transform:uppercase}
 .modal-actions{display:flex;gap:10px;margin-top:8px}
 /* Keep the Save row visible while the form scrolls (record/rule/debt modals).
-   The footer bleeds over the form's 12px right scroll-gutter so content
-   slides cleanly underneath. */
+   margin-top:0 kills the transparent margin strip content would peek through;
+   bottom:-2px + right bleed cover the form's bottom/right scroll padding. */
 #recordForm .modal-actions,
 #ruleForm .modal-actions,
 #debtForm .modal-actions{
-  position:sticky;bottom:0;z-index:3;
+  position:sticky;bottom:-2px;z-index:3;
   background:var(--card);
-  margin-right:-12px;padding:10px 12px 6px 0;
+  margin:0 -12px 0 0;
+  padding:12px 12px 8px 0;
+}
+/* Tighter glow inside the pinned row — the big 24px drop shadow visually
+   slices against the opaque footer edge while content scrolls beneath. */
+#recordForm .modal-actions .btn-primary,
+#ruleForm .modal-actions .btn-primary,
+#debtForm .modal-actions .btn-primary{
+  box-shadow:0 4px 14px var(--accent-glow);
 }
 body.theme-aero #recordForm .modal-actions,
 body.theme-aero #ruleForm .modal-actions,
