@@ -431,18 +431,13 @@ body.modal-open{overflow:hidden}
 #newCurCode{flex:1;text-transform:uppercase}
 .modal-actions{display:flex;gap:10px;margin-top:8px}
 /* Keep the Save row visible while the form scrolls (record/rule/debt modals).
-   A gradient fades from transparent (top) into the modal colour near the
-   button, so scrolled content dissolves softly under it instead of hitting a
-   hard band. A light backdrop blur softens whatever shows through the fade. */
+   Transparent background — the opaque button is the only thing pinned, so
+   content scrolls cleanly behind it without any band. */
 #recordForm .modal-actions,
 #ruleForm .modal-actions,
 #debtForm .modal-actions{
-  position:sticky;bottom:-2px;z-index:3;
-  margin:0 -12px 0 0;
-  padding:20px 12px 8px 0;
-  background:linear-gradient(180deg,
-    rgba(22,26,36,0) 0%, rgba(22,26,36,.9) 45%, var(--card) 75%);
-  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+  position:sticky;bottom:0;z-index:3;
+  background:transparent;
 }
 /* Tighter glow inside the pinned row — the big 24px drop shadow visually
    slices against the footer edge while content scrolls beneath. */
@@ -450,18 +445,6 @@ body.modal-open{overflow:hidden}
 #ruleForm .modal-actions .btn-primary,
 #debtForm .modal-actions .btn-primary{
   box-shadow:0 4px 14px var(--accent-glow);
-}
-body.theme-aero #recordForm .modal-actions,
-body.theme-aero #ruleForm .modal-actions,
-body.theme-aero #debtForm .modal-actions{
-  background:linear-gradient(180deg,
-    rgba(223,241,255,0) 0%, rgba(223,241,255,.72) 45%, rgba(223,241,255,.9) 75%);
-}
-body.theme-yoimiya #recordForm .modal-actions,
-body.theme-yoimiya #ruleForm .modal-actions,
-body.theme-yoimiya #debtForm .modal-actions{
-  background:linear-gradient(180deg,
-    rgba(38,22,46,0) 0%, rgba(38,22,46,.85) 45%, rgba(38,22,46,.96) 75%);
 }
 .modal-actions .btn-primary{flex:1}
 .btn-danger{padding:14px 18px;border-radius:13px;font-weight:700;font-size:14px;
