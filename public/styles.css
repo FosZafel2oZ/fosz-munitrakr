@@ -431,18 +431,21 @@ body.modal-open{overflow:hidden}
 #newCurCode{flex:1;text-transform:uppercase}
 .modal-actions{display:flex;gap:10px;margin-top:8px}
 /* Keep the Save row visible while the form scrolls (record/rule/debt modals).
-   margin-top:0 kills the transparent margin strip content would peek through;
-   bottom:-2px + right bleed cover the form's bottom/right scroll padding. */
+   A gradient fades from transparent (top) into the modal colour near the
+   button, so scrolled content dissolves softly under it instead of hitting a
+   hard band. A light backdrop blur softens whatever shows through the fade. */
 #recordForm .modal-actions,
 #ruleForm .modal-actions,
 #debtForm .modal-actions{
   position:sticky;bottom:-2px;z-index:3;
-  background:var(--card);
   margin:0 -12px 0 0;
-  padding:12px 12px 8px 0;
+  padding:20px 12px 8px 0;
+  background:linear-gradient(180deg,
+    rgba(22,26,36,0) 0%, rgba(22,26,36,.9) 45%, var(--card) 75%);
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
 }
 /* Tighter glow inside the pinned row — the big 24px drop shadow visually
-   slices against the opaque footer edge while content scrolls beneath. */
+   slices against the footer edge while content scrolls beneath. */
 #recordForm .modal-actions .btn-primary,
 #ruleForm .modal-actions .btn-primary,
 #debtForm .modal-actions .btn-primary{
@@ -451,14 +454,14 @@ body.modal-open{overflow:hidden}
 body.theme-aero #recordForm .modal-actions,
 body.theme-aero #ruleForm .modal-actions,
 body.theme-aero #debtForm .modal-actions{
-  background:rgba(255,255,255,.85);
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  background:linear-gradient(180deg,
+    rgba(223,241,255,0) 0%, rgba(223,241,255,.72) 45%, rgba(223,241,255,.9) 75%);
 }
 body.theme-yoimiya #recordForm .modal-actions,
 body.theme-yoimiya #ruleForm .modal-actions,
 body.theme-yoimiya #debtForm .modal-actions{
-  background:rgba(38,22,46,.92);
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  background:linear-gradient(180deg,
+    rgba(38,22,46,0) 0%, rgba(38,22,46,.85) 45%, rgba(38,22,46,.96) 75%);
 }
 .modal-actions .btn-primary{flex:1}
 .btn-danger{padding:14px 18px;border-radius:13px;font-weight:700;font-size:14px;
