@@ -212,8 +212,9 @@ function defaultSettings() {
   };
 }
 
-// Currencies the free rate provider (Frankfurter) can auto-convert
-const CONVERTIBLE = new Set([
+// ECB reference-rate currencies — pairs where BOTH codes are in this set use
+// Frankfurter; every other ISO currency converts via the currency-api fallback.
+const ECB_CURRENCIES = new Set([
   "AUD","BGN","BRL","CAD","CHF","CNY","CZK","DKK","EUR","GBP","HKD","HUF",
   "IDR","ILS","INR","ISK","JPY","KRW","MXN","MYR","NOK","NZD","PHP","PLN",
   "RON","SEK","SGD","THB","TRY","USD","ZAR",
@@ -227,10 +228,7 @@ function isRealCurrency(code) {
     return false;
   }
 }
-const isConvertible = (c) => CONVERTIBLE.has(c);
-function pairAutoConvertible(from, to) {
-  return from !== to && isConvertible(from) && isConvertible(to);
-}
+const isEcb = (c) => ECB_CURRENCIES.has(c);
 
 let store = null;
 function loadStore() {
@@ -242,6 +240,8 @@ function loadStore() {
   if (!store.settings.theme) store.settings.theme = "default";
   if (!store.settings.defaultCurrency) store.settings.defaultCurrency = "THB";
   if (!store.settings.debtShareLanguage) store.settings.debtShareLanguage = "en";
+  if (typeof store.settings.fxMarkupPct !== "number")
+    store.settings.fxMarkupPct = 0;
   if (!Array.isArray(store.settings.currencies) || !store.settings.currencies.length)
     store.settings.currencies = [
       "THB", "USD", "EUR", "GBP", "INR", "PHP", "JPY", "AUD", "CAD",
@@ -316,7 +316,7 @@ function setMode(next) {
 const uid = () =>
   Date.now().toString(16) + Math.random().toString(16).slice(2, 8);
 
-/* ---- FX conversion (frankfurter.dev, free, CORS-enabled, in-browser) ----
+/* ---- FX conversion (frankfurter.dev + currency-api fallback, in-browser) ----
    Logic lives in public/finance-helpers.js (testable). Here we instantiate
    the service with browser-provided deps and expose getRate/attachConversion
    as the same globals existing call sites already use. */
@@ -325,12 +325,17 @@ const _rateService = makeRateService({
   fetch: (...a) => fetch(...a),
   storage: localStorage,
   now: () => new Date(),
-  isConvertible,
+  isEcb,
   rateKey: RATE_KEY,
 });
 const getRate = _rateService.getRate;
+// Single funnel for every conversion in the app — the global card-FX markup
+// is injected here so no call site needs to know about it.
 async function attachConversion(r, manualRate) {
-  return _rateService.attachConversion(r, manualRate, store && store.settings && store.settings.defaultCurrency);
+  const s = store && store.settings;
+  return _rateService.attachConversion(
+    r, manualRate, s && s.defaultCurrency, (s && s.fxMarkupPct) || 0
+  );
 }
 
 function sanitizeRecord(b) {
@@ -2008,23 +2013,11 @@ function fillCurrencySelects() {
     $("#setDefCurrency").value = settings.defaultCurrency || "THB";
   }
 }
+// Every ISO currency now auto-converts (Frankfurter or the currency-api
+// fallback), so the manual-rate field never needs to pre-open. The field and
+// the manualRate plumbing stay for legacy records and as an escape hatch.
 function updateManualRateField() {
-  const cur = $("#fCurrency").value;
-  const def = settings.defaultCurrency || "THB";
-  const field = $("#manualRateField");
-  if (!cur || cur === def || pairAutoConvertible(cur, def)) {
-    field.classList.add("hidden");
-    return;
-  }
-  field.classList.remove("hidden");
-  $("#manualRateLbl").textContent = "Conversion rate (1 " + cur + " = ? " + def + ")";
-  $("#manualRateHint").textContent =
-    cur +
-    " can't be auto-converted — enter how many " +
-    def +
-    " equal 1 " +
-    cur +
-    ".";
+  $("#manualRateField").classList.add("hidden");
 }
 $("#fCurrency").addEventListener("change", updateManualRateField);
 
@@ -2109,7 +2102,6 @@ function renderCurManager() {
   if (!box) return;
   box.innerHTML = "";
   curDraft.forEach((code, i) => {
-    const conv = isConvertible(code);
     const isDef = code === settings.defaultCurrency;
     const row = document.createElement("div");
     row.className = "cur-row";
@@ -2117,9 +2109,7 @@ function renderCurManager() {
     row.innerHTML =
       `<button type="button" class="drag-handle cur-drag" aria-label="Reorder">⠿</button>` +
       `<span class="cur-code">${escapeHtml(code)}</span>` +
-      `<span class="cur-tag ${conv ? "ok" : "warn"}">${
-        conv ? "auto-convert" : "manual rate"
-      }</span>` +
+      `<span class="cur-tag ok">auto-convert</span>` +
       `<button type="button" class="cat-del cur-del"${
         isDef ? " disabled title='Default currency'" : ""
       }>✕</button>`;
@@ -2148,13 +2138,8 @@ $("#addCurBtn").addEventListener("click", () => {
   curDraft.push(code);
   $("#newCurCode").value = "";
   renderCurManager();
-  $("#curMsg").style.color = isConvertible(code) ? "var(--in)" : "var(--out)";
-  $("#curMsg").textContent = isConvertible(code)
-    ? code + " added (auto-convertible)."
-    : code +
-      " added. Not auto-convertible — you'll enter the rate yourself when adding a record in " +
-      code +
-      ".";
+  $("#curMsg").style.color = "var(--in)";
+  $("#curMsg").textContent = code + " added (auto-converts).";
 });
 $("#saveCurrencies").addEventListener("click", async () => {
   $("#curMsg").textContent = "";
@@ -2454,17 +2439,6 @@ $("#recordForm").addEventListener("submit", async (e) => {
     notes: $("#fNotes").value.trim(),
     type: modalType,
   };
-  if (!$("#manualRateField").classList.contains("hidden")) {
-    const mr = parseFloat($("#fManualRate").value);
-    if (!(mr > 0))
-      return ($("#modalError").textContent =
-        "Enter the conversion rate (1 " +
-        payload.currency +
-        " = ? " +
-        (settings.defaultCurrency || "THB") +
-        ")");
-    payload.manualRate = mr;
-  }
   if (!payload.category) return ($("#modalError").textContent = "Category is required");
   if (!payload.date) return ($("#modalError").textContent = "Date is required");
   if (!(payload.amount >= 0))
@@ -2529,8 +2503,6 @@ $("#recordForm").addEventListener("submit", async (e) => {
     else savedRecord = await api("/records", "POST", payload);
     // Split: one "lend" debt per participant (independent records — no links).
     if (splitPlan) {
-      const mrVisible = !$("#manualRateField").classList.contains("hidden");
-      const mr = mrVisible ? parseFloat($("#fManualRate").value) : null;
       const userNotes = $("#fNotes").value.trim();
       const debtNotes =
         "Split bill (" + payload.category +
@@ -2549,7 +2521,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
           currency: payload.currency,
           notes: debtNotes,
         };
-        try { await attachConversion(d, mr); } catch (_e) { d.rateUnavailable = true; }
+        try { await attachConversion(d); } catch (_e) { d.rateUnavailable = true; }
         newDebts.push(d);
       }
       loadStore();
@@ -4195,24 +4167,9 @@ function refreshMatchOutstanding() {
   };
 }
 
-// Show/hide the debt manual-rate field. Mirrors the MuniTrakr `updateManualRateField`:
-// hidden when the record currency matches the default OR when the pair is auto-convertible
-// via Frankfurter; shown when the user needs to enter a rate by hand.
 function updateDbtManualRateField() {
-  const sel = document.getElementById("dbtCurrency");
   const field = document.getElementById("dbtManualRateField");
-  if (!sel || !field) return;
-  const cur = sel.value;
-  const def = (store && store.settings && store.settings.defaultCurrency) || "THB";
-  if (!cur || cur === def || pairAutoConvertible(cur, def)) {
-    field.classList.add("hidden");
-    return;
-  }
-  field.classList.remove("hidden");
-  const lbl = document.getElementById("dbtManualRateLbl");
-  const hint = document.getElementById("dbtManualRateHint");
-  if (lbl) lbl.textContent = "Conversion rate (1 " + cur + " = ? " + def + ")";
-  if (hint) hint.textContent = cur + " can't be auto-converted — enter how many " + def + " equal 1 " + cur + ".";
+  if (field) field.classList.add("hidden");
 }
 // Currency-change re-evaluates the manual-rate field.
 document.getElementById("dbtCurrency")?.addEventListener("change", updateDbtManualRateField);
@@ -4232,17 +4189,6 @@ async function saveDebtFromModal() {
   if (!(amount > 0)) { err.textContent = "Amount must be greater than 0."; return; }
   if (!date) { err.textContent = "Date is required."; return; }
 
-  const mrField = document.getElementById("dbtManualRateField");
-  let manualRate = null;
-  if (mrField && !mrField.classList.contains("hidden")) {
-    manualRate = parseFloat(document.getElementById("dbtManualRate").value);
-    if (!(manualRate > 0)) {
-      const def = (store && store.settings && store.settings.defaultCurrency) || "THB";
-      err.textContent = "Enter the conversion rate (1 " + currency + " = ? " + def + ").";
-      return;
-    }
-  }
-
   loadStore();
   const defaultCurrency = (store.settings.defaultCurrency || "THB");
 
@@ -4257,7 +4203,7 @@ async function saveDebtFromModal() {
     });
     delete updated.convertedAmount; delete updated.convertedCurrency;
     delete updated.rate; delete updated.rateDate; delete updated.rateUnavailable; delete updated.manualRate;
-    try { await attachConversion(updated, manualRate); } catch (_e) { updated.rateUnavailable = true; }
+    try { await attachConversion(updated); } catch (_e) { updated.rateUnavailable = true; }
 
     // Overshoot guard — blocks edits that would have triggered the split modal on Add.
     if (wouldOvershoot(store.debts, updated, defaultCurrency)) {
@@ -4277,7 +4223,7 @@ async function saveDebtFromModal() {
   const entered = {
     type: debtDraftType, personId, amount, currency, date, notes,
   };
-  try { await attachConversion(entered, manualRate); } catch (_e) { entered.rateUnavailable = true; }
+  try { await attachConversion(entered); } catch (_e) { entered.rateUnavailable = true; }
 
   // Compute balanceBefore for this person at "now" (the entered record will sit at the end
   // chronologically since createdAt = now). balanceBefore needs an id to stop at; we pass
