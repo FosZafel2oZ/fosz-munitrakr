@@ -2036,6 +2036,10 @@ function buildSettingsPayload() {
     ($("#setDebtShareLanguage") && $("#setDebtShareLanguage").value) ||
     settings.debtShareLanguage ||
     "en";
+  const mk = $("#setFxMarkup") ? parseFloat($("#setFxMarkup").value) : NaN;
+  p.fxMarkupPct = Number.isFinite(mk) && mk >= 0
+    ? Math.min(mk, 10)
+    : (settings.fxMarkupPct || 0);
   p.headerIconFinance =
     settings.headerIconFinance === undefined ? null : settings.headerIconFinance;
   p.headerIconDebt =
@@ -2589,6 +2593,10 @@ function openSettings() {
     $("#setDebtShareLanguage").value = settings.debtShareLanguage || "en";
     if ($("#debtShareLanguageMsg")) $("#debtShareLanguageMsg").textContent = "";
   }
+  if ($("#setFxMarkup")) {
+    $("#setFxMarkup").value = settings.fxMarkupPct || 0;
+    if ($("#fxMarkupMsg")) $("#fxMarkupMsg").textContent = "";
+  }
   if ($("#setTheme")) $("#setTheme").value = settings.theme || "default";
   $("#hiMsg") && ($("#hiMsg").textContent = "");
   applyHeaderIcon();
@@ -2889,6 +2897,23 @@ $("#saveDebtShareLanguage")?.addEventListener("click", async () => {
       msg.style.color = "";
       msg.textContent = err.message;
     }
+  }
+});
+$("#saveFxMarkup")?.addEventListener("click", async () => {
+  const msg = $("#fxMarkupMsg");
+  if (msg) msg.textContent = "";
+  try {
+    settings = await api("/settings", "PUT", buildSettingsPayload());
+    syncDraftsFromSettings();
+    if ($("#setFxMarkup")) $("#setFxMarkup").value = settings.fxMarkupPct || 0;
+    if (msg) {
+      msg.style.color = "var(--in)";
+      msg.textContent = (settings.fxMarkupPct || 0) > 0
+        ? "Markup set to " + settings.fxMarkupPct + "% — applied to all new conversions."
+        : "Markup off.";
+    }
+  } catch (err) {
+    if (msg) { msg.style.color = ""; msg.textContent = err.message; }
   }
 });
 $("#saveDefCurrency").addEventListener("click", async () => {

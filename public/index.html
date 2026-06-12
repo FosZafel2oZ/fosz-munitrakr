@@ -274,6 +274,19 @@
       </div>
       <div id="debtShareLanguageMsg" class="form-error"></div>
 
+      <label style="margin-top:16px">Card FX markup %
+        <div class="inline-edit">
+          <input id="setFxMarkup" type="number" inputmode="decimal"
+            step="0.1" min="0" max="10" placeholder="0" />
+          <button class="btn-mini" id="saveFxMarkup">Save</button>
+        </div>
+      </label>
+      <div class="muted" style="margin-top:8px">
+        Added on top of market rates so converted amounts match your
+        credit-card statement (Thai cards charge up to 2.5%). 0 = off.
+      </div>
+      <div id="fxMarkupMsg" class="form-error"></div>
+
     </div>
 
     <div class="settings-block" data-mode="any">
