@@ -4,6 +4,11 @@
   "private": true,
   "description": "Offline personal finance tracker (PWA). All data stored on-device. No server.",
   "scripts": {
-    "start": "node serve.js"
+    "start": "node serve.js",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.94.0"
   }
 }
