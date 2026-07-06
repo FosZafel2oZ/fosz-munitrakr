@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v73"; // keep in step with sw.js CACHE
+const APP_VERSION = "v74"; // keep in step with sw.js CACHE
 // Label used as both the donut slice AND the list-filter key for records
 // without a subcategory — single constant so the two can't drift apart.
 const NO_SUB_LABEL = "No Sub-category";
@@ -2367,7 +2367,14 @@ function buildSplitPersonMenu() {
 (function wireSplitSection() {
   const toggle = document.getElementById("splitToggle");
   if (!toggle) return;
-  toggle.addEventListener("change", syncSplitSection);
+  toggle.addEventListener("change", () => {
+    syncSplitSection();
+    // The section expands near the bottom of the form — bring it into view.
+    if (toggle.checked) {
+      const form = document.getElementById("recordForm");
+      if (form) form.scrollTo({ top: form.scrollHeight, behavior: "smooth" });
+    }
+  });
   $("#fAmount").addEventListener("input", () => {
     syncSplitSection();
     if (toggle.checked) updateSplitMyAmt();
@@ -2503,12 +2510,9 @@ $("#recordForm").addEventListener("submit", async (e) => {
     else savedRecord = await api("/records", "POST", payload);
     // Split: one "lend" debt per participant (independent records — no links).
     if (splitPlan) {
-      const userNotes = $("#fNotes").value.trim();
-      const debtNotes =
-        "Split bill (" + payload.category +
-        (payload.subcategory ? " / " + payload.subcategory : "") + ")" +
-        " — total " + fmt(splitPlan.total, payload.currency) +
-        (userNotes ? "\n" + userNotes : "");
+      // Debts carry the exact same notes as the expense:
+      // user's own notes first (if any), then the auto breakdown line.
+      const debtNotes = payload.notes;
       // Convert everything first, then persist all debts in ONE saveStore()
       // so a mid-loop interruption can't leave a partial split behind.
       const newDebts = [];

@@ -1438,7 +1438,9 @@ body.theme-yoimiya .rn-menu{
   cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; }
 .split-actions { display: flex; gap: 8px; margin-bottom: 10px; }
 .split-actions .picker { flex: 0 0 auto; }
-#splitPersonPicker .picker-menu { right: auto; }
+/* Person menu opens UPWARD — the picker sits near the bottom of the form,
+   so a drop-down would land off-screen and force extra scrolling. */
+#splitPersonPicker .picker-menu { right: auto; top: auto; bottom: calc(100% + 6px); }
 #splitPersonMenu { min-width: 210px; }
 
 /* ---- Dashboard list header: title + count left, view-all pill right ----
