@@ -2481,7 +2481,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
       [myName + " " + fmt(mine, "")]
         .concat(parts.map((p) => p.name + " " + fmt(p.amount, "")))
         .join(" · ");
-    splitPlan = { mine, parts, total: payload.amount };
+    splitPlan = { parts }; // only the participants' shares are needed downstream
     payload.amount = mine; // expense records the user's share only
     payload.notes = (payload.notes ? payload.notes + "\n" : "") + breakdown;
   }
@@ -2510,9 +2510,6 @@ $("#recordForm").addEventListener("submit", async (e) => {
     else savedRecord = await api("/records", "POST", payload);
     // Split: one "lend" debt per participant (independent records — no links).
     if (splitPlan) {
-      // Debts carry the exact same notes as the expense:
-      // user's own notes first (if any), then the auto breakdown line.
-      const debtNotes = payload.notes;
       // Convert everything first, then persist all debts in ONE saveStore()
       // so a mid-loop interruption can't leave a partial split behind.
       const newDebts = [];
@@ -2523,7 +2520,8 @@ $("#recordForm").addEventListener("submit", async (e) => {
           date: payload.date,
           amount: part.amount,
           currency: payload.currency,
-          notes: debtNotes,
+          // Same notes as the expense: user's notes first, then the breakdown.
+          notes: payload.notes,
         };
         try { await attachConversion(d); } catch (_e) { d.rateUnavailable = true; }
         newDebts.push(d);
