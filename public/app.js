@@ -2297,7 +2297,15 @@ function syncSplitSection() {
   // Mutual exclusion: hide the recurring section while split is on.
   const recSection = document.getElementById("recRecurringSection");
   if (recSection) recSection.classList.toggle("hidden", toggle.checked);
-  if (toggle.checked) renderSplitRows();
+  if (toggle.checked) {
+    renderSplitRows();
+  } else {
+    // Clear the rows when off — a hidden invalid input (e.g. negative
+    // remainder) would otherwise silently block native form submission.
+    const rows = document.getElementById("splitRows");
+    if (rows) rows.innerHTML = "";
+    splitMineManual = false;
+  }
 }
 
 function renderSplitRows() {
@@ -2312,7 +2320,7 @@ function renderSplitRows() {
     '<div class="split-row split-row-me">' +
       '<span class="pick-ico" style="background:var(--accent)">' + personIconSvg("person") + '</span>' +
       '<span class="split-name">' + escapeHtml(myName) + ' <span class="split-you">(you)</span></span>' +
-      '<input type="number" class="split-amt split-amt-me' + (mine < 0 ? " neg" : "") + '" id="splitMyAmt" inputmode="decimal" step="0.01" min="0" placeholder="0.00" value="' + mine + '" />' +
+      '<input type="number" class="split-amt split-amt-me' + (mine < 0 ? " neg" : "") + '" id="splitMyAmt" inputmode="decimal" step="0.01" placeholder="0.00" value="' + mine.toFixed(2) + '" />' +
     '</div>';
   for (const row of splitPeople) {
     const p = peopleById[row.personId];
@@ -2362,7 +2370,7 @@ function updateSplitMyAmt() {
     return;
   }
   const mine = splitRemainder();
-  el.value = mine;
+  el.value = mine.toFixed(2);
   el.classList.toggle("neg", mine < 0);
 }
 
@@ -4741,56 +4749,65 @@ function _clipText(ctx, str, maxW) {
 // Multiple records always go oldest-first (date asc, createdAt asc) so the
 // receiver reads the history in chronological order; filenames get an index
 // prefix so name-sorted galleries keep that order too.
-// Falls back to per-file downloads when Web Share with files is unavailable.
+// Falls back to per-file downloads only when Web Share with files is
+// genuinely unsupported.
+let _debtShareBusy = false;
 async function shareDebtRecords(debtList) {
   const list = (debtList || []).filter((d) => d && d.id);
-  if (!list.length) return;
-  loadStore();
-  const peopleById = {};
-  for (const p of (store.settings.people || [])) peopleById[p.id] = p;
-  const defaultCurrency = (store.settings.defaultCurrency || "THB");
-  const userName = (store.profile && store.profile.displayName) || "Me";
-  const debtShareLanguage = store.settings.debtShareLanguage || "en";
-
-  const ordered = list.slice().sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)
-  );
-
-  // Render sequentially — each card is a full-size canvas; parallel rendering
-  // of a big selection would spike memory on iOS.
-  const files = [];
-  for (let i = 0; i < ordered.length; i++) {
-    const debt = ordered[i];
-    const person = (store.settings.people || []).find((x) => x.id === debt.personId)
-      || { name: "(deleted person)", color: "#888", icon: "person" };
-    const before = balanceBefore(store.debts || [], debt.id, peopleById);
-    let blob;
-    try {
-      blob = await renderDebtCard(debt, person, before, defaultCurrency, userName, debtShareLanguage);
-    } catch (err) {
-      console.error("renderDebtCard failed:", err);
-      alert("Couldn't generate the image — try again.");
-      return;
-    }
-    if (!blob) return;
-    const safeName = (person.name || "person").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
-    const prefix = ordered.length > 1 ? String(i + 1).padStart(2, "0") + "-" : "";
-    const filename = "debt-" + prefix + safeName + "-" + (debt.date || "record") + ".png";
-    files.push(new File([blob], filename, { type: "image/png" }));
-  }
-
+  if (!list.length || _debtShareBusy) return;
+  _debtShareBusy = true;
   try {
-    if (navigator.canShare && navigator.canShare({ files })) {
-      // files only — adding title/text causes some iOS targets to save extra files
-      await navigator.share({ files });
-      return;
+    loadStore();
+    const peopleById = {};
+    for (const p of (store.settings.people || [])) peopleById[p.id] = p;
+    const defaultCurrency = (store.settings.defaultCurrency || "THB");
+    const userName = (store.profile && store.profile.displayName) || "Me";
+    const debtShareLanguage = store.settings.debtShareLanguage || "en";
+
+    const ordered = list.slice().sort((a, b) =>
+      a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)
+    );
+
+    // Render sequentially — each card is a full-size canvas; parallel rendering
+    // of a big selection would spike memory on iOS.
+    const files = [];
+    for (let i = 0; i < ordered.length; i++) {
+      const debt = ordered[i];
+      const person = peopleById[debt.personId]
+        || { name: "(deleted person)", color: "#888", icon: "person" };
+      const before = balanceBefore(store.debts || [], debt.id, peopleById);
+      let blob;
+      try {
+        blob = await renderDebtCard(debt, person, before, defaultCurrency, userName, debtShareLanguage);
+      } catch (err) {
+        console.error("renderDebtCard failed:", err);
+        alert("Couldn't generate the image — try again.");
+        return;
+      }
+      if (!blob) return;
+      const safeName = (person.name || "person").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+      const prefix = ordered.length > 1 ? String(i + 1).padStart(2, "0") + "-" : "";
+      const filename = "debt-" + prefix + safeName + "-" + (debt.date || "record") + ".png";
+      files.push(new File([blob], filename, { type: "image/png" }));
     }
-    // Share with files genuinely unsupported → download fallback (oldest first).
-    files.forEach((f) => _downloadBlob(f, f.name));
-  } catch (err) {
-    // Don't auto-download on AbortError (user cancelled the share sheet).
-    if (err && err.name === "AbortError") return;
-    files.forEach((f) => _downloadBlob(f, f.name));
+
+    try {
+      if (navigator.canShare && navigator.canShare({ files })) {
+        // files only — adding title/text causes some iOS targets to save extra files
+        await navigator.share({ files });
+        return;
+      }
+      // Share with files genuinely unsupported → download fallback (oldest first).
+      files.forEach((f) => _downloadBlob(f, f.name));
+    } catch (err) {
+      // AbortError = user cancelled the share sheet — stay quiet. Any other
+      // failure (expired user gesture after a long render, double-tap): tell
+      // the user instead of bursting N surprise downloads.
+      if (err && err.name === "AbortError") return;
+      alert("Sharing failed — try again or select fewer records.");
+    }
+  } finally {
+    _debtShareBusy = false;
   }
 }
 
