@@ -2335,6 +2335,12 @@ function updateSplitMyAmt() {
   el.classList.toggle("neg", mine < 0);
 }
 
+// Bring the bottom of the form (where the split section lives) into view.
+function scrollSplitIntoView() {
+  const form = document.getElementById("recordForm");
+  if (form) form.scrollTo({ top: form.scrollHeight, behavior: "smooth" });
+}
+
 // "+ Add person" menu: DebtTrakr people not yet added, plus "+ New person".
 function buildSplitPersonMenu() {
   const menu = document.getElementById("splitPersonMenu");
@@ -2360,6 +2366,7 @@ function buildSplitPersonMenu() {
       }
       splitPeople.push({ personId: b.dataset.pid, amount: null });
       renderSplitRows();
+      scrollSplitIntoView();
     });
   });
 }
@@ -2370,10 +2377,7 @@ function buildSplitPersonMenu() {
   toggle.addEventListener("change", () => {
     syncSplitSection();
     // The section expands near the bottom of the form — bring it into view.
-    if (toggle.checked) {
-      const form = document.getElementById("recordForm");
-      if (form) form.scrollTo({ top: form.scrollHeight, behavior: "smooth" });
-    }
+    if (toggle.checked) scrollSplitIntoView();
   });
   $("#fAmount").addEventListener("input", () => {
     syncSplitSection();
@@ -2431,6 +2435,7 @@ function buildSplitPersonMenu() {
     form.classList.add("hidden");
     splitPeople.push({ personId: newId, amount: null });
     renderSplitRows();
+    scrollSplitIntoView();
   });
 })();
 
