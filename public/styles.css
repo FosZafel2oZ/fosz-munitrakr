@@ -200,6 +200,9 @@ label.btn-primary{cursor:pointer;box-sizing:border-box;
   margin:0 auto;max-width:560px;display:flex;gap:8px;align-items:center;
   padding:0 16px;z-index:8;transition:bottom .2s ease}
 .multi-bar.fab-raised{bottom:calc(160px + var(--safe-b))}
+/* No bottom range dock (all DebtTrakr views) — drop the floats down */
+body.no-dock .fab{bottom:calc(24px + var(--safe-b))}
+body.no-dock .multi-bar{bottom:calc(28px + var(--safe-b))}
 .ms-btn{height:52px;border-radius:15px;background:var(--card-2);
   border:1px solid var(--line);color:var(--text);font-weight:700;
   font-size:13px;display:flex;align-items:center;justify-content:center;

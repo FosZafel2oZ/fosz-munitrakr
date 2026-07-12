@@ -1529,8 +1529,11 @@ function showView(v) {
     document.querySelectorAll("#view-settings .settings-block").forEach((b) =>
       b.classList.add("collapsed")
     );
-  document.getElementById("rangeDock").classList.toggle("hidden",
-    v === "settings" || v === "person-history" || v === "debt-records" || onDebtMode);
+  const dockHidden =
+    v === "settings" || v === "person-history" || v === "debt-records" || onDebtMode;
+  document.getElementById("rangeDock").classList.toggle("hidden", dockHidden);
+  // No dock → nothing to clear; let the floating buttons sit lower.
+  document.body.classList.toggle("no-dock", dockHidden);
   document.getElementById("recFilterMenu").classList.add("hidden");
   const dbtFilterMenu = document.getElementById("dbtRecFilterMenu");
   if (dbtFilterMenu) dbtFilterMenu.classList.add("hidden");
