@@ -4734,47 +4734,66 @@ function _clipText(ctx, str, maxW) {
   return str.slice(0, lo) + ell;
 }
 
-// Share a single debt record as a PNG via the system share sheet.
-// Falls back to a direct download when Web Share with files is unavailable.
-async function shareDebtRecord(debt) {
-  if (!debt || !debt.id) return;
+// Share one or more debt records as PNGs via the system share sheet.
+// Multiple records always go oldest-first (date asc, createdAt asc) so the
+// receiver reads the history in chronological order; filenames get an index
+// prefix so name-sorted galleries keep that order too.
+// Falls back to per-file downloads when Web Share with files is unavailable.
+async function shareDebtRecords(debtList) {
+  const list = (debtList || []).filter((d) => d && d.id);
+  if (!list.length) return;
   loadStore();
-  const person = (store.settings.people || []).find((x) => x.id === debt.personId)
-    || { name: "(deleted person)", color: "#888", icon: "person" };
   const peopleById = {};
   for (const p of (store.settings.people || [])) peopleById[p.id] = p;
-  const before = balanceBefore(store.debts || [], debt.id, peopleById);
   const defaultCurrency = (store.settings.defaultCurrency || "THB");
   const userName = (store.profile && store.profile.displayName) || "Me";
   const debtShareLanguage = store.settings.debtShareLanguage || "en";
 
-  let blob;
-  try {
-    blob = await renderDebtCard(debt, person, before, defaultCurrency, userName, debtShareLanguage);
-  } catch (err) {
-    console.error("renderDebtCard failed:", err);
-    alert("Couldn't generate the image — try again.");
-    return;
-  }
-  if (!blob) return;
+  const ordered = list.slice().sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)
+  );
 
-  const safeName = (person.name || "person").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
-  const filename = "debt-" + safeName + "-" + (debt.date || "record") + ".png";
-  const file = new File([blob], filename, { type: "image/png" });
-
-  try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      // files only — adding title/text causes some iOS targets to save a 2nd file
-      await navigator.share({ files: [file] });
+  // Render sequentially — each card is a full-size canvas; parallel rendering
+  // of a big selection would spike memory on iOS.
+  const files = [];
+  for (let i = 0; i < ordered.length; i++) {
+    const debt = ordered[i];
+    const person = (store.settings.people || []).find((x) => x.id === debt.personId)
+      || { name: "(deleted person)", color: "#888", icon: "person" };
+    const before = balanceBefore(store.debts || [], debt.id, peopleById);
+    let blob;
+    try {
+      blob = await renderDebtCard(debt, person, before, defaultCurrency, userName, debtShareLanguage);
+    } catch (err) {
+      console.error("renderDebtCard failed:", err);
+      alert("Couldn't generate the image — try again.");
       return;
     }
-    // Share with files genuinely unsupported → download fallback.
-    _downloadBlob(blob, filename);
+    if (!blob) return;
+    const safeName = (person.name || "person").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+    const prefix = ordered.length > 1 ? String(i + 1).padStart(2, "0") + "-" : "";
+    const filename = "debt-" + prefix + safeName + "-" + (debt.date || "record") + ".png";
+    files.push(new File([blob], filename, { type: "image/png" }));
+  }
+
+  try {
+    if (navigator.canShare && navigator.canShare({ files })) {
+      // files only — adding title/text causes some iOS targets to save extra files
+      await navigator.share({ files });
+      return;
+    }
+    // Share with files genuinely unsupported → download fallback (oldest first).
+    files.forEach((f) => _downloadBlob(f, f.name));
   } catch (err) {
     // Don't auto-download on AbortError (user cancelled the share sheet).
     if (err && err.name === "AbortError") return;
-    _downloadBlob(blob, filename);
+    files.forEach((f) => _downloadBlob(f, f.name));
   }
+}
+
+// Back-compat wrapper — the per-row share buttons call this with one record.
+async function shareDebtRecord(debt) {
+  return shareDebtRecords([debt]);
 }
 
 // Tiny shared helper for blob downloads (mirrors downloadBackup pattern).
@@ -5080,6 +5099,8 @@ function dbtUpdateSelUI() {
   }
   const delBtn = document.getElementById("dbtMsDelete");
   if (delBtn) delBtn.disabled = n === 0;
+  const shareBtn = document.getElementById("dbtMsShare");
+  if (shareBtn) shareBtn.disabled = n === 0;
   const allBtn = document.getElementById("dbtMsAll");
   if (allBtn) {
     const allSel = lastDbtRows.length > 0 && n === lastDbtRows.length;
@@ -5144,4 +5165,9 @@ document.getElementById("dbtMsDelete")?.addEventListener("click", () => {
   debtSelected.clear();
   // Stay in multi-select mode but re-render
   renderDebtRecords();
+});
+document.getElementById("dbtMsShare")?.addEventListener("click", () => {
+  if (!debtSelected.size) return;
+  // Selection survives the share (non-destructive) — stay in multi-select.
+  shareDebtRecords(lastDbtRows.filter((r) => debtSelected.has(r.id)));
 });
