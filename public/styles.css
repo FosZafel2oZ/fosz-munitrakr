@@ -1358,9 +1358,9 @@ body.theme-yoimiya .rn-menu{
   background: var(--accent-soft); color: var(--accent);
 }
 
-/* DebtTrakr multi-select bar — 3 same-sized 52x52 buttons centered. */
+/* DebtTrakr multi-select bar — 4 same-sized 52x52 buttons centered. */
 #dbtMultiBar { justify-content: center; }
-#dbtMsCancel, #dbtMsDelete, #dbtMsAll { flex: 0 0 52px; width: 52px; padding: 0; }
+#dbtMsCancel, #dbtMsShare, #dbtMsDelete, #dbtMsAll { flex: 0 0 52px; width: 52px; padding: 0; }
 #dbtMsDelete:not([disabled]) {
   color: #fff; background: var(--out); border-color: transparent;
 }

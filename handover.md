@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v75**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v76**.
 
 ---
 
@@ -148,7 +148,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 ### Views
 - **Dashboard** — top buttons (Total Lend / Total Borrow, signed totals across people). Vertical list of person cards (only those with non-zero outstanding). Each card: colored person icon + name, signed outstanding amount, repayment progress bar. "People" header row with a compact "View all" pill.
 - **Per-Person History** — drill in by tapping a person card. Header shows name + outstanding + direction-colored "They owe you / You owe" label. Records list shows every debt for that person newest-first, with direction badge, original currency line (if converted), and "Settled" badge on records that closed a cycle. Tap a row → edit modal. FAB pre-fills the person. Each row has a small share button that exports the record as an Aero-themed PNG card (with running outstanding math) via the iOS share sheet.
-- **All Debt Records** — bulk list across all people. Filter by person (multi-select). Multi-select mode: Cancel / Share / Delete / Select-all (`#dbtMsShare`; no Change-Person — kept clean intentionally). Share (`shareDebtRecords(list)`) renders every selected record to a PNG card and opens ONE share sheet with all files, always oldest-first (`date` asc, `createdAt` asc — inverse of the display sort); multi-file names get a zero-padded index prefix (`debt-01-…`) so name-sorted receivers keep the order, single-record filenames unchanged, with a per-file download fallback when Web Share with files is unavailable. Each row also has a share button (hidden in multi-select mode) that exports the record as an Aero-themed PNG card via the iOS share sheet (`shareDebtRecord(d)` is now a 1-element wrapper around `shareDebtRecords`; per-row buttons unchanged).
+- **All Debt Records** — bulk list across all people. Filter by person (multi-select). Multi-select mode: Cancel / Delete / Share / Select-all (`#dbtMsShare`; no Change-Person — kept clean intentionally). Share (`shareDebtRecords(list)`) renders every selected record to a PNG card and opens ONE share sheet with all files, always oldest-first (`date` asc, `createdAt` asc — inverse of the display sort); multi-file names get a zero-padded index prefix (`debt-01-…`) so name-sorted receivers keep the order, single-record filenames unchanged, with a per-file download fallback when Web Share with files is unavailable. Each row also has a share button (hidden in multi-select mode) that exports the record as an Aero-themed PNG card via the iOS share sheet (`shareDebtRecord(d)` is now a 1-element wrapper around `shareDebtRecords`; per-row buttons unchanged).
 
 ### Bottom-edge layout (no-dock)
 - `showView` mirrors the range-dock's hidden state onto a `body.no-dock` class — set whenever the range dock is absent (settings, person-history, debt-records, or any view while in DebtTrakr mode, which has no dock at all). Under `body.no-dock`, CSS lowers `.fab` to `calc(24px + var(--safe-b))` and `.multi-bar` to `calc(28px + var(--safe-b))`, so DebtTrakr's floating add button and multi-select bar sit near the bottom edge instead of hovering where the (absent) range dock would be.
@@ -209,7 +209,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v75` / `munitrakr-v75`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v76` / `munitrakr-v76`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
