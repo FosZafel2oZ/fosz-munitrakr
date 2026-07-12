@@ -2189,6 +2189,7 @@ function openModal(record) {
   syncModalLock();
   setRecRecurringSection(record);
   splitPeople = [];
+  splitMineManual = false;
   const splitToggleEl = document.getElementById("splitToggle");
   if (splitToggleEl) splitToggleEl.checked = false;
   const splitFormEl = document.getElementById("splitNewPersonForm");
@@ -2245,6 +2246,7 @@ function showColorPanel(items) {
 /* ---------------- Split the bill (Add Record modal) ---------------- */
 // Others' shares only — the user's own share is always the remainder.
 let splitPeople = []; // [{ personId, amount|null }]
+let splitMineManual = false; // user typed their own share (stop auto-remainder)
 
 function splitTotalAmount() {
   return parseFloat($("#fAmount").value) || 0;
@@ -2252,8 +2254,16 @@ function splitTotalAmount() {
 function splitOthersSum() {
   return splitPeople.reduce((s, r) => s + (Number(r.amount) || 0), 0);
 }
-function splitMyShare() {
+function splitRemainder() {
   return Math.round((splitTotalAmount() - splitOthersSum()) * 100) / 100;
+}
+function splitMyShare() {
+  if (splitMineManual) {
+    const el = document.getElementById("splitMyAmt");
+    const v = parseFloat(el && el.value);
+    return isNaN(v) ? 0 : Math.round(v * 100) / 100;
+  }
+  return splitRemainder();
 }
 
 // Show/hide/enable the whole section based on: add-vs-edit, record type,
@@ -2270,6 +2280,7 @@ function syncSplitSection() {
   if (!allowed && toggle.checked) {
     toggle.checked = false;
     splitPeople = [];
+    splitMineManual = false;
   }
   const hasAmount = splitTotalAmount() > 0;
   toggle.disabled = !hasAmount;
@@ -2277,6 +2288,7 @@ function syncSplitSection() {
   if (!hasAmount && toggle.checked) {
     toggle.checked = false;
     splitPeople = [];
+    splitMineManual = false;
   }
   body.classList.toggle("hidden", !toggle.checked);
   // Mutual exclusion: hide the recurring section while split is on.
@@ -2292,13 +2304,12 @@ function renderSplitRows() {
   const peopleById = {};
   for (const p of (store.settings.people || [])) peopleById[p.id] = p;
   const myName = (store.profile && store.profile.displayName) || "Me";
-  const cur = $("#fCurrency").value || "";
   const mine = splitMyShare();
   let html =
     '<div class="split-row split-row-me">' +
       '<span class="pick-ico" style="background:var(--accent)">' + personIconSvg("person") + '</span>' +
       '<span class="split-name">' + escapeHtml(myName) + ' <span class="split-you">(you)</span></span>' +
-      '<span class="split-amt-fixed' + (mine < 0 ? " neg" : "") + '" id="splitMyAmt">' + fmt(mine, cur) + '</span>' +
+      '<input type="number" class="split-amt split-amt-me' + (mine < 0 ? " neg" : "") + '" id="splitMyAmt" inputmode="decimal" step="0.01" min="0" placeholder="0.00" value="' + mine + '" />' +
     '</div>';
   for (const row of splitPeople) {
     const p = peopleById[row.personId];
@@ -2325,13 +2336,30 @@ function renderSplitRows() {
       renderSplitRows();
     });
   });
+  const myInput = box.querySelector("#splitMyAmt");
+  if (myInput) {
+    // Typing → manual (auto-remainder stops). Clearing → back to auto,
+    // refilled on blur or on the next total/participant change.
+    myInput.addEventListener("input", () => {
+      splitMineManual = myInput.value.trim() !== "";
+      if (splitMineManual)
+        myInput.classList.toggle("neg", (parseFloat(myInput.value) || 0) < 0);
+    });
+    myInput.addEventListener("blur", () => {
+      if (!splitMineManual) updateSplitMyAmt();
+    });
+  }
 }
 
 function updateSplitMyAmt() {
   const el = document.getElementById("splitMyAmt");
   if (!el) return;
-  const mine = splitMyShare();
-  el.textContent = fmt(mine, $("#fCurrency").value || "");
+  if (splitMineManual) {
+    el.classList.toggle("neg", (parseFloat(el.value) || 0) < 0);
+    return;
+  }
+  const mine = splitRemainder();
+  el.value = mine;
   el.classList.toggle("neg", mine < 0);
 }
 
@@ -2408,6 +2436,7 @@ function buildSplitPersonMenu() {
     if (!(total > 0) || splitPeople.length === 0) return;
     const shares = evenShares(total, splitPeople.length + 1);
     splitPeople.forEach((r, i) => { r.amount = shares[i + 1]; });
+    splitMineManual = false; // mine returns to auto = shares[0]
     renderSplitRows();
   });
 
@@ -2472,6 +2501,11 @@ $("#recordForm").addEventListener("submit", async (e) => {
     const mine = splitMyShare();
     if (mine < 0)
       return ($("#modalError").textContent = "Shares exceed the total amount");
+    const shareSum = Math.round((mine + splitOthersSum()) * 100) / 100;
+    const shareDiff = Math.round((payload.amount - shareSum) * 100) / 100;
+    if (shareDiff !== 0)
+      return ($("#modalError").textContent =
+        "Shares must add up to the total (off by " + fmt(Math.abs(shareDiff), payload.currency) + ")");
     loadStore();
     const peopleById = {};
     for (const p of (store.settings.people || [])) peopleById[p.id] = p;

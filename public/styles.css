@@ -1431,8 +1431,8 @@ body.theme-yoimiya .rn-menu{
 .split-name .split-you { color: var(--muted); font-weight: 400; font-size: .85em; }
 .split-row input.split-amt { width: 110px; flex: 0 0 auto; margin: 0;
   padding: 8px 10px; font-size: 14px; text-align: right; }
-.split-amt-fixed { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; }
-.split-amt-fixed.neg { color: var(--out); }
+.split-row input.split-amt-me { font-weight: 700; }
+.split-row input.split-amt-me.neg { color: var(--out); border-color: var(--out); }
 .split-remove { -webkit-appearance: none; appearance: none; background: transparent;
   border: 0; color: var(--out); font-size: 17px; line-height: 1; padding: 4px 6px;
   cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; }
