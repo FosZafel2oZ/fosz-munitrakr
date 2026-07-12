@@ -1,5 +1,5 @@
 /* MuniTrakr service worker — network-first (fresh when online, works offline) */
-const CACHE = "munitrakr-v74";
+const CACHE = "munitrakr-v75";
 const SHELL = [
   "./",
   "./index.html",
