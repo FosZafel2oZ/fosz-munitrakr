@@ -14,7 +14,7 @@ Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data live
 ProjectExpenses/
 ├─ public/                         <— THIS folder is the deployable PWA
 │  ├─ index.html                   markup for all views + modals
-│  ├─ app.js                       all client logic (~3,900 lines, single file)
+│  ├─ app.js                       all client logic (~5,100 lines, single file)
 │  ├─ recurring.js                 UMD: cadence math + rule helpers (pure)
 │  ├─ debts.js                     UMD: per-person balance math + cycle reset (pure)
 │  ├─ finance-helpers.js           UMD: reconcileRenames + FX rate service factory
@@ -157,10 +157,10 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 - `totalsAcrossPeople(balances)` returns `{ totalLend, totalBorrow }` for the top dashboard cards.
 
 ### Add Debt modal
-- Currency populated from shared `settings.currencies`. Same `attachConversion` pipeline as MuniTrakr (auto FX or manual rate for non-convertible pairs).
+- Currency populated from shared `settings.currencies`. Same `attachConversion` pipeline as MuniTrakr (every ISO currency auto-converts since v71; card markup applies here too).
 - **Match outstanding** chip — appears when the selected person has a non-zero balance. Defaults to **Paid back** when they owe you, **Lend** when you owe them. Fills amount with the outstanding value.
 - Inline **+ Add new person** form — name + color, no need to leave the modal. New person is auto-selected.
-- Validates: person required, amount > 0, date required, manual rate (if visible).
+- Validates: person required, amount > 0, date required.
 
 ### People
 - Stored in `settings.people`. Each has color + icon (`PEOPLE_ICONS` map, 22 icons: silhouettes by age/gender, gender symbols, relationships, occupations, tokens).
@@ -172,11 +172,11 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 
 In MuniTrakr mode:
 1. Recurring (rule list + Add rule)
-2. Categories (drag-reorder, icon+color, add)
-3. Preferences (default currency)
-4. Currencies (ISO-validated add/remove + reorder)
-5. Theme (theme select + Header icon (MuniTrakr) upload/restore + Header icon (DebtTrakr) upload/restore — both modes' icons editable from either side)
-6. Backup & Restore (Web Share / download / restore from file)
+2. Categories (drag-reorder, icon picker modal + color, add-form with icon picker)
+3. Preferences (Your name, Debt share image language, Card FX markup %)
+4. Currencies (Default currency + ISO-validated add/remove + reorder; every valid code auto-converts)
+5. Theme (theme select + per-mode header icons — "Upload" / "Reset" buttons, both modes editable from either side)
+6. Backup & Restore ("Back up" via Web Share / download, "Restore" from file)
 7. App version (current version + Check for updates + "Vibe coded by FosZ")
 
 In DebtTrakr mode: **People** replaces Recurring + Categories; everything else is identical and shared.
@@ -204,7 +204,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 ## 8. Service worker & versioning
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
-- FX API calls (`frankfurter`) bypass the SW.
+- FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
 - **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v74` / `munitrakr-v74`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
@@ -212,7 +212,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 ## 9. Key conventions & gotchas
 
-- **Git repo at https://github.com/FosZafel2oZ/fosz-munitrakr** (public, `main` branch). Cloudflare Pages auto-deploys from `main` on every push.
+- **Git repo at https://github.com/FosZafel2oZ/fosz-munitrakr** (public, `main` branch). Cloudflare Pages auto-deploys from `main` on every push (project setting: build output directory = `public`).
+- **Session workflow (user preference):** work directly on `main`; user previews by opening `public/index.html` via `file://` (no server needed except SW/manifest testing); commit freely but **push only when the user says "push it"**. Plans are executed via subagent-driven development (see memory).
 - **String dates everywhere** (`YYYY-MM-DD`). Cadence math in `recurring.js` is string-based to avoid `new Date(string)` UTC-vs-local pitfalls that bit the iOS date input.
 - **`createdAt` is numeric ms** — sort comparator uses arithmetic. Migration in `loadStore` coerces any legacy string values.
 - **Categories matched by NAME on records**, but renames propagate via stable `id` through `reconcileRenames(oldS, newS, records)` (in `finance-helpers.js`) inside the shim `PUT /settings`.
@@ -251,3 +252,5 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
 | `evenShares` | pure (from `debts.js`) — cent-exact even split, remainder to index 0 (the user) |
 | `splitPeople` / `syncSplitSection` / `renderSplitRows` | split-the-bill state + UI (Add Record modal) |
+| `ECB_CURRENCIES` / `isEcb` | 31-code ECB set — selects Frankfurter vs currency-api in the rate service |
+| `NO_SUB_LABEL` | "No Sub-category" — shared donut-slice + list-filter key for records without a sub |
