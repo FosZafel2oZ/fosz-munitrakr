@@ -1439,7 +1439,7 @@ body.theme-yoimiya .rn-menu{
 .split-remove { -webkit-appearance: none; appearance: none; background: transparent;
   border: 0; color: var(--out); font-size: 17px; line-height: 1; padding: 4px 6px;
   cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; }
-.split-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+.split-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .split-actions .picker { flex: 0 0 auto; }
 /* Person menu opens UPWARD — the picker sits near the bottom of the form,
    so a drop-down would land off-screen and force extra scrolling. The

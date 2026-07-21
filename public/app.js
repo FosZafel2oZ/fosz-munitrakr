@@ -2382,6 +2382,9 @@ function renderSplitRows() {
       solve2p();
     });
   }
+  // Auto button: only meaningful with 3+ participants (2-person solves live).
+  const autoBtn = document.getElementById("splitAutoBtn");
+  if (autoBtn) autoBtn.classList.toggle("hidden", splitPeople.length < 2);
 }
 
 // Bring the bottom of the form (where the split section lives) into view.
@@ -2455,6 +2458,38 @@ function buildSplitPersonMenu() {
     const shares = evenShares(total, splitPeople.length + 1);
     splitMine = shares[0];
     splitPeople.forEach((r, i) => { r.amount = shares[i + 1]; });
+    splitLastEdited = null;
+    renderSplitRows();
+  });
+
+  // Auto: split the REMAINING amount evenly across the blank fields only.
+  document.getElementById("splitAutoBtn").addEventListener("click", () => {
+    const err = $("#modalError");
+    const total = splitTotalAmount();
+    if (!(total > 0) || splitPeople.length < 2) return;
+    const blanks = [];
+    if (splitMine == null) blanks.push("me");
+    for (const r of splitPeople) if (r.amount == null) blanks.push(r.personId);
+    if (!blanks.length) {
+      err.textContent = "All shares are filled — clear one to use Auto.";
+      return;
+    }
+    const filled = [];
+    if (splitMine != null) filled.push(splitMine);
+    for (const r of splitPeople) if (r.amount != null) filled.push(r.amount);
+    const shares = fillBlanks(total, filled, blanks.length);
+    if (!shares.length) {
+      err.textContent = "Nothing left to split — the filled shares already reach the total.";
+      return;
+    }
+    err.textContent = "";
+    blanks.forEach((key, i) => {
+      if (key === "me") splitMine = shares[i];
+      else {
+        const rec = splitPeople.find((r) => r.personId === key);
+        if (rec) rec.amount = shares[i];
+      }
+    });
     splitLastEdited = null;
     renderSplitRows();
   });
