@@ -2317,7 +2317,8 @@ function syncSplitSection() {
   if (toggle.checked) {
     renderSplitRows();
   } else {
-    // Clear the rows when off so a stale share can't be read back on re-open.
+    // Clear the rendered rows when off. Participants and their amounts stay in
+    // state (re-checking the toggle restores them); only my own share resets.
     const rows = document.getElementById("splitRows");
     if (rows) rows.innerHTML = "";
     splitMine = null;
@@ -2451,8 +2452,17 @@ function buildSplitPersonMenu() {
 
   // Split evenly: total / (me + others), remainder cent to me (index 0).
   document.getElementById("splitEvenBtn").addEventListener("click", () => {
+    const err = $("#modalError");
     const total = splitTotalAmount();
-    if (!(total > 0) || splitPeople.length === 0) return;
+    if (!(total > 0)) {
+      err.textContent = "Enter the total amount first";
+      return;
+    }
+    if (splitPeople.length === 0) {
+      err.textContent = "Add at least one person to split with";
+      return;
+    }
+    err.textContent = "";
     const shares = evenShares(total, splitPeople.length + 1);
     splitMine = shares[0];
     splitPeople.forEach((r, i) => { r.amount = shares[i + 1]; });
@@ -2464,7 +2474,11 @@ function buildSplitPersonMenu() {
   document.getElementById("splitAutoBtn").addEventListener("click", () => {
     const err = $("#modalError");
     const total = splitTotalAmount();
-    if (!(total > 0) || splitPeople.length < 2) return;
+    if (!(total > 0)) {
+      err.textContent = "Enter the total amount first";
+      return;
+    }
+    if (splitPeople.length < 2) return; // unreachable — the button is hidden below 3 participants
     const blanks = [];
     if (splitMine == null) blanks.push("me");
     for (const r of splitPeople) if (r.amount == null) blanks.push(r.personId);
@@ -2542,7 +2556,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
   };
   if (!payload.category) return ($("#modalError").textContent = "Category is required");
   if (!payload.date) return ($("#modalError").textContent = "Date is required");
-  if (!(payload.amount >= 0))
+  if (!Number.isFinite(payload.amount) || !(payload.amount >= 0))
     return ($("#modalError").textContent = "Enter a valid amount");
   payload.amount = Math.round(payload.amount * 100) / 100; // money is cents-precision
 
