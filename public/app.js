@@ -2302,15 +2302,14 @@ function syncSplitSection() {
     splitMine = null;
     splitLastEdited = null;
   }
+  // A total is required to START a split, but an already-on split must survive
+  // a transiently-empty amount: a number input mid-edit ("1000.", backspaced
+  // to retype) reports value "", and wiping here would silently discard every
+  // share the user typed. An empty total at save time is caught visibly by the
+  // "Enter a valid amount" check.
   const hasAmount = splitTotalAmount() > 0;
-  toggle.disabled = !hasAmount;
-  if (hint) hint.classList.toggle("hidden", hasAmount);
-  if (!hasAmount && toggle.checked) {
-    toggle.checked = false;
-    splitPeople = [];
-    splitMine = null;
-    splitLastEdited = null;
-  }
+  toggle.disabled = !hasAmount && !toggle.checked;
+  if (hint) hint.classList.toggle("hidden", hasAmount || toggle.checked);
   body.classList.toggle("hidden", !toggle.checked);
   // Mutual exclusion: hide the recurring section while split is on.
   const recSection = document.getElementById("recRecurringSection");
@@ -2318,8 +2317,7 @@ function syncSplitSection() {
   if (toggle.checked) {
     renderSplitRows();
   } else {
-    // Clear the rows when off — a hidden invalid input (e.g. negative
-    // remainder) would otherwise silently block native form submission.
+    // Clear the rows when off so a stale share can't be read back on re-open.
     const rows = document.getElementById("splitRows");
     if (rows) rows.innerHTML = "";
     splitMine = null;
@@ -2333,6 +2331,9 @@ function renderSplitRows() {
   loadStore();
   const peopleById = {};
   for (const p of (store.settings.people || [])) peopleById[p.id] = p;
+  // Drop participants whose person was deleted (e.g. from another tab) — an
+  // invisible row would otherwise block save with an unexplainable error.
+  splitPeople = splitPeople.filter((r) => peopleById[r.personId]);
   const myName = (store.profile && store.profile.displayName) || "Me";
   const mineNeg = splitMine != null && splitMine < 0;
   let html =
@@ -2343,7 +2344,6 @@ function renderSplitRows() {
     '</div>';
   for (const row of splitPeople) {
     const p = peopleById[row.personId];
-    if (!p) continue;
     html +=
       '<div class="split-row" data-pid="' + p.id + '">' +
         '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
@@ -2366,6 +2366,7 @@ function renderSplitRows() {
     });
     rowEl.querySelector(".split-remove").addEventListener("click", () => {
       splitPeople = splitPeople.filter((r) => r.personId !== pid);
+      if (splitLastEdited === pid) splitLastEdited = null;
       renderSplitRows();
     });
   });
@@ -2474,9 +2475,17 @@ function buildSplitPersonMenu() {
     const filled = [];
     if (splitMine != null) filled.push(splitMine);
     for (const r of splitPeople) if (r.amount != null) filled.push(r.amount);
+    if (filled.some((v) => v < 0)) {
+      err.textContent = "A share is negative — fix it before using Auto.";
+      return;
+    }
     const shares = fillBlanks(total, filled, blanks.length);
     if (!shares.length) {
       err.textContent = "Nothing left to split — the filled shares already reach the total.";
+      return;
+    }
+    if (shares.some((s) => !(s > 0))) {
+      err.textContent = "Not enough left to give everyone a share.";
       return;
     }
     err.textContent = "";
@@ -2564,9 +2573,11 @@ $("#recordForm").addEventListener("submit", async (e) => {
   if (splitOn) {
     if (splitPeople.length === 0)
       return ($("#modalError").textContent = "Add at least one person to split with");
+    // Validate the value that will actually be stored — a typed 0.004 rounds
+    // to 0.00 and must not create a zero-amount debt.
     for (const r of splitPeople) {
-      if (!(Number(r.amount) > 0))
-        return ($("#modalError").textContent = "Every person needs a share greater than 0");
+      if (!(Math.round(Number(r.amount) * 100) > 0))
+        return ($("#modalError").textContent = "Every person's share must round to at least 0.01");
     }
     const mine = splitMyShare(); // blank = 0 (paying nothing yourself is fine)
     if (mine < 0)
