@@ -2535,6 +2535,25 @@ $("#recordForm").addEventListener("submit", async (e) => {
   if (!payload.date) return ($("#modalError").textContent = "Date is required");
   if (!(payload.amount >= 0))
     return ($("#modalError").textContent = "Enter a valid amount");
+  payload.amount = Math.round(payload.amount * 100) / 100; // money is cents-precision
+
+  // Recurring sub-form bounds — novalidate means JS must enforce what native did.
+  if (document.getElementById("recRecurringToggle")?.checked) {
+    const cadenceBtn = document.querySelector("#recCadence button.seg-on");
+    const cadenceKind = (cadenceBtn && cadenceBtn.dataset.v) || "daily";
+    if (cadenceKind === "monthly" || cadenceKind === "yearly") {
+      const el = document.getElementById(cadenceKind === "monthly" ? "recDayOfMonth" : "recYearDay");
+      const d = Number(el.value);
+      if (!Number.isInteger(d) || d < 1 || d > 31)
+        return ($("#modalError").textContent = "Recurring day must be a whole number from 1 to 31");
+    }
+    const endBtn = document.querySelector("#recEnd button.seg-on");
+    if (endBtn && endBtn.dataset.v === "count") {
+      const n = Number(document.getElementById("recEndCount").value);
+      if (!Number.isInteger(n) || n < 1)
+        return ($("#modalError").textContent = "Occurrences must be a whole number of at least 1");
+    }
+  }
 
   // ----- Split the bill (Add flow only) -----
   const splitOn =
