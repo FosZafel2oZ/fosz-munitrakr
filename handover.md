@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v76**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v77**.
 
 ---
 
@@ -24,7 +24,7 @@ ProjectExpenses/
 │  ├─ icon.png / icon.svg          default app icon
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
-├─ tests/                          node tests/run.js — 107 unit tests
+├─ tests/                          node tests/run.js — 115 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
@@ -38,7 +38,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `107/107 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `115/115 passed, 0 failed`.
 
 ---
 
@@ -139,7 +139,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 
 ### Split the bill
 - Add Record modal (expense type, Add flow only): "Split the bill" checkbox above the recurring section (mutually exclusive with it). User's share is the auto-computed remainder; "Split evenly" uses `evenShares` (debts.js) with the rounding remainder going to the user. On save: the expense stores only the user's share (notes auto-append the full breakdown), and one `lend` debt per participant is created on the DebtTrakr side in a single batched `saveStore()` (same currency/date; debt notes are identical to the expense notes — user notes first, then the breakdown). Checking the toggle auto-scrolls the form to the section; the person menu opens upward. Expense and debts are independent after creation.
-- Adding a participant — from the "+ Add person" menu or via the inline "+ New person" form — also auto-scrolls the form to the split section (`scrollSplitIntoView()`), same as checking the toggle. The user's own "(you)" row (`#splitMyAmt`, `.split-amt.split-amt-me`) is an editable number input: it live-tracks the remainder (total − others) until the user types into it (`splitMineManual` flag), and clearing the field returns it to auto (refilled on blur or the next recompute); "Split evenly" always resets it to auto. On save, shares must sum exactly to the total or the modal shows "Shares must add up to the total (off by …)".
+- Share fields (the user's own included) are typed-or-blank; state mirrors the visible fields exactly (`splitMine`, `splitPeople[].amount`, `null` = blank — number-input badInput can't desync save). With exactly 2 participants, typing either field auto-fills the other with `total − typed` (`solve2p()`, DOM-direct so focus/caret survive; also re-mirrors when the total changes). With 3+ participants nothing solves live; an **Auto** button (visible only then) splits the remaining amount cent-exact across the blank fields via `fillBlanks` (debts.js). "Split evenly" overwrites all fields with `evenShares`. The record form is `novalidate` — every save rejection is a visible `#modalError` message (share sums are validated cent-exact on the rounded values that get stored). Save also cents-rounds `payload.amount` and bounds-checks the recurring day/occurrences fields with visible errors (novalidate follow-ups).
 
 ---
 
@@ -209,7 +209,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v76` / `munitrakr-v76`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v77` / `munitrakr-v77`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -254,8 +254,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `computeOccurrences` / `applyEndChecks` / `buildRecordFromRule` / `unpauseRule` | recurring math (from `recurring.js`) |
 | `reconcileRenames` / `makeRateService` | shared helpers (from `finance-helpers.js`) |
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
-| `evenShares` | pure (from `debts.js`) — cent-exact even split, remainder to index 0 (the user) |
-| `splitPeople` / `splitMineManual` / `syncSplitSection` / `renderSplitRows` | split-the-bill state + UI (Add Record modal) |
+| `evenShares` / `fillBlanks` | pure (from `debts.js`) — cent-exact splits: evenShares over everyone, fillBlanks over blank fields only |
+| `splitPeople` / `splitMine` / `splitLastEdited` / `solve2p` / `syncSplitSection` / `renderSplitRows` | split-the-bill state + UI (Add Record modal) |
 | `shareDebtRecords(list)` | renders + shares N debt PNGs oldest-first in one share sheet; `shareDebtRecord(d)` is a 1-element wrapper |
 | `ECB_CURRENCIES` / `isEcb` | 31-code ECB set — selects Frankfurter vs currency-api in the rate service |
 | `NO_SUB_LABEL` | "No Sub-category" — shared donut-slice + list-filter key for records without a sub |
