@@ -2258,9 +2258,6 @@ let splitLastEdited = null; // "me" | personId — which side 2-person solve mir
 function splitTotalAmount() {
   return parseFloat($("#fAmount").value) || 0;
 }
-function splitOthersSum() {
-  return splitPeople.reduce((s, r) => s + (Number(r.amount) || 0), 0);
-}
 function splitMyShare() {
   return splitMine == null ? 0 : Math.round(Number(splitMine) * 100) / 100;
 }
@@ -2552,14 +2549,9 @@ $("#recordForm").addEventListener("submit", async (e) => {
       if (!(Number(r.amount) > 0))
         return ($("#modalError").textContent = "Every person needs a share greater than 0");
     }
-    const mine = splitMyShare();
+    const mine = splitMyShare(); // blank = 0 (paying nothing yourself is fine)
     if (mine < 0)
       return ($("#modalError").textContent = "Shares exceed the total amount");
-    const shareSum = Math.round((mine + splitOthersSum()) * 100) / 100;
-    const shareDiff = Math.round((payload.amount - shareSum) * 100) / 100;
-    if (shareDiff !== 0)
-      return ($("#modalError").textContent =
-        "Shares must add up to the total (off by " + fmt(Math.abs(shareDiff), payload.currency) + ")");
     loadStore();
     const peopleById = {};
     for (const p of (store.settings.people || [])) peopleById[p.id] = p;
@@ -2569,6 +2561,13 @@ $("#recordForm").addEventListener("submit", async (e) => {
       name: (peopleById[r.personId] || {}).name || "?",
       amount: Math.round(Number(r.amount) * 100) / 100,
     }));
+    // Cent-exact check on the values that will actually be stored (parts are
+    // rounded above; a typed 83.333 must not pass validation yet store 83.33).
+    const partCents = parts.reduce((s, p) => s + Math.round(p.amount * 100), 0);
+    const diffCents = Math.round(payload.amount * 100) - Math.round(mine * 100) - partCents;
+    if (diffCents !== 0)
+      return ($("#modalError").textContent =
+        "Shares must add up to the total (off by " + fmt(Math.abs(diffCents) / 100, payload.currency) + ")");
     const breakdown =
       "Split bill — total " + fmt(payload.amount, payload.currency) + ": " +
       [myName + " " + fmt(mine, "")]
