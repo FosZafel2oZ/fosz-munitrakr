@@ -212,5 +212,26 @@
     return out;
   }
 
-  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares };
+  // Split the REMAINING amount (total − already-filled shares) evenly across
+  // blankCount blank fields, cent-exact, largest share at index 0. Returns []
+  // when nothing positive is left to distribute or any input is invalid
+  // (negative or non-finite filled entries are invalid — the caller's save
+  // validation rejects them anyway).
+  function fillBlanks(total, filled, blankCount) {
+    const t = Number(total);
+    const n = Math.floor(Number(blankCount));
+    if (!Number.isFinite(t) || !(t > 0) || !Number.isFinite(n) || !(n >= 1)) return [];
+    if (!Array.isArray(filled)) return [];
+    let filledCents = 0;
+    for (const f of filled) {
+      const v = Number(f);
+      if (!Number.isFinite(v) || v < 0) return [];
+      filledCents += Math.round(v * 100);
+    }
+    const remainingCents = Math.round(t * 100) - filledCents;
+    if (remainingCents <= 0) return [];
+    return evenShares(remainingCents / 100, n);
+  }
+
+  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares, fillBlanks };
 });

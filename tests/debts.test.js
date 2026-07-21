@@ -465,3 +465,47 @@ test("evenShares: invalid input -> empty array", () => {
   assert.deepEqual(D.evenShares(NaN, 2), []);
   assert.deepEqual(D.evenShares(100, Infinity), []);
 });
+
+/* ---------------- fillBlanks (split-the-bill Auto button) ---------------- */
+
+test("fillBlanks: splits remaining evenly across blanks", () => {
+  assert.deepEqual(D.fillBlanks(300, [100], 2), [100, 100]);
+});
+
+test("fillBlanks: no filled fields behaves like evenShares", () => {
+  assert.deepEqual(D.fillBlanks(1000, [], 3), [333.34, 333.33, 333.33]);
+});
+
+test("fillBlanks: rounding remainder goes to the first blank", () => {
+  assert.deepEqual(D.fillBlanks(100, [50.01], 2), [25, 24.99]);
+});
+
+test("fillBlanks: cent-exact — blanks + filled always reach the total", () => {
+  const filled = [10.1, 20.2];
+  const shares = D.fillBlanks(123.45, filled, 4);
+  assert.equal(shares.length, 4);
+  const cents = shares.concat(filled).reduce((s, v) => s + Math.round(v * 100), 0);
+  assert.equal(cents, 12345);
+});
+
+test("fillBlanks: filled already reach the total -> empty", () => {
+  assert.deepEqual(D.fillBlanks(100, [60, 40], 1), []);
+});
+
+test("fillBlanks: filled exceed the total -> empty", () => {
+  assert.deepEqual(D.fillBlanks(100, [150], 2), []);
+});
+
+test("fillBlanks: invalid inputs -> empty", () => {
+  assert.deepEqual(D.fillBlanks(0, [], 2), []);
+  assert.deepEqual(D.fillBlanks(NaN, [], 2), []);
+  assert.deepEqual(D.fillBlanks(100, [], 0), []);
+  assert.deepEqual(D.fillBlanks(100, [NaN], 2), []);
+  assert.deepEqual(D.fillBlanks(100, [-5], 2), []);
+  assert.deepEqual(D.fillBlanks(100, "nope", 2), []);
+});
+
+test("fillBlanks: float-drift totals stay cent-exact", () => {
+  // 0.1 + 0.2 style drift must not break the cents math.
+  assert.deepEqual(D.fillBlanks(0.3, [0.1], 1), [0.2]);
+});
