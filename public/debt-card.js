@@ -98,8 +98,9 @@
   const WIDTH = 1080;
   const DPR = 2;
   const PAD = 64;
-  // Vertical rhythm. Heights are fixed per block, so the card's total height
-  // depends only on which optional blocks are present — no pre-measuring pass.
+  // Vertical rhythm. Every block has a fixed height except the notes card,
+  // which grows per wrapped line — so the height needs one measuring pass
+  // (see the throwaway context in renderDebtCard) before the canvas is sized.
   const TOP = 56, BOTTOM = 56, GAP = 44, NOTE_GAP = 32, NOTE_H = 132, OUT_H = 140;
   // Notes wrap; the card grows by one NOTE_LINE per extra line, up to NOTE_MAX_LINES.
   const NOTE_LINE = 38, NOTE_MAX_LINES = 4;
@@ -286,7 +287,12 @@
     // ---- Header, right column first: its width bounds the left column ----
     ctx.textBaseline = "top";
     ctx.font = FONT(800, 64);
-    const amtW = ctx.measureText(m.amountText).width;
+    // The amount is the one string that would otherwise never clip; without a
+    // cap an absurd figure (the app permits 1e15) runs over the name and pill.
+    // Leave room for the icon tile plus a readable stub of the name.
+    const amountMaxW = WIDTH - PAD * 2 - 112 - 28 - 120;
+    const amountClipped = clipText(ctx, m.amountText, amountMaxW);
+    const amtW = ctx.measureText(amountClipped).width;
     ctx.font = FONT(700, 30);
     const curW = m.currencyText ? ctx.measureText(m.currencyText).width + 12 : 0;
     ctx.font = FONT(500, 26);
@@ -298,7 +304,7 @@
 
     ctx.fillStyle = P.text;
     ctx.font = FONT(800, 64);
-    ctx.fillText(m.amountText, rightEdge - amtW - curW, y + 2);
+    ctx.fillText(amountClipped, rightEdge - amtW - curW, y + 2);
     if (m.currencyText) {
       ctx.font = FONT(700, 30);
       ctx.fillStyle = P.muted;

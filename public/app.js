@@ -4559,7 +4559,7 @@ async function shareDebtRecords(debtList) {
         alert("Couldn't generate the image — try again.");
         return;
       }
-      if (!blob) return;
+      if (!blob) { alert("Couldn't generate the image — try again."); return; }
       const safeName = (person.name || "person").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
       const prefix = ordered.length > 1 ? String(i + 1).padStart(2, "0") + "-" : "";
       const filename = "debt-" + prefix + safeName + "-" + (debt.date || "record") + ".png";
