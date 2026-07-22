@@ -95,3 +95,34 @@ test("debtCardModel: notes collapse to one line, blank notes are null", () => {
   });
   assert.equal(m.notesText, "ค่าตั๋วหนัง Split bill — total 900");
 });
+
+test("debtCardModel: Thai repayment sentences name both sides", () => {
+  const back = model({
+    debt: { type: "paid-back", amount: 100, currency: "THB", date: "2026-07-21" },
+    language: "th",
+  });
+  assert.equal(back.tagSentence, "Boat คืนเงินให้ Bill");
+  const pay = model({
+    debt: { type: "pay-back", amount: 100, currency: "THB", date: "2026-07-21" },
+    language: "th",
+  });
+  assert.equal(pay.tagSentence, "Bill คืนเงินให้ Boat");
+  const borrow = model({
+    debt: { type: "borrow", amount: 100, currency: "THB", date: "2026-07-21" },
+    language: "th",
+  });
+  assert.equal(borrow.tagSentence, "Bill ยืมเงินจาก Boat");
+});
+
+test("debtCardModel: running balance uses the converted amount, not the raw one", () => {
+  const m = model({
+    debt: { type: "lend", amount: 450, currency: "USD", date: "2026-07-21",
+            convertedAmount: 15750, convertedCurrency: "THB", rate: 35 },
+    balanceBefore: 1000,
+  });
+  assert.equal(m.amountText, "450");
+  assert.equal(m.currencyText, "USD");
+  assert.equal(m.mathText, "1,000 + 15,750");
+  assert.equal(m.totalText, "16,750");
+  assert.equal(m.totalCurrency, "THB");
+});
