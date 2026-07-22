@@ -9,8 +9,15 @@
   }
 })(typeof window !== "undefined" ? window : globalThis, function () {
 
+  // Money: whole amounts stay clean ("450"), fractional ones always show both
+  // cents ("4,162.37", "11,111,111.10" — never a lone "….1").
   function fmtNum(v) {
-    return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    const n = Number(v);
+    const whole = Number.isInteger(n);
+    return n.toLocaleString(undefined, {
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: whole ? 0 : 2,
+    });
   }
 
   // Turns a debt + its context into every string the card draws. Pure: no

@@ -126,3 +126,15 @@ test("debtCardModel: running balance uses the converted amount, not the raw one"
   assert.equal(m.totalText, "16,750");
   assert.equal(m.totalCurrency, "THB");
 });
+
+test("debtCardModel: money shows no decimals when whole, exactly two when not", () => {
+  assert.equal(model({ debt: { type: "lend", amount: 450, currency: "THB", date: "2026-07-21" } }).amountText, "450");
+  assert.equal(model({ debt: { type: "lend", amount: 1234567.89, currency: "THB", date: "2026-07-21" } }).amountText, "1,234,567.89");
+  // A trailing-zero cent must survive — "11,111,111.1" would be wrong.
+  const m = model({
+    debt: { type: "lend", amount: 1234567.89, currency: "THB", date: "2026-07-21" },
+    balanceBefore: 9876543.21,
+  });
+  assert.equal(m.totalText, "11,111,111.10");
+  assert.equal(m.mathText, "9,876,543.21 + 1,234,567.89");
+});
