@@ -101,6 +101,10 @@
   // Vertical rhythm. Heights are fixed per block, so the card's total height
   // depends only on which optional blocks are present — no pre-measuring pass.
   const TOP = 56, BOTTOM = 56, GAP = 44, NOTE_GAP = 32, NOTE_H = 132, OUT_H = 140;
+  // Notes wrap; the card grows by one NOTE_LINE per extra line, up to NOTE_MAX_LINES.
+  const NOTE_LINE = 38, NOTE_MAX_LINES = 4;
+  // Width available to the note text: card inner width minus the icon tile column.
+  const NOTE_TEXT_W = WIDTH - PAD - 32 - (PAD + 28 + 60 + 24);
 
   const PALETTE = {
     bgTop:    "#f6fbfa",
@@ -187,6 +191,33 @@
     return str.slice(0, lo) + ell;
   }
 
+  // Greedy wrap into at most maxLines. Prefers breaking at a space, but falls
+  // back to a mid-"word" break, which is what makes Thai (no inter-word
+  // spaces) wrap at all. The final line ellipsises if text remains.
+  // ctx.font must already be set.
+  function wrapText(ctx, str, maxW, maxLines) {
+    const lines = [];
+    let rest = String(str);
+    while (rest.length && lines.length < maxLines) {
+      if (ctx.measureText(rest).width <= maxW) { lines.push(rest); rest = ""; break; }
+      let lo = 1, hi = rest.length;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (ctx.measureText(rest.slice(0, mid)).width <= maxW) lo = mid;
+        else hi = mid - 1;
+      }
+      let cut = lo;
+      const sp = rest.lastIndexOf(" ", cut);
+      if (sp > 0) cut = sp;
+      lines.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).replace(/^\s+/, "");
+    }
+    if (rest.length && lines.length) {
+      lines[lines.length - 1] = clipText(ctx, lines[lines.length - 1] + " " + rest, maxW);
+    }
+    return lines;
+  }
+
   // Rasterizes an SVG string into an Image at the given pixel size.
   function loadImageFromSvg(svgStr, sizePx) {
     return new Promise((resolve, reject) => {
@@ -218,8 +249,17 @@
     const P = PALETTE;
 
     const headerH = m.convertedText ? 142 : 112;
+    // Measure the wrap on a throwaway context — the real canvas can't be sized
+    // until we know how many note lines there are.
+    let noteLines = [];
+    if (m.notesText) {
+      const measure = document.createElement("canvas").getContext("2d");
+      measure.font = FONT(700, 30);
+      noteLines = wrapText(measure, m.notesText, NOTE_TEXT_W, NOTE_MAX_LINES);
+    }
+    const noteH = noteLines.length ? NOTE_H + (noteLines.length - 1) * NOTE_LINE : 0;
     const HEIGHT =
-      TOP + headerH + GAP + (m.notesText ? NOTE_H + NOTE_GAP : 0) + OUT_H + BOTTOM;
+      TOP + headerH + GAP + (noteH ? noteH + NOTE_GAP : 0) + OUT_H + BOTTOM;
 
     const canvas = document.createElement("canvas");
     canvas.width = WIDTH * DPR;
@@ -262,7 +302,7 @@
     if (m.currencyText) {
       ctx.font = FONT(700, 30);
       ctx.fillStyle = P.muted;
-      ctx.fillText(m.currencyText, rightEdge - curW + 12, y + 34);
+      ctx.fillText(m.currencyText, rightEdge - curW + 12, y + 27);
     }
     ctx.textAlign = "right";
     ctx.fillStyle = P.faint;
@@ -309,15 +349,17 @@
     y += headerH + GAP;
 
     // ---- Notes card ----
-    if (m.notesText) {
+    if (noteLines.length) {
       ctx.fillStyle = P.card;
-      roundRect(ctx, PAD, y, WIDTH - PAD * 2, NOTE_H, 26);
+      roundRect(ctx, PAD, y, WIDTH - PAD * 2, noteH, 26);
       ctx.fill();
       ctx.strokeStyle = P.line;
       ctx.lineWidth = 1.5;
-      roundRect(ctx, PAD, y, WIDTH - PAD * 2, NOTE_H, 26);
+      roundRect(ctx, PAD, y, WIDTH - PAD * 2, noteH, 26);
       ctx.stroke();
 
+      // Tile stays anchored to the label row so it doesn't drift down as the
+      // note grows taller.
       const tile = 60, tileX = PAD + 28, tileY = y + (NOTE_H - tile) / 2;
       ctx.fillStyle = P.noteTile;
       roundRect(ctx, tileX, tileY, tile, tile, 18);
@@ -330,9 +372,9 @@
       ctx.fillText(m.notesLabel, nx, y + 34);
       ctx.fillStyle = P.text;
       ctx.font = FONT(700, 30);
-      ctx.fillText(clipText(ctx, m.notesText, rightEdge - 32 - nx), nx, y + 72);
+      noteLines.forEach((ln, i) => ctx.fillText(ln, nx, y + 72 + i * NOTE_LINE));
 
-      y += NOTE_H + NOTE_GAP;
+      y += noteH + NOTE_GAP;
     }
 
     // ---- Outstanding card (green + checkmark once the cycle closes) ----
@@ -352,7 +394,7 @@
     if (m.totalCurrency) {
       ctx.font = FONT(700, 26);
       ctx.fillStyle = "rgba(255,255,255,0.78)";
-      ctx.fillText(m.totalCurrency, totalX + totW + 10, y + OUT_H / 2 + 8);
+      ctx.fillText(m.totalCurrency, totalX + totW + 10, y + OUT_H / 2 + 2);
     }
     if (m.isSettled) drawCheckmark(ctx, totalX - 54, y + OUT_H / 2 - 18, 36, "#ffffff");
 
