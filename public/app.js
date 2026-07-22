@@ -2619,7 +2619,9 @@ $("#recordForm").addEventListener("submit", async (e) => {
         .join(" · ");
     splitPlan = { parts }; // only the participants' shares are needed downstream
     payload.amount = mine; // expense records the user's share only
-    payload.notes = (payload.notes ? payload.notes + "\n" : "") + breakdown;
+    // Middle dot, not a newline — the note reads as one line everywhere it's
+    // shown (records list, debt rows, share card).
+    payload.notes = (payload.notes ? payload.notes + " · " : "") + breakdown;
   }
 
   // step 1: detect new category/sub and ask for colours
