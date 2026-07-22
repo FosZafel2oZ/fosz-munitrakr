@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v77**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v78**.
 
 ---
 
@@ -17,6 +17,7 @@ ProjectExpenses/
 │  ├─ app.js                       all client logic (~5,100 lines, single file)
 │  ├─ recurring.js                 UMD: cadence math + rule helpers (pure)
 │  ├─ debts.js                     UMD: per-person balance math + cycle reset (pure)
+│  ├─ debt-card.js               UMD: share-card model (pure) + canvas renderer
 │  ├─ finance-helpers.js           UMD: reconcileRenames + FX rate service factory
 │  ├─ styles.css                   all styles incl. per-theme overrides
 │  ├─ sw.js                        service worker (stale-while-revalidate)
@@ -24,12 +25,13 @@ ProjectExpenses/
 │  ├─ icon.png / icon.svg          default app icon
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
-├─ tests/                          node tests/run.js — 115 unit tests
+├─ tests/                          node tests/run.js — 129 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
 │  ├─ finance-helpers.test.js      reconcileRenames + FX caching
-│  └─ debts.test.js                personBalances + cycle reset + settlements
+│  ├─ debts.test.js                personBalances + cycle reset + settlements
+│  └─ debt-card.test.js          share-card model wording + balance math
 ├─ serve.js                        zero-dep static server (local preview)
 ├─ docs/superpowers/               specs + plans archive
 └─ HANDOVER.md                     this file
@@ -38,7 +40,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `115/115 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `129/129 passed, 0 failed`.
 
 ---
 
@@ -138,7 +140,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 - Big totals on the dashboard cards + donut center auto-shrink font when text overflows (so `THB 1,000,000,000,000,000` doesn't blow out the layout). Currency moved into the muted label (`"2026 Expenses · THB"`) to leave more horizontal room for the number itself.
 
 ### Split the bill
-- Add Record modal (expense type, Add flow only): "Split the bill" checkbox above the recurring section (mutually exclusive with it). User's share is the auto-computed remainder; "Split evenly" uses `evenShares` (debts.js) with the rounding remainder going to the user. On save: the expense stores only the user's share (notes auto-append the full breakdown), and one `lend` debt per participant is created on the DebtTrakr side in a single batched `saveStore()` (same currency/date; debt notes are identical to the expense notes — user notes first, then the breakdown). Checking the toggle auto-scrolls the form to the section; the person menu opens upward. Expense and debts are independent after creation.
+- Add Record modal (expense type, Add flow only): "Split the bill" checkbox above the recurring section (mutually exclusive with it). User's share is the auto-computed remainder; "Split evenly" uses `evenShares` (debts.js) with the rounding remainder going to the user. On save: the expense stores only the user's share (notes auto-append the full breakdown), and one `lend` debt per participant is created on the DebtTrakr side in a single batched `saveStore()` (same currency/date; debt notes are identical to the expense notes — the user's own notes and the auto-generated breakdown are joined by a middle dot (` · `), not a newline, so the note reads as one line everywhere it appears). Checking the toggle auto-scrolls the form to the section; the person menu opens upward. Expense and debts are independent after creation.
 - Share fields (the user's own included) are typed-or-blank; state mirrors the visible fields exactly (`splitMine`, `splitPeople[].amount`, `null` = blank — number-input badInput can't desync save). With exactly 2 participants, typing either field auto-fills the other with `total − typed` (`solve2p()`, DOM-direct so focus/caret survive; also re-mirrors when the total changes). With 3+ participants nothing solves live; an **Auto** button (visible only then) splits the remaining amount cent-exact across the blank fields via `fillBlanks` (debts.js). "Split evenly" overwrites all fields with `evenShares`. The record form is `novalidate` — every save rejection is a visible `#modalError` message (share sums are validated cent-exact on the rounded values that get stored). Save also cents-rounds `payload.amount` and bounds-checks the recurring day/occurrences fields with visible errors (novalidate follow-ups). Split state survives a transiently-empty total (a number input mid-edit reads as blank), so editing the amount never silently discards typed shares.
 
 ---
@@ -148,7 +150,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 ### Views
 - **Dashboard** — top buttons (Total Lend / Total Borrow, signed totals across people). Vertical list of person cards (only those with non-zero outstanding). Each card: colored person icon + name, signed outstanding amount, repayment progress bar. "People" header row with a compact "View all" pill.
 - **Per-Person History** — drill in by tapping a person card. Header shows name + outstanding + direction-colored "They owe you / You owe" label. Records list shows every debt for that person newest-first, with direction badge, original currency line (if converted), and "Settled" badge on records that closed a cycle. Tap a row → edit modal. FAB pre-fills the person. Each row has a small share button that exports the record as an Aero-themed PNG card (with running outstanding math) via the iOS share sheet.
-- **All Debt Records** — bulk list across all people. Filter by person (multi-select). Multi-select mode: Cancel / Delete / Share / Select-all (`#dbtMsShare`; no Change-Person — kept clean intentionally). Share (`shareDebtRecords(list)`) renders every selected record to a PNG card and opens ONE share sheet with all files, always oldest-first (`date` asc, `createdAt` asc — inverse of the display sort); multi-file names get a zero-padded index prefix (`debt-01-…`) so name-sorted receivers keep the order, single-record filenames unchanged, with a per-file download fallback when Web Share with files is unavailable. Each row also has a share button (hidden in multi-select mode) that exports the record as an Aero-themed PNG card via the iOS share sheet (`shareDebtRecord(d)` is now a 1-element wrapper around `shareDebtRecords`; per-row buttons unchanged).
+- **All Debt Records** — bulk list across all people. Filter by person (multi-select). Multi-select mode: Cancel / Delete / Share / Select-all (`#dbtMsShare`; no Change-Person — kept clean intentionally). Share (`shareDebtRecords(list)`) renders every selected record to a PNG card and opens ONE share sheet with all files, always oldest-first (`date` asc, `createdAt` asc — inverse of the display sort); multi-file names get a zero-padded index prefix (`debt-01-…`) so name-sorted receivers keep the order, single-record filenames unchanged, with a per-file download fallback when Web Share with files is unavailable. Each row also has a share button (hidden in multi-select mode) that exports the record as an Aero-themed PNG card via the iOS share sheet (`shareDebtRecord(d)` is now a 1-element wrapper around `shareDebtRecords`; per-row buttons unchanged). Card layout: identity (icon tile, name, direction pill) on the left of the header with the amount, date and any FX line right-aligned opposite it; notes in their own white card; the running balance in a dark card that turns green with a checkmark when the record settles the cycle. Note text wraps onto up to 4 lines (the card grows to fit, and Thai — which has no inter-word spaces — breaks mid-word); amounts render with no decimals when whole and exactly two when fractional.
 
 ### Bottom-edge layout (no-dock)
 - `showView` mirrors the range-dock's hidden state onto a `body.no-dock` class — set whenever the range dock is absent (settings, person-history, debt-records, or any view while in DebtTrakr mode, which has no dock at all). Under `body.no-dock`, CSS lowers `.fab` to `calc(24px + var(--safe-b))` and `.multi-bar` to `calc(28px + var(--safe-b))`, so DebtTrakr's floating add button and multi-select bar sit near the bottom edge instead of hovering where the (absent) range dock would be.
@@ -209,7 +211,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v77` / `munitrakr-v77`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v78` / `munitrakr-v78`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -225,7 +227,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 - **Modal scroll lock:** `body.modal-open { overflow: hidden }` + `overscroll-behavior: contain` to block iOS scroll-chaining. Each modal's open/close path must update the body class.
 - **Drag-reorder** in Settings (Categories, Currencies, recurring rule rows): pointer-events based via `makeDraggable(container, rowSel, handleSel, arr, render)`.
 - **Backup uses Web Share API** with `{ files: [file] }` only (no `text`/`title` — those cause iOS targets to save extra files). Falls back to direct download when `canShare(files)` is false.
-- **iOS emoji rendering:** Unicode characters like ⏸ ▶ get substituted with Apple's emoji font. All icon buttons use inline SVG instead.
+- **iOS emoji rendering:** Unicode characters like ⏸ ▶ get substituted with Apple's emoji font. All icon buttons use inline SVG instead. The share card follows the same rule: its checkmark and note glyph are canvas paths, and the person icon is a rasterized SVG injected by the caller.
 - **iOS PWA cold start:** mode is reset to `"finance"`, but persisted `currentView` is restored. `showView`'s mode-compatibility gate redirects orphaned debt-only views to dashboard.
 
 ---
@@ -257,5 +259,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `evenShares` / `fillBlanks` | pure (from `debts.js`) — cent-exact splits: evenShares over everyone, fillBlanks over blank fields only |
 | `splitPeople` / `splitMine` / `splitLastEdited` / `solve2p` / `syncSplitSection` / `renderSplitRows` | split-the-bill state + UI (Add Record modal) |
 | `shareDebtRecords(list)` | renders + shares N debt PNGs oldest-first in one share sheet; `shareDebtRecord(d)` is a 1-element wrapper |
+| `debtCardModel` | pure (from debt-card.js) — every string + flag the share card draws (wording, FX line, balance math, settled) |
+| `renderDebtCard(opts)` | canvas renderer (from debt-card.js); takes an options object and the person's icon SVG injected by the caller |
 | `ECB_CURRENCIES` / `isEcb` | 31-code ECB set — selects Frankfurter vs currency-api in the rate service |
 | `NO_SUB_LABEL` | "No Sub-category" — shared donut-slice + list-filter key for records without a sub |
