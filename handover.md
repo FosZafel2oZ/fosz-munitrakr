@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v78**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v79**.
 
 ---
 
@@ -25,7 +25,7 @@ ProjectExpenses/
 │  ├─ icon.png / icon.svg          default app icon
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
-├─ tests/                          node tests/run.js — 129 unit tests
+├─ tests/                          node tests/run.js — 136 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
@@ -40,7 +40,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `129/129 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `136/136 passed, 0 failed`.
 
 ---
 
@@ -143,6 +143,11 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 - Add Record modal (expense type, Add flow only): "Split the bill" checkbox above the recurring section (mutually exclusive with it). User's share is the auto-computed remainder; "Split evenly" uses `evenShares` (debts.js) with the rounding remainder going to the user. On save: the expense stores only the user's share (notes auto-append the full breakdown), and one `lend` debt per participant is created on the DebtTrakr side in a single batched `saveStore()` (same currency/date; debt notes are identical to the expense notes — the user's own notes and the auto-generated breakdown are joined by a middle dot (` · `), not a newline, so the note reads as one line everywhere it appears). Checking the toggle auto-scrolls the form to the section; the person menu opens upward. Expense and debts are independent after creation.
 - Share fields (the user's own included) are typed-or-blank; state mirrors the visible fields exactly (`splitMine`, `splitPeople[].amount`, `null` = blank — number-input badInput can't desync save). With exactly 2 participants, typing either field auto-fills the other with `total − typed` (`solve2p()`, DOM-direct so focus/caret survive; also re-mirrors when the total changes). With 3+ participants nothing solves live; an **Auto** button (visible only then) splits the remaining amount cent-exact across the blank fields via `fillBlanks` (debts.js). "Split evenly" overwrites all fields with `evenShares`. The record form is `novalidate` — every save rejection is a visible `#modalError` message (share sums are validated cent-exact on the rounded values that get stored). Save also cents-rounds `payload.amount` and bounds-checks the recurring day/occurrences fields with visible errors (novalidate follow-ups). Split state survives a transiently-empty total (a number input mid-edit reads as blank), so editing the amount never silently discards typed shares.
 
+### Paid by someone else
+- Add Record modal (expense type, Add flow only): "Paid by someone else" checkbox, mutually exclusive with both split AND recurring (three-way exclusion — `syncPaidBySection` hides itself when either of the other two is on, and the extended `syncSplitSection` does the same in reverse). Choosing a payer uses the same person-picker pattern as split: a "Choose person" button opens a menu of `settings.people` plus an inline **+ New person** mini-form; the new person is auto-selected on save. The picked `paidByPersonId` survives the user manually toggling the section off (state stays, section just hides) but resets to `null` whenever the modal opens fresh or the section is force-hidden by split/recurring turning on.
+- On save the expense record is unaffected — it stores the full entered amount, same as any normal expense (unlike split, which shrinks the expense to the user's share). The payer's debt side is created silently and atomically: `attachConversion` runs first, then one batched `saveStore()` pushes the resulting debt record(s), mirroring split's and Add Debt's atomicity convention. The plan is computed via a sentinel `balanceBefore` trick (a synthetic debt dated to sort last is appended so the balance is "as of this expense's date", not "as of now") feeding `planPaidBy(entered, balanceBeforeSigned, defaultCurrency)` in `debts.js`: if the payer already owed the user, it settles that cycle first as `paid-back`, delegating to `planSplit` for the overshoot case (splits into paid-back + a fresh borrow, default-currency halves, same convention as `planSplit` elsewhere); otherwise (balance clear or the user already owes them) it's simply a new `borrow`. The debt note is the user's own notes, then a middle dot, then an auto-generated tag: `Paid for <user's display name> — <category> <amount>`.
+- Validation (visible `#modalError`, novalidate-style): requires `payload.amount > 0` ("Enter an amount greater than 0 to record who paid") and a `paidByPersonId` that resolves to a real person ("Choose who paid for you"). FX conversion failure on the debt side is caught and marks `rateUnavailable` on the record — the debt still inserts (same fallback as every other conversion path), it just isn't converted yet.
+
 ---
 
 ## 5. DebtTrakr — features
@@ -211,7 +216,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v78` / `munitrakr-v78`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v79` / `munitrakr-v79`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -258,6 +263,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
 | `evenShares` / `fillBlanks` | pure (from `debts.js`) — cent-exact splits: evenShares over everyone, fillBlanks over blank fields only |
 | `splitPeople` / `splitMine` / `splitLastEdited` / `solve2p` / `syncSplitSection` / `renderSplitRows` | split-the-bill state + UI (Add Record modal) |
+| `planPaidBy` | pure (from `debts.js`) — picks paid-back vs borrow from the payer's balance and delegates overshoot to planSplit; returns `{ records }` |
+| `paidByPersonId` / `syncPaidBySection` / `buildPaidByPersonMenu` | paid-by-someone-else state + UI (Add Record modal) |
 | `shareDebtRecords(list)` | renders + shares N debt PNGs oldest-first in one share sheet; `shareDebtRecord(d)` is a 1-element wrapper |
 | `debtCardModel` | pure (from debt-card.js) — every string + flag the share card draws (wording, FX line, balance math, settled) |
 | `renderDebtCard(opts)` | canvas renderer (from debt-card.js); takes an options object and the person's icon SVG injected by the caller |
