@@ -509,3 +509,94 @@ test("fillBlanks: float-drift totals stay cent-exact", () => {
   // 0.1 + 0.2 style drift must not break the cents math.
   assert.deepEqual(D.fillBlanks(0.3, [0.1], 1), [0.2]);
 });
+
+/* ---------------- planPaidBy (paid-by-someone-else) ---------------- */
+
+function paidByEntered(amount, extra) {
+  return Object.assign(
+    { personId: "p1", date: "2026-07-24", amount, currency: "THB", notes: "x" },
+    extra
+  );
+}
+
+test("planPaidBy: clear balance -> single borrow", () => {
+  const out = D.planPaidBy(paidByEntered(450), 0, "THB");
+  assert.equal(out.records.length, 1);
+  const r = out.records[0];
+  assert.equal(r.type, "borrow");
+  assert.equal(r.amount, 450);
+  assert.equal(r.currency, "THB");
+  assert.equal(r.personId, "p1");
+  assert.equal(r.date, "2026-07-24");
+  assert.equal(r.notes, "x");
+});
+
+test("planPaidBy: they owe more than the amount -> single paid-back, original currency kept", () => {
+  const out = D.planPaidBy(paidByEntered(450), 1000, "THB");
+  assert.equal(out.records.length, 1);
+  const r = out.records[0];
+  assert.equal(r.type, "paid-back");
+  assert.equal(r.amount, 450);
+  assert.equal(r.currency, "THB");
+});
+
+test("planPaidBy: they owe exactly the amount -> single paid-back (no split)", () => {
+  const out = D.planPaidBy(paidByEntered(450), 450, "THB");
+  assert.equal(out.records.length, 1);
+  const r = out.records[0];
+  assert.equal(r.type, "paid-back");
+  assert.equal(r.amount, 450);
+});
+
+test("planPaidBy: they owe less -> two records, exact split halves in default currency", () => {
+  const out = D.planPaidBy(paidByEntered(450), 100, "THB");
+  assert.equal(out.records.length, 2);
+  const [a, b] = out.records;
+  assert.equal(a.type, "paid-back");
+  assert.equal(a.amount, 100);
+  assert.equal(a.currency, "THB");
+  assert.equal(a.personId, "p1");
+  assert.equal(a.date, "2026-07-24");
+  assert.equal(a.notes, "x");
+  assert.equal(b.type, "borrow");
+  assert.equal(b.amount, 350);
+  assert.equal(b.currency, "THB");
+  assert.equal(b.personId, "p1");
+  assert.equal(b.date, "2026-07-24");
+  assert.equal(b.notes, "x");
+});
+
+test("planPaidBy: I already owe them -> single borrow", () => {
+  const out = D.planPaidBy(paidByEntered(450), -200, "THB");
+  assert.equal(out.records.length, 1);
+  const r = out.records[0];
+  assert.equal(r.type, "borrow");
+  assert.equal(r.amount, 450);
+});
+
+test("planPaidBy: converted amount drives the math", () => {
+  const entered = paidByEntered(450, {
+    currency: "USD",
+    convertedAmount: 15750,
+    convertedCurrency: "THB",
+  });
+  const out = D.planPaidBy(entered, 1000, "THB");
+  assert.equal(out.records.length, 2);
+  const [a, b] = out.records;
+  assert.equal(a.type, "paid-back");
+  assert.equal(a.amount, 1000);
+  assert.equal(a.currency, "THB");
+  assert.equal(b.type, "borrow");
+  assert.equal(b.amount, 14750);
+  assert.equal(b.currency, "THB");
+});
+
+test("planPaidBy: invalid input -> empty; no caller mutation", () => {
+  assert.deepEqual(D.planPaidBy(null, 100, "THB"), { records: [] });
+  assert.deepEqual(D.planPaidBy(paidByEntered(0), 100, "THB"), { records: [] });
+  assert.deepEqual(D.planPaidBy(paidByEntered(NaN), 100, "THB"), { records: [] });
+
+  const e = paidByEntered(450);
+  D.planPaidBy(e, 0, "THB");
+  assert.equal(e.type, undefined);
+});
