@@ -2769,6 +2769,29 @@ $("#recordForm").addEventListener("submit", async (e) => {
     loadStore();
     if (!(store.settings.people || []).some((p) => p.id === paidByPersonId))
       return ($("#modalError").textContent = "Choose who paid for you");
+    // Foreign-currency netting needs a rate BEFORE anything saves: planSplit's
+    // halves are minted in the default currency, so converting late (or never)
+    // would store wrong money with no rateUnavailable flag left to repair it.
+    // No-netting saves stay allowed offline — a plain borrow keeps its original
+    // currency and the flag, same as the Add Debt modal.
+    const pbDefaultCurrency = store.settings.defaultCurrency || "THB";
+    if (payload.currency !== pbDefaultCurrency) {
+      const probe = { amount: payload.amount, currency: payload.currency, date: payload.date };
+      let probeFailed = false;
+      try { await attachConversion(probe); } catch (_e) { probeFailed = true; }
+      if (probeFailed || probe.convertedAmount == null || probe.rateUnavailable) {
+        const sentinel = "__paidby_probe__";
+        const debtsForCalc = (store.debts || []).concat([{
+          id: sentinel, personId: paidByPersonId, date: payload.date,
+          amount: 0, currency: payload.currency,
+          createdAt: Date.now() + 1000000,
+        }]);
+        if (balanceBefore(debtsForCalc, sentinel) > 0)
+          return ($("#modalError").textContent =
+            "No exchange rate right now — can't deduct from what they owe you. Use " +
+            pbDefaultCurrency + " or try again online.");
+      }
+    }
   }
 
   // step 1: detect new category/sub and ask for colours

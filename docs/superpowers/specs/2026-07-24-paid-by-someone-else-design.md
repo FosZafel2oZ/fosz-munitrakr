@@ -52,7 +52,7 @@ stamp ids/createdAt (first = Date.now(), second = +1ms), push all, ONE saveStore
 
 - `fmt` is the existing app-wide money formatter.
 - Backdated expenses inherit the Add Debt modal's behavior: the sentinel sorts by the record's date, so the balance is computed as of that date.
-- Offline/conversion failure: the debt(s) carry `rateUnavailable`, same as split-bill debts.
+- Offline/conversion failure: if the expense currency differs from the default AND the payer's balance requires netting (balance > 0 as of the expense date), the save is blocked pre-save with a visible message — planSplit's halves are minted in the default currency and a rate-less conversion would store wrong money unrepairably. Otherwise (same currency, or no netting needed) the single debt inserts carrying `rateUnavailable`, same as the Add Debt modal offline.
 
 ## `planPaidBy` (new pure function, `public/debts.js`)
 
