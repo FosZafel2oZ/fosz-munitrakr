@@ -2357,20 +2357,26 @@ function syncPaidBySection() {
     if (menu) menu.classList.add("hidden");
   }
   body.classList.toggle("hidden", !toggle.checked);
-  // Refresh the selected-person button from state.
-  loadStore();
-  const peopleById = {};
-  for (const p of (store.settings.people || [])) peopleById[p.id] = p;
-  if (paidByPersonId && !peopleById[paidByPersonId]) paidByPersonId = null;
-  const btn = document.getElementById("paidByPersonBtn");
-  if (btn) {
-    const p = paidByPersonId ? peopleById[paidByPersonId] : null;
-    if (p) {
-      btn.innerHTML =
-        '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
-        '<span>' + escapeHtml(p.name) + '</span>';
-    } else {
-      btn.textContent = "Choose person";
+  // Refresh the selected-person button from state — but only while the
+  // section is actually visible and on; matches split's cost profile
+  // (renderSplitRows only pays loadStore when its toggle is checked), and
+  // this now runs on every #fAmount keystroke so it must stay cheap while
+  // hidden/off.
+  if (allowed && toggle.checked) {
+    loadStore();
+    const peopleById = {};
+    for (const p of (store.settings.people || [])) peopleById[p.id] = p;
+    if (paidByPersonId && !peopleById[paidByPersonId]) paidByPersonId = null;
+    const btn = document.getElementById("paidByPersonBtn");
+    if (btn) {
+      const p = paidByPersonId ? peopleById[paidByPersonId] : null;
+      if (p) {
+        btn.innerHTML =
+          '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
+          '<span>' + escapeHtml(p.name) + '</span>';
+      } else {
+        btn.textContent = "Choose person";
+      }
     }
   }
 }
@@ -2758,6 +2764,8 @@ $("#recordForm").addEventListener("submit", async (e) => {
     !editingId && modalType === "expense" &&
     !!document.getElementById("paidByToggle")?.checked;
   if (paidByOn) {
+    if (!(payload.amount > 0))
+      return ($("#modalError").textContent = "Enter an amount greater than 0 to record who paid");
     loadStore();
     if (!(store.settings.people || []).some((p) => p.id === paidByPersonId))
       return ($("#modalError").textContent = "Choose who paid for you");
