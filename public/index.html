@@ -562,6 +562,28 @@
         </div>
       </div>
 
+      <!-- Paid by someone else (Add flow only; expense only; exclusive with split & recurring) -->
+      <div id="paidBySection" class="split-section">
+        <label class="row-toggle">
+          <input type="checkbox" id="paidByToggle" />
+          <span>Paid by someone else</span>
+        </label>
+        <div id="paidByBody" class="hidden">
+          <div class="split-actions">
+            <div class="picker" id="paidByPersonPicker">
+              <button type="button" class="btn-secondary sm" id="paidByPersonBtn">Choose person</button>
+              <div class="picker-menu hidden" id="paidByPersonMenu"></div>
+            </div>
+          </div>
+          <div id="paidByNewPersonForm" class="add-person-inline hidden">
+            <input type="color" id="paidByNewPersonColor" value="#7c5cff" />
+            <input type="text" id="paidByNewPersonName" placeholder="Name" />
+            <button type="button" class="btn-mini" id="paidByNewPersonSave">Save</button>
+            <button type="button" class="btn-mini" id="paidByNewPersonCancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
       <!-- New category/sub colour assignment -->
       <div id="newColorPanel" class="new-color-panel hidden">
         <div class="block-title">Assign colors to new items</div>

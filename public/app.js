@@ -1990,6 +1990,7 @@ $$(".type-toggle button").forEach((b) =>
     buildFreqCats();
     setCategory("");
     syncSplitSection();
+    syncPaidBySection();
   })
 );
 
@@ -2198,7 +2199,13 @@ function openModal(record) {
   if (splitToggleEl) splitToggleEl.checked = false;
   const splitFormEl = document.getElementById("splitNewPersonForm");
   if (splitFormEl) splitFormEl.classList.add("hidden");
+  paidByPersonId = null;
+  const paidByToggleEl = document.getElementById("paidByToggle");
+  if (paidByToggleEl) paidByToggleEl.checked = false;
+  const paidByFormEl = document.getElementById("paidByNewPersonForm");
+  if (paidByFormEl) paidByFormEl.classList.add("hidden");
   syncSplitSection();
+  syncPaidBySection();
 }
 function closeModal() {
   $("#modal").classList.add("hidden");
@@ -2254,6 +2261,7 @@ function showColorPanel(items) {
 let splitPeople = []; // [{ personId, amount: number|null }] — null = blank
 let splitMine = null; // my share; null = blank
 let splitLastEdited = null; // "me" | personId — which side 2-person solve mirrors
+let paidByPersonId = null; // person who fronted the money (paid-by-someone-else)
 
 function splitTotalAmount() {
   return parseFloat($("#fAmount").value) || 0;
@@ -2294,7 +2302,8 @@ function syncSplitSection() {
   const hint = document.getElementById("splitHint");
   if (!section || !toggle || !body) return;
   const recOn = !!document.getElementById("recRecurringToggle")?.checked;
-  const allowed = !editingId && modalType === "expense" && !recOn;
+  const paidByOn = !!document.getElementById("paidByToggle")?.checked;
+  const allowed = !editingId && modalType === "expense" && !recOn && !paidByOn;
   section.classList.toggle("hidden", !allowed);
   if (!allowed && toggle.checked) {
     toggle.checked = false;
@@ -2311,9 +2320,9 @@ function syncSplitSection() {
   toggle.disabled = !hasAmount && !toggle.checked;
   if (hint) hint.classList.toggle("hidden", hasAmount || toggle.checked);
   body.classList.toggle("hidden", !toggle.checked);
-  // Mutual exclusion: hide the recurring section while split is on.
+  // Mutual exclusion: hide the recurring section while split (or paidBy) is on.
   const recSection = document.getElementById("recRecurringSection");
-  if (recSection) recSection.classList.toggle("hidden", toggle.checked);
+  if (recSection) recSection.classList.toggle("hidden", toggle.checked || paidByOn);
   if (toggle.checked) {
     renderSplitRows();
   } else {
@@ -2323,6 +2332,46 @@ function syncSplitSection() {
     if (rows) rows.innerHTML = "";
     splitMine = null;
     splitLastEdited = null;
+  }
+}
+
+// Show/hide/enable the paid-by section based on: add-vs-edit, record type,
+// and mutual exclusion with split + recurring. No dependence on the amount
+// field — deliberately unaffected by a transiently-empty #fAmount (v77 rule:
+// never infer intent from a blank number input).
+function syncPaidBySection() {
+  const section = document.getElementById("paidBySection");
+  const toggle = document.getElementById("paidByToggle");
+  const body = document.getElementById("paidByBody");
+  if (!section || !toggle || !body) return;
+  const recOn = !!document.getElementById("recRecurringToggle")?.checked;
+  const splitOn = !!document.getElementById("splitToggle")?.checked;
+  const allowed = !editingId && modalType === "expense" && !recOn && !splitOn;
+  section.classList.toggle("hidden", !allowed);
+  if (!allowed && toggle.checked) {
+    toggle.checked = false;
+    paidByPersonId = null;
+    const form = document.getElementById("paidByNewPersonForm");
+    if (form) form.classList.add("hidden");
+    const menu = document.getElementById("paidByPersonMenu");
+    if (menu) menu.classList.add("hidden");
+  }
+  body.classList.toggle("hidden", !toggle.checked);
+  // Refresh the selected-person button from state.
+  loadStore();
+  const peopleById = {};
+  for (const p of (store.settings.people || [])) peopleById[p.id] = p;
+  if (paidByPersonId && !peopleById[paidByPersonId]) paidByPersonId = null;
+  const btn = document.getElementById("paidByPersonBtn");
+  if (btn) {
+    const p = paidByPersonId ? peopleById[paidByPersonId] : null;
+    if (p) {
+      btn.innerHTML =
+        '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
+        '<span>' + escapeHtml(p.name) + '</span>';
+    } else {
+      btn.textContent = "Choose person";
+    }
   }
 }
 
@@ -2427,16 +2476,18 @@ function buildSplitPersonMenu() {
   if (!toggle) return;
   toggle.addEventListener("change", () => {
     syncSplitSection();
+    syncPaidBySection();
     // The section expands near the bottom of the form — bring it into view.
     if (toggle.checked) scrollSplitIntoView();
   });
   $("#fAmount").addEventListener("input", () => {
     solve2p(); // 2-person mode: re-mirror the counterpart to the new total
     syncSplitSection();
+    syncPaidBySection();
   });
   // Mutual exclusion (other direction): recurring ON hides split.
   const recToggle = document.getElementById("recRecurringToggle");
-  if (recToggle) recToggle.addEventListener("change", syncSplitSection);
+  if (recToggle) recToggle.addEventListener("change", () => { syncSplitSection(); syncPaidBySection(); });
 
   // "+ Add person" menu open/close
   const addBtn = document.getElementById("splitAddPersonBtn");
@@ -2542,6 +2593,84 @@ function buildSplitPersonMenu() {
   });
 })();
 
+(function wirePaidBySection() {
+  const toggle = document.getElementById("paidByToggle");
+  if (!toggle) return;
+  toggle.addEventListener("change", () => {
+    syncSplitSection();
+    syncPaidBySection();
+    // The section sits near the bottom of the form — bring it into view.
+    if (toggle.checked) scrollSplitIntoView();
+  });
+
+  // Person picker menu open/close (single-select, no taken-filter — one
+  // payer at a time, unlike split's multi-participant picker).
+  const btn = document.getElementById("paidByPersonBtn");
+  const menu = document.getElementById("paidByPersonMenu");
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    buildPaidByPersonMenu();
+    menu.classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#paidByPersonPicker")) menu.classList.add("hidden");
+  });
+
+  // Inline new-person mini-form (same pattern as split's).
+  const form = document.getElementById("paidByNewPersonForm");
+  document.getElementById("paidByNewPersonCancel").addEventListener("click", () => {
+    form.classList.add("hidden");
+  });
+  // Enter in the name field saves the person — not the whole record form.
+  document.getElementById("paidByNewPersonName").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.getElementById("paidByNewPersonSave").click();
+    }
+  });
+  document.getElementById("paidByNewPersonSave").addEventListener("click", () => {
+    const name = document.getElementById("paidByNewPersonName").value.trim();
+    if (!name) return;
+    const color = document.getElementById("paidByNewPersonColor").value || "#7c5cff";
+    loadStore();
+    const newId = "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+    store.settings.people.push({ id: newId, name, color, icon: "person" });
+    saveStore();
+    document.getElementById("paidByNewPersonName").value = "";
+    form.classList.add("hidden");
+    paidByPersonId = newId;
+    syncPaidBySection();
+  });
+})();
+
+// "Choose person" menu: all DebtTrakr people (single-select), plus "+ New person".
+function buildPaidByPersonMenu() {
+  const menu = document.getElementById("paidByPersonMenu");
+  if (!menu) return;
+  loadStore();
+  const people = store.settings.people || [];
+  menu.innerHTML =
+    people.map((p) =>
+      '<button type="button" class="picker-opt" data-pid="' + p.id + '">' +
+        '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
+        '<span>' + escapeHtml(p.name) + '</span>' +
+      '</button>'
+    ).join("") +
+    '<button type="button" class="picker-opt" data-new="1">+ New person</button>';
+  menu.querySelectorAll(".picker-opt").forEach((b) => {
+    b.addEventListener("click", () => {
+      menu.classList.add("hidden");
+      if (b.dataset.new) {
+        document.getElementById("paidByNewPersonForm").classList.remove("hidden");
+        document.getElementById("paidByNewPersonName").focus();
+        return;
+      }
+      paidByPersonId = b.dataset.pid;
+      syncPaidBySection();
+    });
+  });
+}
+
 $("#recordForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#modalError").textContent = "";
@@ -2624,6 +2753,16 @@ $("#recordForm").addEventListener("submit", async (e) => {
     payload.notes = (payload.notes ? payload.notes + " · " : "") + breakdown;
   }
 
+  // ----- Paid by someone else (Add flow only) -----
+  const paidByOn =
+    !editingId && modalType === "expense" &&
+    !!document.getElementById("paidByToggle")?.checked;
+  if (paidByOn) {
+    loadStore();
+    if (!(store.settings.people || []).some((p) => p.id === paidByPersonId))
+      return ($("#modalError").textContent = "Choose who paid for you");
+  }
+
   // step 1: detect new category/sub and ask for colours
   if (!pendingNew) {
     const news = detectNew(payload.type, payload.category, payload.subcategory);
@@ -2671,6 +2810,40 @@ $("#recordForm").addEventListener("submit", async (e) => {
         d.createdAt = base + i;
         d.updatedAt = base + i;
         store.debts.push(d);
+      });
+      saveStore();
+    }
+    // Paid by someone else: net a debt against the payer, silently, batched
+    // in one saveStore() — same atomicity convention as split-bill debts.
+    if (paidByOn) {
+      const myName = (store.profile && store.profile.displayName) || "Me";
+      const autoTag = "Paid for " + myName + " — " + payload.category + " " +
+        fmt(payload.amount, payload.currency);
+      const entered = {
+        personId: paidByPersonId,
+        date: payload.date,
+        amount: payload.amount,
+        currency: payload.currency,
+        notes: payload.notes ? payload.notes + " · " + autoTag : autoTag,
+      };
+      try { await attachConversion(entered); } catch (_e) { entered.rateUnavailable = true; }
+      loadStore();
+      // Sentinel construction mirrors the Add Debt ADD branch — a backdated
+      // expense's balance is computed as of its own date, not "now".
+      const sentinel = "__paidby_sentinel__";
+      const debtsForCalc = (store.debts || []).concat([Object.assign({}, entered, {
+        id: sentinel,
+        createdAt: Date.now() + 1000000, // ensures sentinel sorts last
+      })]);
+      const balanceBeforeSigned = balanceBefore(debtsForCalc, sentinel);
+      const { records } = planPaidBy(
+        entered, balanceBeforeSigned, store.settings.defaultCurrency || "THB");
+      const base = Date.now();
+      records.forEach((r, i) => {
+        r.id = "debt_" + (base + i).toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+        r.createdAt = base + i;
+        r.updatedAt = base + i;
+        store.debts.push(r);
       });
       saveStore();
     }

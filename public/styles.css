@@ -1444,9 +1444,12 @@ body.theme-yoimiya .rn-menu{
 /* Person menu opens UPWARD — the picker sits near the bottom of the form,
    so a drop-down would land off-screen and force extra scrolling. The
    shadow flips upward to match the new direction. */
-#splitPersonPicker .picker-menu { right: auto; top: auto; bottom: calc(100% + 6px);
+#splitPersonPicker .picker-menu,
+#paidByPersonPicker .picker-menu { right: auto; top: auto; bottom: calc(100% + 6px);
   box-shadow: 0 -18px 44px rgba(0,0,0,.45); }
 #splitPersonMenu { min-width: 210px; }
+#paidByPersonMenu { min-width: 210px; }
+#paidByPersonBtn { display: inline-flex; align-items: center; gap: 8px; }
 
 /* ---- Dashboard list header: title + count left, view-all pill right ----
    margin-top gives breathing room below the donut card / summary row. */
