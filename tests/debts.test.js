@@ -532,12 +532,13 @@ test("planPaidBy: clear balance -> single borrow", () => {
 });
 
 test("planPaidBy: they owe more than the amount -> single paid-back, original currency kept", () => {
-  const out = D.planPaidBy(paidByEntered(450), 1000, "THB");
+  const entered = paidByEntered(450, { currency: "USD" });
+  const out = D.planPaidBy(entered, 1000, "THB");
   assert.equal(out.records.length, 1);
   const r = out.records[0];
   assert.equal(r.type, "paid-back");
   assert.equal(r.amount, 450);
-  assert.equal(r.currency, "THB");
+  assert.equal(r.currency, "USD");
 });
 
 test("planPaidBy: they owe exactly the amount -> single paid-back (no split)", () => {
@@ -599,4 +600,8 @@ test("planPaidBy: invalid input -> empty; no caller mutation", () => {
   const e = paidByEntered(450);
   D.planPaidBy(e, 0, "THB");
   assert.equal(e.type, undefined);
+
+  const e2 = paidByEntered(450);
+  D.planPaidBy(e2, 1000, "THB");
+  assert.equal(e2.type, undefined);
 });

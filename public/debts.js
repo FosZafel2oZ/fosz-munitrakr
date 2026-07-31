@@ -235,8 +235,9 @@
 
   // Plans the debt record(s) for a "paid by someone else" expense: the payer
   // fronted `entered.amount`, netted against whatever they already owed me.
-  // `entered` is the user's intended record (no id/createdAt/type — caller
-  // stamps those; this function does not mutate it, it returns new records).
+  // `entered` is the user's intended record (no id/createdAt — caller stamps
+  // those; `type` is set here, this function does not mutate `entered`, it
+  // returns new records).
   // `balanceBeforeSigned` is the person's outstanding immediately before this
   // record, signed (positive = they owe me, negative = I owe them).
   // `defaultCurrency` is store.settings.defaultCurrency.
