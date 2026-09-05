@@ -455,6 +455,13 @@ body.modal-open{overflow:hidden}
   box-shadow:0 6px 16px rgba(255,107,129,.25);border:0}
 .btn-danger:active{filter:brightness(.92)}
 .btn-danger.sm{padding:9px 14px;border-radius:10px;font-size:13px}
+/* Save as New — same shape as Save Record, but green (var(--in), the
+   theme-aware inflow colour) so it reads as "save a second copy" rather
+   than an overwrite. */
+.btn-alt{width:100%;padding:14px;border-radius:13px;font-weight:700;font-size:15px;
+  background:var(--in);color:#fff;
+  display:flex;align-items:center;justify-content:center;gap:9px}
+.btn-alt:active{transform:translateY(1px)}
 
 /* Outlined secondary button — accent border, transparent fill */
 .btn-secondary{

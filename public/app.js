@@ -18,6 +18,7 @@ let selectedSlice = null; // first-tap selected category/sub on the donut
 let lastDrillable = {}; // categories that have sub-categories (for 2nd-tap drill)
 let chart = null;
 let editingId = null;
+let saveAsNew = false; // one-shot flag: the next submit saves a copy as a new record
 let modalType = "expense";
 let pendingNew = null; // [{kind, type, category, name}] awaiting colour pick
 let selected = new Set();
@@ -2164,12 +2165,14 @@ $("#saveCurrencies").addEventListener("click", async () => {
 
 function openModal(record) {
   editingId = record ? record.id : null;
+  saveAsNew = false; // defensive: a stale flag must never survive into a fresh open
   modalType = record ? record.type : activeType;
   pendingNew = null;
   $("#newColorPanel").classList.add("hidden");
   $("#saveBtn").textContent = "Save Record";
   $("#modalTitle").textContent = record ? "Edit Record" : "Add New Record";
   $("#deleteBtn").classList.toggle("hidden", !record);
+  $("#saveAsNewBtn").classList.toggle("hidden", !record);
   $("#modalError").textContent = "";
   $$(".type-toggle button").forEach((x) =>
     x.classList.toggle("active", x.dataset.type === modalType)
@@ -2211,6 +2214,10 @@ function closeModal() {
   $("#modal").classList.add("hidden");
   editingId = null;
   pendingNew = null;
+  // An abandoned banner-edit must not leave the callback armed — otherwise
+  // the NEXT unrelated save would wrongly advance the rule and stamp its
+  // ruleId. Harmless here when the submit path already consumed it.
+  window.__pendingOnSaved = null;
   syncModalLock();
 }
 // Lock page scroll while any modal sheet is open (stops iOS scroll-chaining
@@ -2321,8 +2328,11 @@ function syncSplitSection() {
   if (hint) hint.classList.toggle("hidden", hasAmount || toggle.checked);
   body.classList.toggle("hidden", !toggle.checked);
   // Mutual exclusion: hide the recurring section while split (or paidBy) is on.
+  // Also hidden during a banner confirm-edit (window.__pendingOnSaved armed):
+  // checking it would create a duplicate rule from the rule's own occurrence,
+  // and State B's chip would just be noise here.
   const recSection = document.getElementById("recRecurringSection");
-  if (recSection) recSection.classList.toggle("hidden", toggle.checked || paidByOn);
+  if (recSection) recSection.classList.toggle("hidden", toggle.checked || paidByOn || !!window.__pendingOnSaved);
   if (toggle.checked) {
     renderSplitRows();
   } else {
@@ -2680,6 +2690,11 @@ function buildPaidByPersonMenu() {
 $("#recordForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#modalError").textContent = "";
+  // Captured then cleared immediately: a failed validation below can never
+  // leave a sticky as-new mode — fixing a field and pressing "Save Record"
+  // must UPDATE as usual.
+  const asNew = saveAsNew;
+  saveAsNew = false;
   const payload = {
     category: $("#fCategory").value.trim(),
     subcategory: $("#fSub").value.trim(),
@@ -2800,6 +2815,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
     if (news.length) {
       pendingNew = news;
       showColorPanel(news);
+      saveAsNew = asNew; // keep the as-new intent across the two-pass color flow
       return;
     }
   }
@@ -2814,7 +2830,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
       pendingNew = null;
     }
     let savedRecord = null;
-    if (editingId) savedRecord = await api("/records/" + editingId, "PUT", payload);
+    if (editingId && !asNew) savedRecord = await api("/records/" + editingId, "PUT", payload);
     else savedRecord = await api("/records", "POST", payload);
     // Split: one "lend" debt per participant (independent records — no links).
     if (splitPlan) {
@@ -2915,6 +2931,11 @@ $("#deleteBtn").addEventListener("click", async () => {
   } catch (err) {
     $("#modalError").textContent = err.message;
   }
+});
+$("#saveAsNewBtn").addEventListener("click", () => {
+  if (!editingId) return;
+  saveAsNew = true;
+  $("#recordForm").requestSubmit();
 });
 
 /* ---------------- Settings view ---------------- */
@@ -3899,6 +3920,11 @@ function editPending(idx) {
   const rule = (store.settings.recurring || []).find((r) => r.id === p.ruleId);
   if (!rule) return;
   const draft = buildRecordFromRule(rule, p.dueDate);
+  // The draft was never inserted, so its id is a phantom — opening with it
+  // would PUT to a record that doesn't exist. Dropping it makes the save a
+  // POST; __pendingOnSaved below then stamps the ruleId and advances the
+  // rule, which is exactly confirm-with-edits.
+  delete draft.id;
   // Reuse openModal to edit the pre-filled draft, then on save treat as confirm.
   window.__pendingOnSaved = async (savedRecord) => {
     loadStore();
@@ -3923,6 +3949,8 @@ function editPending(idx) {
   };
   // openModal expects a record-shaped object to prefill.
   openModal(draft);
+  // openModal set "Edit Record" (record-shaped draft, but this is a confirm).
+  $("#modalTitle").textContent = "Edit & Confirm";
 }
 
 async function confirmAllPending() {
