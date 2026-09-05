@@ -2698,6 +2698,10 @@ $("#recordForm").addEventListener("submit", async (e) => {
   // must UPDATE as usual.
   const asNew = saveAsNew;
   saveAsNew = false;
+  // Mid color-flow (pass 2) the as-new intent must survive any failure — the
+  // only submit affordance left is "Confirm & Save", so a dropped flag would
+  // silently overwrite the original record on the next tap.
+  if (pendingNew) saveAsNew = asNew;
   const payload = {
     category: $("#fCategory").value.trim(),
     subcategory: $("#fSub").value.trim(),

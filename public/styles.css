@@ -450,6 +450,7 @@ body.modal-open{overflow:hidden}
   box-shadow:0 4px 14px var(--accent-glow);
 }
 .modal-actions .btn-primary{flex:1}
+.modal-actions .btn-alt{flex:1}
 .btn-danger{padding:14px 18px;border-radius:13px;font-weight:700;font-size:14px;
   background:linear-gradient(180deg,#ff7a8a,var(--out));color:#fff;
   box-shadow:0 6px 16px rgba(255,107,129,.25);border:0}
@@ -1038,6 +1039,10 @@ body.theme-yoimiya .btn-danger,
 body.theme-yoimiya #msDelete:not([disabled]){
   background:linear-gradient(135deg,#ff5a4a,#c12d1f 60%,#7a1611);color:#fff;
   box-shadow:0 8px 22px rgba(160,30,20,.45),inset 0 1px 0 rgba(255,200,140,.18)}
+/* Save as New already tints its fill via --in (orange here), but the shadow
+   is hardcoded to the root theme's green — retint it to match so the glow
+   doesn't clash with the orange button. */
+body.theme-yoimiya .btn-alt{ box-shadow:0 6px 16px rgba(255,178,77,.25); }
 body.theme-yoimiya .modal-overlay{background:rgba(15,6,20,.6)}
 body.theme-yoimiya .chart-pct{color:var(--accent-2)}
 
