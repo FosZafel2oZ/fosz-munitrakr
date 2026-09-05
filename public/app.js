@@ -2171,8 +2171,11 @@ function openModal(record) {
   $("#newColorPanel").classList.add("hidden");
   $("#saveBtn").textContent = "Save Record";
   $("#modalTitle").textContent = record ? "Edit Record" : "Add New Record";
-  $("#deleteBtn").classList.toggle("hidden", !record);
-  $("#saveAsNewBtn").classList.toggle("hidden", !record);
+  // During a banner Edit & Confirm the draft is record-shaped but was never
+  // saved (its id was stripped in editPending) — there is nothing to delete
+  // or duplicate, so both buttons stay hidden even though record is truthy.
+  $("#deleteBtn").classList.toggle("hidden", !record || !!window.__pendingOnSaved);
+  $("#saveAsNewBtn").classList.toggle("hidden", !record || !!window.__pendingOnSaved);
   $("#modalError").textContent = "";
   $$(".type-toggle button").forEach((x) =>
     x.classList.toggle("active", x.dataset.type === modalType)
