@@ -4858,8 +4858,9 @@ async function shareDebtRecords(debtList) {
   }
 }
 
-// Share 2+ of ONE person's records as a single statement PNG (person-history
-// select mode). Same busy guard, alerts and share/fallback rules as
+// Share 2+ of ONE person's records as a single statement PNG (select mode on
+// either debt screen, whenever the selection is all one person's). Same busy
+// guard, alerts and share/fallback rules as
 // shareDebtRecords; the footer shows the outstanding right after the newest
 // selected record.
 async function shareDebtStatement(debtList) {
@@ -5276,11 +5277,15 @@ function buildDebtFilterMenu() {
       const id = cb.dataset.id;
       if (debtRecFilter.has(id)) debtRecFilter.delete(id);
       else debtRecFilter.add(id);
+      // A new filter is a new list — start a new selection so the block never has gaps.
+      if (debtMultiSelect) debtSelected.clear();
       renderDebtRecords();
     });
   });
   document.getElementById("dbtRecFilterClear")?.addEventListener("click", () => {
     debtRecFilter.clear();
+    // A new filter is a new list — start a new selection so the block never has gaps.
+    if (debtMultiSelect) debtSelected.clear();
     buildDebtFilterMenu();
     renderDebtRecords();
   });
