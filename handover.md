@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v81**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v82**.
 
 ---
 
@@ -25,7 +25,7 @@ ProjectExpenses/
 │  ├─ icon.png / icon.svg          default app icon
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
-├─ tests/                          node tests/run.js — 140 unit tests
+├─ tests/                          node tests/run.js — 156 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
@@ -40,7 +40,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `140/140 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `156/156 passed, 0 failed`.
 
 ---
 
@@ -126,6 +126,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 - **Card FX markup** (`settings.fxMarkupPct`, Preferences → "Card FX markup %", default 0): applied on top of every fetched rate everywhere (records, debts, recurring, splits) so converted amounts match credit-card statements. Stored on converted records as `fxMarkupPct`; `rate` is the effective (marked-up) rate. Never applied to manual rates.
 - The pre-emptive manual-rate field is retired (every ISO currency converts). Offline saves mark `rateUnavailable`; re-save/edit when online. Legacy `manualRate` records still render correctly.
 - All FX logic lives in `public/finance-helpers.js` (`makeRateService` factory with injectable `fetch` / `storage` / `now` / `isEcb` — testable in Node).
+- **A removed currency stays selectable for items that use it.** `currencyChoices(list, current)` (`finance-helpers.js`, pure) returns a new array — `list` plus `current` appended when it's a non-empty string not already in `list` — so an item keeps its own currency even after it's dropped from `settings.currencies`. `withCurrencyOption(sel, code)` (`app.js`) applies that to a live `<select>` and is called for the record, debt, and recurring-rule currency dropdowns (`#fCurrency`, `#dbtCurrency`, `#ruleCurrency`) whenever their editor opens on an existing item — without it the select would read `""` and saving would silently change the item's currency. All three editors also reject a blank currency on save with a visible message (`#modalError` "Choose a currency", `#debtError` "Currency is required.", `#ruleError` "Currency is required.").
 
 ### Recurring rules
 - Settings → Recurring section. Each rule has: type (expense/investment), category/sub, amount/currency, notes, cadence (daily/weekly/monthly/yearly + sub-controls), start date, end condition (none / end date / after N), auto-confirm toggle, pause.
@@ -162,8 +163,9 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 
 ### Views
 - **Dashboard** — top buttons (Total Lend / Total Borrow, signed totals across people). Vertical list of person cards (only those with non-zero outstanding). Each card: colored person icon + name, signed outstanding amount, repayment progress bar. "People" header row with a compact "View all" pill.
-- **Per-Person History** — drill in by tapping a person card. Header shows name + outstanding + direction-colored "They owe you / You owe" label. Records list shows every debt for that person newest-first, with direction badge, original currency line (if converted), and "Settled" badge on records that closed a cycle. Tap a row → edit modal. FAB pre-fills the person. Each row has a small share button that exports the record as a PNG card (with running outstanding math) via the iOS share sheet.
-- **All Debt Records** — bulk list across all people. Filter by person (multi-select). Multi-select mode: Cancel / Delete / Share / Select-all (`#dbtMsShare`; no Change-Person — kept clean intentionally). Share (`shareDebtRecords(list)`) renders every selected record to a PNG card and opens ONE share sheet with all files, always oldest-first (`date` asc, `createdAt` asc — inverse of the display sort); multi-file names get a zero-padded index prefix (`debt-01-…`) so name-sorted receivers keep the order, single-record filenames unchanged, with a per-file download fallback when Web Share with files is unavailable. Each row also has a share button (hidden in multi-select mode) that exports the record as a PNG card via the iOS share sheet (`shareDebtRecord(d)` is now a 1-element wrapper around `shareDebtRecords`; per-row buttons unchanged). Card layout: identity (icon tile, name, direction pill) on the left of the header with the amount, date and any FX line right-aligned opposite it; notes in their own white card; the running balance in a dark card that turns green with a checkmark when the record settles the cycle. Note text wraps onto up to 4 lines (the card grows to fit, and Thai — which has no inter-word spaces — breaks mid-word); amounts render with no decimals when whole and exactly two when fractional.
+- **Per-Person History** — drill in by tapping a person card. Header shows name + outstanding + direction-colored "They owe you / You owe" label. Records list shows every debt for that person newest-first, with direction badge, original currency line (if converted), and "Settled" badge on records that closed a cycle. Tap a row → edit modal. FAB pre-fills the person. Each row has a small share button that exports the record as a PNG card (with running outstanding math) via the iOS share sheet. A second FAB (`#phShareBtn`, share icon) enters select mode on this view — the same `#dbtMultiBar` bar that All Debt Records uses, generalised via `debtSelectRows()` (returns `lastPhRows` while `currentView === "person-history"`, `lastDbtRows` otherwise) so Cancel / Delete / Share / Select-all all act on whichever of the two screens is open. Selecting 2+ records and tapping "Share N" sends them as ONE statement image (`shareDebtStatement`, see below); selecting exactly 1 record falls back to the ordinary single-record card via `shareDebtRecords`.
+- **All Debt Records** — bulk list across all people. Filter by person (multi-select). Multi-select mode: Cancel / Delete / Share / Select-all (`#dbtMsShare`; no Change-Person — kept clean intentionally). Share is the same wide "Share N" button Per-Person History uses (`#dbtMsShare` grew from a fixed 52px icon button to `flex:1` with a label span, `#dbtMsShareLabel`, once the button started doing double duty) — but on this view it always calls `shareDebtRecords(list)` and sends separate cards, never a statement, regardless of how many records are selected. `shareDebtRecords` renders every selected record to a PNG card and opens ONE share sheet with all files, always oldest-first (`date` asc, `createdAt` asc — inverse of the display sort); multi-file names get a zero-padded index prefix (`debt-01-…`) so name-sorted receivers keep the order, single-record filenames unchanged, with a per-file download fallback when Web Share with files is unavailable. Each row also has a share button (hidden in multi-select mode) that exports the record as a PNG card via the iOS share sheet (`shareDebtRecord(d)` is now a 1-element wrapper around `shareDebtRecords`; per-row buttons unchanged). Card layout: identity (icon tile, name, direction pill) on the left of the header with the amount, date and any FX line right-aligned opposite it; notes in their own white card; the running balance in a dark card that turns green with a checkmark when the record settles the cycle. Note text wraps onto up to 4 lines (the card grows to fit, and Thai — which has no inter-word spaces — breaks mid-word); amounts render with no decimals when whole and exactly two when fractional.
+- **Statement image** (`statementModel` + `renderStatementCard`, `debt-card.js`) — the PNG `shareDebtStatement` sends for a 2+ record Per-Person History selection. `statementModel` re-sorts the selected debts chronologically (date asc, then `createdAt` asc) regardless of on-screen selection order and turns them into one row per record: a short date, a kind sentence ("`<Name> borrowed`" / "`<Name> paid back`" / "`<Me> borrowed`" / "`<Me> paid back`"), the note (wraps up to 2 lines), and the amount in the default currency. A subtotal row is drawn only when every selected record points the same direction ("Total of N records" + the net magnitude); a mixed-direction selection shows only the per-row amounts, no subtotal. The footer reuses the single card's shared `drawOutstanding` helper (`renderDebtCard` and `renderStatementCard` both pass it a model with the same `outstandingLabel` / `mathText` / `totalText` / `totalCurrency` / `isSettled` fields): `shareDebtStatement` computes `balanceAfter` as the running balance right after the newest selected record (via the same `balanceBefore` helper the single card uses, plus that record's own signed amount), and inside the model `previous = balanceAfter − the selected net`; the "previous + selected" math line is omitted when `previous` is 0 (fresh cycle) or when applying the selected net crosses zero (magnitudes alone can't show a true sum then) — the same omission rule as the single card. The footer turns green with a checkmark and "Settled" / "เคลียร์แล้ว" when the resulting balance is exactly 0. Every string (pill "Statement"/"สรุปรายการ", record count, kind sentences, outstanding/settled labels) follows the same `settings.debtShareLanguage` English/Thai split as the single card. The canvas is 1080px wide at up to 2× device-pixel ratio, but a long statement (many rows) steps the DPR down (`Math.sqrt(16e6 / (WIDTH * HEIGHT))`, floored at 1×) to stay under iOS's ~16-megapixel canvas-area cap instead of clipping or failing to render.
 
 ### Bottom-edge layout (no-dock)
 - `showView` mirrors the range-dock's hidden state onto a `body.no-dock` class — set whenever the range dock is absent (settings, person-history, debt-records, or any view while in DebtTrakr mode, which has no dock at all). Under `body.no-dock`, CSS lowers `.fab` to `calc(24px + var(--safe-b))` and `.multi-bar` to `calc(28px + var(--safe-b))`, so DebtTrakr's floating add button and multi-select bar sit near the bottom edge instead of hovering where the (absent) range dock would be.
@@ -224,7 +226,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v81` / `munitrakr-v81`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v82` / `munitrakr-v82`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -256,6 +258,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `records` | in-memory copy of MuniTrakr records (sorted desc by date) |
 | `multiSelect` / `selected` / `lastTyped` | MuniTrakr records-page selection state |
 | `debtMultiSelect` / `debtSelected` / `lastDbtRows` / `debtRecFilter` | DebtTrakr records-page selection + filter state |
+| `debtSelectRows()` / `lastPhRows` | `debtSelectRows()` returns whichever row set the shared `#dbtMultiBar` select mode should act on — `lastPhRows` (that person's records, display order) on Per-Person History, `lastDbtRows` on All Debt Records |
 | `pendingConfirmations` | recurring banner queue (derived, not persisted) |
 | `_currentHistoryPersonId` | which person's history is open |
 | `PEOPLE_ICONS` / `personIconSvg(id, cls)` | people-icon library (separate from category `ICONS`) |
@@ -268,6 +271,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `wouldOvershoot` | pure (from `debts.js`) — used by edit guard; true if applying an edit would have triggered the split modal on Add |
 | `computeOccurrences` / `applyEndChecks` / `buildRecordFromRule` / `unpauseRule` | recurring math (from `recurring.js`) |
 | `reconcileRenames` / `makeRateService` | shared helpers (from `finance-helpers.js`) |
+| `currencyChoices(list, current)` | pure (from `finance-helpers.js`) — returns `list` plus `current` appended when it's a non-empty string not already in `list`; never mutates `list` — lets an item keep its own currency after it's removed from Settings |
+| `withCurrencyOption(sel, code)` | applies `currencyChoices` to a live currency `<select>` (`#fCurrency`, `#dbtCurrency`, `#ruleCurrency`); without it a removed currency would read as `""` on that editor and silently change on save |
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
 | `evenShares` / `fillBlanks` | pure (from `debts.js`) — cent-exact splits: evenShares over everyone, fillBlanks over blank fields only |
 | `stripSplitBreakdown` | pure (from `debts.js`) — strips the auto-generated "Split bill — total …" breakdown from a notes string, leaving the user's own notes; used by Duplicate so a copy doesn't inherit a breakdown tied to the original save's debts |
@@ -277,7 +282,11 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `openModal(record, prefill)` | Add/Edit modal opener; `record` with an id → Edit (PUT); `prefill` → Add pre-filled (used by Duplicate). Optional `prefill` opens Add mode with fields copied from it (type, category, sub, amount, currency, notes); never carries a date, id, or ruleId, so the copy starts today, unsaved, and unlinked |
 | `window.__pendingOnSaved` | one-shot post-save callback; armed by banner Edit & Confirm (`editPending`) to stamp `ruleId` and advance the rule; `closeModal` always clears it so an abandoned edit can't leak into the next unrelated save |
 | `shareDebtRecords(list)` | renders + shares N debt PNGs oldest-first in one share sheet; `shareDebtRecord(d)` is a 1-element wrapper |
+| `shareDebtStatement(debtList)` | shares 2+ of ONE person's records as a single statement PNG (Per-Person History select mode, 2+ selected); same busy guard, alerts and share/fallback rules as `shareDebtRecords` |
 | `debtCardModel` | pure (from debt-card.js) — every string + flag the share card draws (wording, FX line, balance math, settled) |
 | `renderDebtCard(opts)` | canvas renderer (from debt-card.js); takes an options object and the person's icon SVG injected by the caller |
+| `statementModel` | pure (from `debt-card.js`) — content model for the multi-record statement image: chronologically-sorted rows, the same-direction subtotal, and the running-balance footer math (`previous = balanceAfter − the selected net`) |
+| `renderStatementCard(opts)` | canvas renderer (from `debt-card.js`) for the statement image; steps its device-pixel ratio down for a long statement to stay under iOS's canvas-area cap |
+| `drawOutstanding(ctx, y, m)` | (from `debt-card.js`) — draws the shared Outstanding footer (dark card, green + checkmark when settled); used by both `renderDebtCard` and `renderStatementCard`, whose models expose the same field names |
 | `ECB_CURRENCIES` / `isEcb` | 31-code ECB set — selects Frankfurter vs currency-api in the rate service |
 | `NO_SUB_LABEL` | "No Sub-category" — shared donut-slice + list-filter key for records without a sub |
