@@ -630,3 +630,46 @@ test("stripSplitBreakdown: user notes containing their own middle dots survive",
     D.stripSplitBreakdown("Dinner · Thonglor · Split bill — total 1,000: Bill 500 · Nok 500"),
     "Dinner · Thonglor");
 });
+
+/* ---------------- blockSelect (no-gaps selection rule) ---------------- */
+
+const BLOCK_IDS = ["a", "b", "c", "d", "e"]; // a = newest, top
+
+test("blockSelect: empty selection, tap c -> [c]", () => {
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, [], "c"), ["c"]);
+});
+
+test("blockSelect: extend downward — selected [b], tap e -> [b,c,d,e]", () => {
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["b"], "e"), ["b", "c", "d", "e"]);
+});
+
+test("blockSelect: extend upward — selected [c,d], tap a -> [a,b,c,d]", () => {
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["c", "d"], "a"), ["a", "b", "c", "d"]);
+});
+
+test("blockSelect: top edge drops only itself — selected [b,c,d], tap b -> [c,d]", () => {
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["b", "c", "d"], "b"), ["c", "d"]);
+});
+
+test("blockSelect: middle cuts it and everything older — selected [a,b,c,d], tap b -> [a]", () => {
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["a", "b", "c", "d"], "b"), ["a"]);
+});
+
+test("blockSelect: bottom edge drops only itself — selected [a,b,c], tap c -> [a,b]", () => {
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["a", "b", "c"], "c"), ["a", "b"]);
+});
+
+test("blockSelect: one-row block, tap it -> []", () => {
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["c"], "c"), []);
+});
+
+test("blockSelect: unknown tap and gap normalisation", () => {
+  // Unknown tap: current selection restricted to ids, in display order, unchanged.
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["d", "b"], "z"), ["b", "d"]);
+  // Gapped input's block is b..d; extending to e fills the gap.
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, ["b", "d"], "e"), ["b", "c", "d", "e"]);
+  // selected may be a Set; it must not be mutated.
+  const s = new Set(["c"]);
+  assert.deepEqual(D.blockSelect(BLOCK_IDS, s, "a"), ["a", "b", "c"]);
+  assert.deepEqual(Array.from(s), ["c"]);
+});

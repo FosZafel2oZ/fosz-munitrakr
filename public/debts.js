@@ -268,5 +268,46 @@
     return { records: [copy] };
   }
 
-  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares, fillBlanks, stripSplitBreakdown, planPaidBy };
+  // Selections on the debt screens are always one contiguous block (in display
+  // order, `ids` top-to-bottom = newest-to-oldest) so a shared statement image
+  // can never have gaps — its "previous" balance is then the true balance
+  // before the first selected record. Returns the NEW selection as an array
+  // in display order; never mutates `ids` or `selected`.
+  function blockSelect(ids, selected, tappedId) {
+    if (!Array.isArray(ids)) ids = [];
+    const selectedIds = selected instanceof Set ? Array.from(selected) : (Array.isArray(selected) ? selected : []);
+    const selectedPositions = [];
+    for (const id of selectedIds) {
+      const pos = ids.indexOf(id);
+      if (pos !== -1) selectedPositions.push(pos);
+    }
+
+    const restrictedSelection = () => {
+      const posSet = new Set(selectedPositions);
+      return ids.filter((_, i) => posSet.has(i));
+    };
+
+    const tappedPos = ids.indexOf(tappedId);
+    if (tappedPos === -1) return restrictedSelection();
+
+    if (selectedPositions.length === 0) return [tappedId];
+
+    const top = Math.min(...selectedPositions);
+    const bottom = Math.max(...selectedPositions);
+
+    if (tappedPos < top || tappedPos > bottom) {
+      // Not in the block: extend to include it, filling any gap.
+      return ids.slice(Math.min(top, tappedPos), Math.max(bottom, tappedPos) + 1);
+    }
+
+    if (tappedPos === top) {
+      // Top of the block: drop only it.
+      return ids.slice(top + 1, bottom + 1);
+    }
+
+    // Middle or bottom: it and everything below (older) are dropped.
+    return ids.slice(top, tappedPos);
+  }
+
+  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares, fillBlanks, stripSplitBreakdown, planPaidBy, blockSelect };
 });
