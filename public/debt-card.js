@@ -623,6 +623,14 @@
 
     const HEIGHT = TOP + headerH + GAP + rowsCardH + NOTE_GAP + OUT_H + BOTTOM;
 
+    // Even at 1× the canvas would exceed iPhone's area limit — refuse up front
+    // with a typed error rather than let WebKit fail with a generic one.
+    if (WIDTH * HEIGHT > 16e6) {
+      const err = new Error("Statement too tall for one image");
+      err.code = "STATEMENT_TOO_TALL";
+      throw err;
+    }
+
     const canvas = document.createElement("canvas");
     // iOS caps canvas area at 16M px; a long statement backs off DPR to stay
     // under it instead of clipping or refusing to render.
@@ -757,8 +765,8 @@
       ctx.strokeStyle = P.line;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(PAD, rowY);
-      ctx.lineTo(WIDTH - PAD, rowY);
+      ctx.moveTo(rowsPadX, rowY);
+      ctx.lineTo(rowsRightEdge, rowY);
       ctx.stroke();
 
       ctx.textBaseline = "middle";

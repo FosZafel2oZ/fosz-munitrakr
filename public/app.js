@@ -1265,7 +1265,8 @@ function updateFabs() {
   const phShareBtn = document.getElementById("phShareBtn");
   const dbtMultiBar = document.getElementById("dbtMultiBar");
   if (dbtMultiBtn) dbtMultiBtn.classList.toggle("hidden", !onDebtRecords || debtMultiSelect);
-  if (phShareBtn) phShareBtn.classList.toggle("hidden", !onPersonHistory || debtMultiSelect);
+  if (phShareBtn) phShareBtn.classList.toggle("hidden",
+    !onPersonHistory || debtMultiSelect || !lastPhRows.length);
   if (dbtMultiBar) dbtMultiBar.classList.toggle("hidden",
     !((onDebtRecords || onPersonHistory) && debtMultiSelect));
 }
@@ -4873,6 +4874,21 @@ async function shareDebtStatement(debtList) {
     const userName = (store.profile && store.profile.displayName) || "Me";
     const debtShareLanguage = store.settings.debtShareLanguage || "en";
 
+    // A record with no rate to the default currency would draw its foreign
+    // amount labelled in the default currency — a silently wrong number on
+    // the image. Re-saving it online converts it (the debt editor re-runs
+    // attachConversion); until then it can't go on a statement.
+    const unrated = list.filter(
+      (d) => d.currency !== defaultCurrency && d.convertedCurrency !== defaultCurrency);
+    if (unrated.length) {
+      const n = unrated.length;
+      alert(n + " selected record" + (n > 1 ? "s have" : " has") +
+        " no exchange rate to " + defaultCurrency + " yet — open and save " +
+        (n > 1 ? "them" : "it") + " while online, or leave " + (n > 1 ? "them" : "it") +
+        " out, then share again.");
+      return;
+    }
+
     const ordered = list.slice().sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)
     );
@@ -4898,6 +4914,10 @@ async function shareDebtStatement(debtList) {
         language: debtShareLanguage,
       });
     } catch (err) {
+      if (err && err.code === "STATEMENT_TOO_TALL") {
+        alert("Too many records for one image — select fewer and share them in parts.");
+        return;
+      }
       console.error("renderStatementCard failed:", err);
       alert("Couldn't generate the image — try again.");
       return;
@@ -4993,6 +5013,11 @@ function renderPersonHistory(personId) {
   if (!rows.length) {
     empty.classList.remove("hidden");
     dbtUpdateSelUI();
+    // Several callers (edit/add/delete/split, via rerenderActiveDebtView or
+    // its inline equivalent in deleteDebtFromModal) re-render this screen
+    // without calling updateFabs() themselves — call it here so #phShareBtn
+    // always reflects the just-rendered (possibly now-empty) list.
+    updateFabs();
     return;
   }
   empty.classList.add("hidden");
@@ -5071,6 +5096,9 @@ function renderPersonHistory(personId) {
     list.appendChild(card);
   }
   dbtUpdateSelUI();
+  // See the empty-list branch above — some callers never call updateFabs()
+  // after re-rendering this screen, so it's called here on every path.
+  updateFabs();
 }
 
 document.getElementById("phBack")?.addEventListener("click", () => {
