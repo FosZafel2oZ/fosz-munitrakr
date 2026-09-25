@@ -173,5 +173,17 @@
     };
   }
 
-  return { reconcileRenames, makeRateService };
+  /* ---------- currencyChoices ----------
+     An item keeps its own currency even after it was removed from the
+     user's list — an editor must still be able to show and save it. Returns
+     a NEW array: list, plus current appended when it's a non-empty string
+     not already in list. Never mutates list.
+  */
+  function currencyChoices(list, current) {
+    const l = Array.isArray(list) ? list.slice() : [];
+    if (current && !l.includes(current)) l.push(current);
+    return l;
+  }
+
+  return { reconcileRenames, makeRateService, currencyChoices };
 });

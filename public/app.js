@@ -2013,6 +2013,15 @@ function fillCurrencySelects() {
     $("#setDefCurrency").value = settings.defaultCurrency || "THB";
   }
 }
+// Make sure `code` is one of the select's options. An item keeps its own
+// currency even after it's removed from Settings; without this the select
+// would read "" and the save would silently change the item's currency.
+function withCurrencyOption(sel, code) {
+  if (!sel) return;
+  const codes = currencyChoices([...sel.options].map((o) => o.value), code);
+  if (codes.length !== sel.options.length)
+    sel.innerHTML = codes.map((c) => `<option value="${c}">${c}</option>`).join("");
+}
 // Every ISO currency now auto-converts (Frankfurter or the currency-api
 // fallback), so the manual-rate field never needs to pre-open. The field and
 // the manualRate plumbing stay for legacy records and as an escape hatch.
@@ -2185,6 +2194,7 @@ function openModal(record, prefill) {
   $("#fDate").value = record ? record.date : ymd(new Date());
   $("#fAmount").value = src ? src.amount : "";
   fillCurrencySelects();
+  withCurrencyOption($("#fCurrency"), src && src.currency);
   $("#fCurrency").value = src
     ? src.currency
     : settings.defaultCurrency || "THB";
@@ -2709,6 +2719,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
   if (!Number.isFinite(payload.amount) || !(payload.amount >= 0))
     return ($("#modalError").textContent = "Enter a valid amount");
   payload.amount = Math.round(payload.amount * 100) / 100; // money is cents-precision
+  if (!payload.currency) return ($("#modalError").textContent = "Choose a currency");
 
   // Recurring sub-form bounds — novalidate means JS must enforce what native did.
   if (document.getElementById("recRecurringToggle")?.checked) {
@@ -3640,7 +3651,7 @@ function ruleSetSub(rule, name) {
 
 function populateRuleCurrency(rule) {
   const sel = document.getElementById("ruleCurrency");
-  sel.innerHTML = (store.settings.currencies || []).map((c) => `<option value="${c}">${c}</option>`).join("");
+  sel.innerHTML = currencyChoices(store.settings.currencies || [], rule.currency).map((c) => `<option value="${c}">${c}</option>`).join("");
   sel.value = rule.currency || store.settings.defaultCurrency;
   sel.onchange = () => { rule.currency = sel.value; };
 }
@@ -3746,6 +3757,10 @@ async function saveRuleFromModal(draft, isNew) {
   }
   if (!(draft.amount > 0)) {
     if (err) err.textContent = "Amount must be greater than 0.";
+    return;
+  }
+  if (!draft.currency) {
+    if (err) err.textContent = "Currency is required.";
     return;
   }
 
@@ -4424,6 +4439,7 @@ function openDebtModal(debt /* nullable */) {
       ).join("");
     }
   }
+  withCurrencyOption(document.getElementById("dbtCurrency"), debt && debt.currency);
   document.getElementById("dbtCurrency").value = (debt && debt.currency) || (store.settings.defaultCurrency || "THB");
 
   document.getElementById("dbtAmount").value = (debt && debt.amount > 0) ? debt.amount : "";
@@ -4588,6 +4604,7 @@ async function saveDebtFromModal() {
   if (!personId) { err.textContent = "Person is required."; return; }
   if (!(amount > 0)) { err.textContent = "Amount must be greater than 0."; return; }
   if (!date) { err.textContent = "Date is required."; return; }
+  if (!currency) { err.textContent = "Currency is required."; return; }
 
   loadStore();
   const defaultCurrency = (store.settings.defaultCurrency || "THB");

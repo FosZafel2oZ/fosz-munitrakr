@@ -445,3 +445,27 @@ test("attachConversion: missing date falls back to 'today' from injected clock",
   assert.ok(seenUrl.includes("/2026-05-21"), "should request today; got " + seenUrl);
   assert.equal(r.rateDate, "2026-05-21");
 });
+
+
+/* ============================================================ */
+/* currencyChoices                                               */
+/* ============================================================ */
+
+test("currencyChoices: a removed currency is appended so the item can keep it", () => {
+  assert.deepEqual(H.currencyChoices(["THB", "USD"], "JPY"), ["THB", "USD", "JPY"]);
+});
+test("currencyChoices: a listed currency changes nothing and the input is not mutated", () => {
+  const list = ["THB", "USD"];
+  const out = H.currencyChoices(list, "USD");
+  assert.deepEqual(out, ["THB", "USD"]);
+  assert.ok(out !== list);
+  assert.deepEqual(list, ["THB", "USD"]);
+});
+test("currencyChoices: blank or missing current is ignored", () => {
+  assert.deepEqual(H.currencyChoices(["THB"], ""), ["THB"]);
+  assert.deepEqual(H.currencyChoices(["THB"], undefined), ["THB"]);
+});
+test("currencyChoices: a non-array list is treated as empty", () => {
+  assert.deepEqual(H.currencyChoices(null, "JPY"), ["JPY"]);
+  assert.deepEqual(H.currencyChoices(undefined, ""), []);
+});
