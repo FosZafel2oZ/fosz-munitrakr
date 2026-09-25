@@ -138,3 +138,195 @@ test("debtCardModel: money shows no decimals when whole, exactly two when not", 
   assert.equal(m.totalText, "11,111,111.10");
   assert.equal(m.mathText, "9,876,543.21 + 1,234,567.89");
 });
+
+function stmt(o) {
+  return C.statementModel(Object.assign({
+    debts: [],
+    personName: "Boat",
+    userName: "Bill",
+    defaultCurrency: "THB",
+    balanceAfter: 0,
+    language: "en",
+  }, o));
+}
+
+test("statementModel: rows come out oldest-first (date, then createdAt for same-day ties)", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-09-10", createdAt: 3 },
+      { type: "lend", amount: 50, currency: "THB", date: "2026-09-05", createdAt: 2 },
+      { type: "lend", amount: 20, currency: "THB", date: "2026-09-05", createdAt: 1 },
+    ],
+  });
+  assert.deepEqual(m.rows.map((r) => r.amountText), ["20", "50", "100"]);
+});
+
+test("statementModel: EN kindText for all four types", () => {
+  const types = ["lend", "paid-back", "borrow", "pay-back"];
+  const m = stmt({
+    debts: types.map((type, i) => ({ type, amount: 10, currency: "THB", date: "2026-09-0" + (i + 1) })),
+  });
+  assert.deepEqual(m.rows.map((r) => r.kindText), [
+    "Boat borrowed", "Boat paid back", "Bill borrowed", "Bill paid back",
+  ]);
+});
+
+test("statementModel: TH kindText for all four types", () => {
+  const types = ["lend", "paid-back", "borrow", "pay-back"];
+  const m = stmt({
+    language: "th",
+    debts: types.map((type, i) => ({ type, amount: 10, currency: "THB", date: "2026-09-0" + (i + 1) })),
+  });
+  assert.deepEqual(m.rows.map((r) => r.kindText), [
+    "Boat ยืม", "Boat คืน", "Bill ยืม", "Bill คืน",
+  ]);
+});
+
+test("statementModel: EN row date and the four rangeText shapes", () => {
+  assert.equal(
+    stmt({ debts: [{ type: "lend", amount: 10, currency: "THB", date: "2026-09-07" }] }).rows[0].dateText,
+    "7 Sep"
+  );
+
+  // same day
+  assert.equal(
+    stmt({ debts: [{ type: "lend", amount: 10, currency: "THB", date: "2026-09-22" }] }).rangeText,
+    "22 Sep 2026"
+  );
+
+  // same month + year
+  assert.equal(
+    stmt({ debts: [
+      { type: "lend", amount: 10, currency: "THB", date: "2026-09-07" },
+      { type: "lend", amount: 10, currency: "THB", date: "2026-09-22" },
+    ] }).rangeText,
+    "7 – 22 Sep 2026"
+  );
+
+  // same year, different month
+  assert.equal(
+    stmt({ debts: [
+      { type: "lend", amount: 10, currency: "THB", date: "2026-08-28" },
+      { type: "lend", amount: 10, currency: "THB", date: "2026-09-22" },
+    ] }).rangeText,
+    "28 Aug – 22 Sep 2026"
+  );
+
+  // different years
+  assert.equal(
+    stmt({ debts: [
+      { type: "lend", amount: 10, currency: "THB", date: "2025-12-28" },
+      { type: "lend", amount: 10, currency: "THB", date: "2026-01-03" },
+    ] }).rangeText,
+    "28 Dec 2025 – 3 Jan 2026"
+  );
+});
+
+test("statementModel: TH row date, same-month range, pill and countText", () => {
+  const one = stmt({
+    language: "th",
+    debts: [{ type: "lend", amount: 10, currency: "THB", date: "2026-09-07" }],
+  });
+  assert.equal(one.rows[0].dateText, "7 ก.ย.");
+  assert.equal(one.pill, "สรุปรายการ");
+
+  const range = stmt({
+    language: "th",
+    debts: [
+      { type: "lend", amount: 10, currency: "THB", date: "2026-09-07" },
+      { type: "lend", amount: 10, currency: "THB", date: "2026-09-22" },
+    ],
+  });
+  assert.equal(range.rangeText, "7 – 22 ก.ย. 2026");
+
+  const seven = stmt({
+    language: "th",
+    debts: Array.from({ length: 7 }, (_, i) => ({
+      type: "lend", amount: 10, currency: "THB", date: "2026-09-0" + (i + 1),
+    })),
+  });
+  assert.equal(seven.countText, "7 รายการ");
+});
+
+test("statementModel: subtotal appears only when every row shares a direction", () => {
+  const allLend = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-09-01" },
+      { type: "lend", amount: 50, currency: "THB", date: "2026-09-02" },
+    ],
+  });
+  assert.equal(allLend.subtotalText, "150");
+  assert.equal(allLend.subtotalLabel, "Total of 2 records");
+
+  const mixed = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-09-01" },
+      { type: "paid-back", amount: 50, currency: "THB", date: "2026-09-02" },
+    ],
+  });
+  assert.equal(mixed.subtotalText, null);
+  assert.equal(mixed.subtotalLabel, null);
+});
+
+test("statementModel: approved mock — seven lends, previous math and total", () => {
+  const m = stmt({
+    debts: Array.from({ length: 7 }, (_, i) => ({
+      type: "lend", amount: 255.1, currency: "THB", date: "2026-09-0" + (i + 1),
+    })),
+    balanceAfter: 5073.32,
+  });
+  assert.equal(m.mathText, "3,287.62 + 1,785.70");
+  assert.equal(m.totalText, "5,073.32");
+  assert.equal(m.subtotalText, "1,785.70");
+});
+
+test("statementModel: fresh cycle (previous 0) has no math line", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-09-01" },
+      { type: "lend", amount: 100, currency: "THB", date: "2026-09-02" },
+    ],
+    balanceAfter: 200,
+  });
+  assert.equal(m.mathText, null);
+  assert.equal(m.totalText, "200");
+});
+
+test("statementModel: math line subtracts when the balance shrinks", () => {
+  const m = stmt({
+    debts: [{ type: "paid-back", amount: 200, currency: "THB", date: "2026-09-01" }],
+    balanceAfter: 300,
+  });
+  assert.equal(m.mathText, "500 − 200");
+});
+
+test("statementModel: crossing zero inside the selection suppresses the math line", () => {
+  const m = stmt({
+    debts: [{ type: "paid-back", amount: 300, currency: "THB", date: "2026-09-01" }],
+    balanceAfter: -200,
+  });
+  assert.equal(m.mathText, null);
+  assert.equal(m.totalText, "200");
+});
+
+test("statementModel: settled cycle shows the closing math and isSettled", () => {
+  const m = stmt({
+    debts: [{ type: "paid-back", amount: 500, currency: "THB", date: "2026-09-01" }],
+    balanceAfter: 0,
+  });
+  assert.equal(m.isSettled, true);
+  assert.equal(m.mathText, "500 − 500");
+  assert.equal(m.totalText, "0");
+});
+
+test("statementModel: a converted record contributes its converted amount to the row and the net", () => {
+  const m = stmt({
+    debts: [{
+      type: "lend", amount: 450, currency: "USD", date: "2026-09-01",
+      convertedAmount: 15750, convertedCurrency: "THB",
+    }],
+    balanceAfter: 15750,
+  });
+  assert.equal(m.rows[0].amountText, "15,750");
+  assert.equal(m.subtotalText, "15,750");
+});

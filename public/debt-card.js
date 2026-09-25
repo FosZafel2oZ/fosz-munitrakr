@@ -20,6 +20,22 @@
     });
   }
 
+  // Direction rule: which record types point money "out" (+1, they owe more /
+  // I owe less) vs "in" (-1). Shared by the single card and the statement.
+  function signOf(type) {
+    return (type === "lend" || type === "pay-back") ? 1 : -1;
+  }
+
+  // Running balances are always expressed in the default currency. Shared by
+  // the single card and the statement.
+  function amountInDefault(debt, defaultCurrency) {
+    return (debt.convertedAmount != null && debt.convertedCurrency === defaultCurrency)
+      ? Number(debt.convertedAmount)
+      : (debt.currency === defaultCurrency
+          ? Number(debt.amount)
+          : Number(debt.convertedAmount || debt.amount));
+  }
+
   // Turns a debt + its context into every string the card draws. Pure: no
   // canvas, no DOM, no store access — so the wording and the running-balance
   // math can be tested in Node.
@@ -43,7 +59,7 @@
          debt.type === "paid-back" ? them + " paid back to "  + me :
          debt.type === "pay-back"  ? me   + " paid back to "  + them : "");
 
-    const direction = (debt.type === "lend" || debt.type === "pay-back") ? "out" : "in";
+    const direction = signOf(debt.type) > 0 ? "out" : "in";
 
     const showConverted =
       debt.convertedAmount != null && debt.convertedCurrency &&
@@ -55,13 +71,7 @@
           : "")
       : null;
 
-    // Running balance is always expressed in the default currency.
-    const recordAmtInDefault =
-      (debt.convertedAmount != null && debt.convertedCurrency === defaultCurrency)
-        ? Number(debt.convertedAmount)
-        : (debt.currency === defaultCurrency
-            ? Number(debt.amount)
-            : Number(debt.convertedAmount || debt.amount));
+    const recordAmtInDefault = amountInDefault(debt, defaultCurrency);
 
     const delta = (direction === "out" ? 1 : -1) * recordAmtInDefault;
     const newBalance = balanceBefore + delta;
@@ -89,6 +99,135 @@
       totalText: fmtNum(Math.abs(newBalance)),
       totalCurrency: defaultCurrency,
       isSettled: newBalance === 0 && balanceBefore !== 0,
+      settledLabel: lang === "th" ? "เคลียร์แล้ว" : "Settled",
+    };
+  }
+
+  // Content model for the multi-record statement image: several selected
+  // debts with one person, rolled into oldest-first rows plus a
+  // running-balance footer that mirrors debtCardModel's. Pure: no DOM,
+  // canvas or store access, and never `new Date(str)`.
+  function statementModel(o) {
+    const opts = o || {};
+    const lang = opts.language === "th" ? "th" : "en";
+    const me = opts.userName || "Me";
+    const them = opts.personName || "(deleted person)";
+    const defaultCurrency = opts.defaultCurrency || "";
+    const balanceAfter = Number(opts.balanceAfter) || 0;
+
+    const EN_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const TH_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+    const months = lang === "th" ? TH_MONTHS : EN_MONTHS;
+    const RANGE_SEP = " – ";
+
+    // Split "YYYY-MM-DD" by hand — never `new Date(str)` (locale/timezone drift).
+    function ymd(str) {
+      const p = String(str || "").split("-");
+      return { y: p[0] || "", m: Number(p[1]) || 1, d: Number(p[2]) || 1 };
+    }
+    function shortDate(str) {
+      const p = ymd(str);
+      return p.d + " " + months[p.m - 1];
+    }
+    function fullEdge(p) {
+      return p.d + " " + months[p.m - 1] + " " + p.y;
+    }
+
+    // Chronological order: date asc, then createdAt asc (the app's rule).
+    const debts = (opts.debts || []).slice().sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    });
+
+    function kindText(type) {
+      if (lang === "th") {
+        return type === "lend" ? them + " ยืม" :
+               type === "paid-back" ? them + " คืน" :
+               type === "borrow" ? me + " ยืม" :
+               type === "pay-back" ? me + " คืน" : "";
+      }
+      return type === "lend" ? them + " borrowed" :
+             type === "paid-back" ? them + " paid back" :
+             type === "borrow" ? me + " borrowed" :
+             type === "pay-back" ? me + " paid back" : "";
+    }
+
+    let netCents = 0;
+    let sameSign = true;
+    let firstSign = null;
+
+    const rows = debts.map((d) => {
+      const amt = amountInDefault(d, defaultCurrency);
+      const cents = Math.round(amt * 100);
+      const sign = signOf(d.type);
+      netCents += sign * cents;
+      if (firstSign === null) firstSign = sign;
+      else if (sign !== firstSign) sameSign = false;
+
+      const rawNotes = d.notes ? String(d.notes).replace(/\s+/g, " ").trim() : "";
+      return {
+        dateText: shortDate(d.date),
+        kindText: kindText(d.type),
+        direction: sign > 0 ? "out" : "in",
+        notesText: rawNotes || null,
+        amountText: fmtNum(amt),
+      };
+    });
+
+    let rangeText = "";
+    if (debts.length) {
+      const firstDate = debts[0].date;
+      const lastDate = debts[debts.length - 1].date;
+      const first = ymd(firstDate);
+      const last = ymd(lastDate);
+      if (firstDate === lastDate) {
+        rangeText = fullEdge(last);
+      } else if (first.y === last.y && first.m === last.m) {
+        rangeText = first.d + RANGE_SEP + fullEdge(last);
+      } else if (first.y === last.y) {
+        rangeText = first.d + " " + months[first.m - 1] + RANGE_SEP + fullEdge(last);
+      } else {
+        rangeText = fullEdge(first) + RANGE_SEP + fullEdge(last);
+      }
+    }
+
+    // Subtotal only reads as a true sum when every row points the same way.
+    const hasSubtotal = debts.length > 0 && sameSign;
+    const subtotalText = hasSubtotal ? fmtNum(Math.abs(netCents) / 100) : null;
+    const subtotalLabel = hasSubtotal
+      ? (lang === "th" ? "รวม " + debts.length + " รายการ"
+                        : "Total of " + debts.length + " records")
+      : null;
+
+    // "Previous" is defined backwards from the caller-supplied balanceAfter so
+    // the footer's math always adds up: previous + selected net = after.
+    const afterCents = Math.round(balanceAfter * 100);
+    const prevCents = afterCents - netCents;
+
+    // No math line on a fresh cycle, and none if the balance crossed zero
+    // inside the selection (magnitudes alone can't show a true sum then).
+    const crossesZero = afterCents !== 0 && Math.sign(afterCents) !== Math.sign(prevCents);
+    const mathText = (prevCents === 0 || crossesZero)
+      ? null
+      : fmtNum(Math.abs(prevCents) / 100) +
+        ((netCents === 0 || Math.sign(netCents) === Math.sign(prevCents)) ? " + " : " − ") +
+        fmtNum(Math.abs(netCents) / 100);
+
+    return {
+      name: them,
+      pill: lang === "th" ? "สรุปรายการ" : "Statement",
+      countText: lang === "th"
+        ? debts.length + " รายการ"
+        : debts.length + (debts.length === 1 ? " record" : " records"),
+      rangeText,
+      rows,
+      subtotalLabel,
+      subtotalText,
+      outstandingLabel: lang === "th" ? "ยอดคงค้าง" : "Outstanding",
+      mathText,
+      totalText: fmtNum(Math.abs(afterCents) / 100),
+      totalCurrency: defaultCurrency,
+      isSettled: afterCents === 0,
       settledLabel: lang === "th" ? "เคลียร์แล้ว" : "Settled",
     };
   }
@@ -418,5 +557,5 @@
     return await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
   }
 
-  return { debtCardModel, renderDebtCard };
+  return { debtCardModel, statementModel, renderDebtCard };
 });
