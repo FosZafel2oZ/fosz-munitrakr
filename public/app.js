@@ -18,7 +18,6 @@ let selectedSlice = null; // first-tap selected category/sub on the donut
 let lastDrillable = {}; // categories that have sub-categories (for 2nd-tap drill)
 let chart = null;
 let editingId = null;
-let saveAsNew = false; // one-shot flag: the next submit saves a copy as a new record
 let modalType = "expense";
 let pendingNew = null; // [{kind, type, category, name}] awaiting colour pick
 let selected = new Set();
@@ -2163,38 +2162,41 @@ $("#saveCurrencies").addEventListener("click", async () => {
   }
 });
 
-function openModal(record) {
+// `prefill` (optional) opens the modal in Add mode with its fields copied —
+// used by Duplicate; it never carries a date, id, or ruleId, so the copy
+// starts today, unsaved, and unlinked.
+function openModal(record, prefill) {
+  const src = record || prefill;
   editingId = record ? record.id : null;
-  saveAsNew = false; // defensive: a stale flag must never survive into a fresh open
-  modalType = record ? record.type : activeType;
+  modalType = src ? src.type : activeType;
   pendingNew = null;
   $("#newColorPanel").classList.add("hidden");
-  $("#saveBtn").textContent = "Save Record";
+  $("#saveBtnLabel").textContent = "Save";
   $("#modalTitle").textContent = record ? "Edit Record" : "Add New Record";
   // During a banner Edit & Confirm the draft is record-shaped but was never
   // saved (its id was stripped in editPending) — there is nothing to delete
   // or duplicate, so both buttons stay hidden even though record is truthy.
   $("#deleteBtn").classList.toggle("hidden", !record || !!window.__pendingOnSaved);
-  $("#saveAsNewBtn").classList.toggle("hidden", !record || !!window.__pendingOnSaved);
+  $("#duplicateBtn").classList.toggle("hidden", !record || !!window.__pendingOnSaved);
   $("#modalError").textContent = "";
   $$(".type-toggle button").forEach((x) =>
     x.classList.toggle("active", x.dataset.type === modalType)
   );
   $("#fDate").value = record ? record.date : ymd(new Date());
-  $("#fAmount").value = record ? record.amount : "";
+  $("#fAmount").value = src ? src.amount : "";
   fillCurrencySelects();
-  $("#fCurrency").value = record
-    ? record.currency
+  $("#fCurrency").value = src
+    ? src.currency
     : settings.defaultCurrency || "THB";
   $("#fManualRate").value = record && record.manualRate ? record.rate : "";
   updateManualRateField();
-  $("#fNotes").value = record ? record.notes : "";
+  $("#fNotes").value = src ? src.notes : "";
   $("#catPickMenu").classList.add("hidden");
   $("#subPickMenu").classList.add("hidden");
   buildCatMenu();
   buildFreqCats();
-  setCategory(record ? record.category : "");
-  if (record && record.subcategory) setSub(record.subcategory);
+  setCategory(src ? src.category : "");
+  if (src && src.subcategory) setSub(src.subcategory);
   $("#modal").classList.remove("hidden");
   syncModalLock();
   setRecRecurringSection(record);
@@ -2261,7 +2263,7 @@ function showColorPanel(items) {
     box.appendChild(row);
   });
   $("#newColorPanel").classList.remove("hidden");
-  $("#saveBtn").textContent = "Confirm & Save";
+  $("#saveBtnLabel").textContent = "Confirm & Save";
 }
 
 /* ---------------- Split the bill (Add Record modal) ---------------- */
@@ -2693,15 +2695,6 @@ function buildPaidByPersonMenu() {
 $("#recordForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#modalError").textContent = "";
-  // Captured then cleared immediately: a failed validation below can never
-  // leave a sticky as-new mode — fixing a field and pressing "Save Record"
-  // must UPDATE as usual.
-  const asNew = saveAsNew;
-  saveAsNew = false;
-  // Mid color-flow (pass 2) the as-new intent must survive any failure — the
-  // only submit affordance left is "Confirm & Save", so a dropped flag would
-  // silently overwrite the original record on the next tap.
-  if (pendingNew) saveAsNew = asNew;
   const payload = {
     category: $("#fCategory").value.trim(),
     subcategory: $("#fSub").value.trim(),
@@ -2822,7 +2815,6 @@ $("#recordForm").addEventListener("submit", async (e) => {
     if (news.length) {
       pendingNew = news;
       showColorPanel(news);
-      saveAsNew = asNew; // keep the as-new intent across the two-pass color flow
       return;
     }
   }
@@ -2837,7 +2829,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
       pendingNew = null;
     }
     let savedRecord = null;
-    if (editingId && !asNew) savedRecord = await api("/records/" + editingId, "PUT", payload);
+    if (editingId) savedRecord = await api("/records/" + editingId, "PUT", payload);
     else savedRecord = await api("/records", "POST", payload);
     // Split: one "lend" debt per participant (independent records — no links).
     if (splitPlan) {
@@ -2939,10 +2931,23 @@ $("#deleteBtn").addEventListener("click", async () => {
     $("#modalError").textContent = err.message;
   }
 });
-$("#saveAsNewBtn").addEventListener("click", () => {
+// Duplicate: reopen the form as a fresh Add pre-filled with what's on screen
+// — nothing is saved and the original stays exactly as it was. The date
+// resets to today: a copy on the original's date was rarely wanted and
+// tedious to fix afterwards.
+$("#duplicateBtn").addEventListener("click", () => {
   if (!editingId) return;
-  saveAsNew = true;
-  $("#recordForm").requestSubmit();
+  const prefill = {
+    type: modalType,
+    category: $("#fCategory").value.trim(),
+    subcategory: $("#fSub").value.trim(),
+    amount: $("#fAmount").value,
+    currency: $("#fCurrency").value,
+    notes: $("#fNotes").value,
+  };
+  closeModal();
+  openModal(null, prefill);
+  $("#recordForm").scrollTop = 0; // land on the fields, not the action row
 });
 
 /* ---------------- Settings view ---------------- */
