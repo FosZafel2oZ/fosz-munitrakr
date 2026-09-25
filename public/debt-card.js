@@ -665,16 +665,20 @@
     const rightW = Math.max(countW, rangeW);
     const rightEdge = WIDTH - PAD;
 
-    ctx.textAlign = "right";
+    // countText/rangeText can contain Thai. WebKit (Safari/iOS) mispositions
+    // complex-shaped text such as Thai when textAlign isn't left/start, so
+    // this column is placed by measuring instead — draw left-aligned at
+    // rightEdge minus the measured width, the same technique the amount
+    // column above uses. Never draw text that can contain Thai with a
+    // right/centre textAlign.
     ctx.fillStyle = P.text;
     ctx.font = FONT(800, 44);
-    ctx.fillText(m.countText, rightEdge, y + 6);
+    ctx.fillText(m.countText, rightEdge - countW, y + 6);
     if (m.rangeText) {
       ctx.fillStyle = P.faint;
       ctx.font = FONT(500, 26);
-      ctx.fillText(m.rangeText, rightEdge, y + 60);
+      ctx.fillText(m.rangeText, rightEdge - rangeW, y + 60);
     }
-    ctx.textAlign = "left";
 
     // ---- Header, left column: icon tile + name + statement pill ----
     const ICON = 112;
