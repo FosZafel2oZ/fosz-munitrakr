@@ -2934,7 +2934,11 @@ $("#deleteBtn").addEventListener("click", async () => {
 // Duplicate: reopen the form as a fresh Add pre-filled with what's on screen
 // — nothing is saved and the original stays exactly as it was. The date
 // resets to today: a copy on the original's date was rarely wanted and
-// tedious to fix afterwards.
+// tedious to fix afterwards. The auto-generated split-bill breakdown is
+// stripped from the copied notes (it's tied to the original save's debts,
+// not this unsaved copy). Between close and reopen we force a reflow so
+// the modal's slideUp animation replays — the copy visibly pops in instead
+// of silently swapping content in an already-open-looking modal.
 $("#duplicateBtn").addEventListener("click", () => {
   if (!editingId) return;
   const prefill = {
@@ -2943,9 +2947,10 @@ $("#duplicateBtn").addEventListener("click", () => {
     subcategory: $("#fSub").value.trim(),
     amount: $("#fAmount").value,
     currency: $("#fCurrency").value,
-    notes: $("#fNotes").value,
+    notes: stripSplitBreakdown($("#fNotes").value),
   };
   closeModal();
+  void $("#modal").offsetWidth; // flush the hidden state so .modal's slideUp replays — the copy visibly pops in
   openModal(null, prefill);
   $("#recordForm").scrollTop = 0; // land on the fields, not the action row
 });

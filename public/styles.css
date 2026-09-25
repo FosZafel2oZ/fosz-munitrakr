@@ -462,6 +462,17 @@ body.modal-open{overflow:hidden}
 #recordForm .modal-actions .btn-secondary:active{background:linear-gradient(var(--accent-soft),var(--accent-soft)),var(--btn-base)}
 #recordForm .modal-actions .btn-secondary svg{width:18px;height:18px}
 #recordForm .modal-actions svg{flex:0 0 auto}
+/* Narrow phones (iPhone Display Zoom reports 320pt; many Androids are
+   360dp): three buttons with icons overflow at the normal spacing, so
+   tighten the spacing here — the icons and labels stay. */
+@media (max-width: 389px){
+  #recordForm .modal-actions{gap:5px}
+  #recordForm .modal-actions .btn-danger,
+  #recordForm .modal-actions .btn-secondary,
+  #recordForm .modal-actions .btn-primary{padding-left:10px;padding-right:10px}
+  #recordForm .modal-actions .btn-secondary,
+  #recordForm .modal-actions .btn-primary{gap:5px}
+}
 .btn-danger{padding:14px 18px;border-radius:13px;font-weight:700;font-size:14px;
   background:linear-gradient(180deg,#ff7a8a,var(--out));color:#fff;
   box-shadow:0 6px 16px rgba(255,107,129,.25);border:0}

@@ -25,7 +25,7 @@ ProjectExpenses/
 │  ├─ icon.png / icon.svg          default app icon
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
-├─ tests/                          node tests/run.js — 136 unit tests
+├─ tests/                          node tests/run.js — 140 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
@@ -40,7 +40,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `136/136 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `140/140 passed, 0 failed`.
 
 ---
 
@@ -152,6 +152,9 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 ### Duplicate
 - Edit Record modal only: an outlined **Duplicate** button (`.btn-secondary`, copy-icon SVG) sits between Delete and Save. Unlike a plain `.btn-secondary`, it has an opaque per-theme base — a `--btn-base` custom property (`var(--card)` in the default theme, `#eef4f6` in Aero, `#2a1832` in Yoimiya) that its `:active` state layers `--accent-soft` over — because the record form's action row is sticky and transparent and relies on opaque buttons so form content can't scroll visibly through them (`--card` itself is translucent in Aero/Yoimiya, hence the per-theme override; see `styles.css`, grep `btn-base`). Clicking it saves nothing: it reads the on-screen form into a `prefill` object (type, category, sub, amount, currency, notes), calls `closeModal()`, then `openModal(null, prefill)` reopens the modal as a fresh Add New Record pre-filled from that prefill. The date resets to today (a copy on the original's date was rarely wanted and tedious to fix afterwards), and the form scrolls back to the top (`#recordForm.scrollTop = 0`) so the user lands on the fields, not the action row. The original record is completely untouched — nothing is written until the new copy is itself saved. Because it reopens via Add (not Edit), the copy carries no `ruleId` and the recurring section starts in State A (no rule, toggle visible/unchecked); split-the-bill and paid-by-someone-else are both available on the copy (their guards gate on `!editingId`, which is `null` in Add mode); legacy manual-rate values are not copied (the manual-rate field is only populated from `record.manualRate`, and `record` is `null` for a duplicate).
 - Note the Save button: check-icon, label "Save" lives in `#saveBtnLabel` (`openModal` writes the span's `textContent`, never the button's own — writing the button's `textContent` would erase the icon); the new-category color-confirmation detour still relabels it to "Confirm & Save".
+- The split-bill breakdown is stripped from the copied notes (`stripSplitBreakdown`, debts.js) — the breakdown is tied to the original save's debts, so a copy must not inherit it, whether or not it's split again.
+- The modal replays its slide-up animation so the copy visibly pops in: between `closeModal()` and `openModal(null, prefill)` the handler forces a reflow (`void $("#modal").offsetWidth`), which restarts `.modal`'s `slideUp` entrance animation instead of it being skipped (close and reopen otherwise run in the same task with no style flush between them).
+- Under 390px viewport width the action row tightens its spacing (icons and labels kept) so all three buttons fit down to 320px — see `styles.css`, the `@media (max-width: 389px)` block after the Duplicate `--btn-base` rules.
 
 ---
 
@@ -267,10 +270,11 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `reconcileRenames` / `makeRateService` | shared helpers (from `finance-helpers.js`) |
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
 | `evenShares` / `fillBlanks` | pure (from `debts.js`) — cent-exact splits: evenShares over everyone, fillBlanks over blank fields only |
+| `stripSplitBreakdown` | pure (from `debts.js`) — strips the auto-generated "Split bill — total …" breakdown from a notes string, leaving the user's own notes; used by Duplicate so a copy doesn't inherit a breakdown tied to the original save's debts |
 | `splitPeople` / `splitMine` / `splitLastEdited` / `solve2p` / `syncSplitSection` / `renderSplitRows` | split-the-bill state + UI (Add Record modal) |
 | `planPaidBy` | pure (from `debts.js`) — picks paid-back vs borrow from the payer's balance and delegates overshoot to planSplit; returns `{ records }` |
 | `paidByPersonId` / `syncPaidBySection` / `buildPaidByPersonMenu` | paid-by-someone-else state + UI (Add Record modal) |
-| `openModal(record, prefill)` | Add/Edit modal opener; `record` truthy → Edit, else Add. Optional `prefill` opens Add mode with fields copied from it (type, category, sub, amount, currency, notes) — used by Duplicate; never carries a date, id, or ruleId, so the copy starts today, unsaved, and unlinked |
+| `openModal(record, prefill)` | Add/Edit modal opener; `record` with an id → Edit (PUT); `prefill` → Add pre-filled (used by Duplicate). Optional `prefill` opens Add mode with fields copied from it (type, category, sub, amount, currency, notes); never carries a date, id, or ruleId, so the copy starts today, unsaved, and unlinked |
 | `window.__pendingOnSaved` | one-shot post-save callback; armed by banner Edit & Confirm (`editPending`) to stamp `ruleId` and advance the rule; `closeModal` always clears it so an abandoned edit can't leak into the next unrelated save |
 | `shareDebtRecords(list)` | renders + shares N debt PNGs oldest-first in one share sheet; `shareDebtRecord(d)` is a 1-element wrapper |
 | `debtCardModel` | pure (from debt-card.js) — every string + flag the share card draws (wording, FX line, balance math, settled) |

@@ -605,3 +605,28 @@ test("planPaidBy: invalid input -> empty; no caller mutation", () => {
   D.planPaidBy(e2, 1000, "THB");
   assert.equal(e2.type, undefined);
 });
+
+/* ---------------- stripSplitBreakdown (Duplicate) ---------------- */
+
+test("stripSplitBreakdown: removes the breakdown after the user's notes", () => {
+  assert.equal(
+    D.stripSplitBreakdown("Bonchon · Split bill — total 900: Bill 450 · Boat 450"),
+    "Bonchon");
+});
+
+test("stripSplitBreakdown: breakdown-only notes become empty", () => {
+  assert.equal(
+    D.stripSplitBreakdown("Split bill — total 2,500: Bill 1,250 · Boat 1,250"),
+    "");
+});
+
+test("stripSplitBreakdown: notes without a breakdown are unchanged", () => {
+  assert.equal(D.stripSplitBreakdown("Coffee with Nok · oat milk"), "Coffee with Nok · oat milk");
+  assert.equal(D.stripSplitBreakdown(""), "");
+});
+
+test("stripSplitBreakdown: user notes containing their own middle dots survive", () => {
+  assert.equal(
+    D.stripSplitBreakdown("Dinner · Thonglor · Split bill — total 1,000: Bill 500 · Nok 500"),
+    "Dinner · Thonglor");
+});

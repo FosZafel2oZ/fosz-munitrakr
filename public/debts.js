@@ -233,6 +233,15 @@
     return evenShares(remainingCents / 100, n);
   }
 
+  // Strips the auto-generated split-bill breakdown ("Split bill — total …")
+  // from a notes string, leaving only the user's own notes. The breakdown is
+  // generated at save time and tied to that save's debts (amounts, names) —
+  // it must not be inherited by a Duplicate, which starts a fresh, unsaved
+  // copy that may or may not be split again.
+  function stripSplitBreakdown(notes) {
+    return String(notes || "").replace(/(?:^| · )Split bill — total .*$/, "");
+  }
+
   // Plans the debt record(s) for a "paid by someone else" expense: the payer
   // fronted `entered.amount`, netted against whatever they already owed me.
   // `entered` is the user's intended record (no id/createdAt — caller stamps
@@ -259,5 +268,5 @@
     return { records: [copy] };
   }
 
-  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares, fillBlanks, planPaidBy };
+  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares, fillBlanks, stripSplitBreakdown, planPaidBy };
 });
