@@ -128,6 +128,20 @@
     return lent - back;
   }
 
+  // Returns the person's outstanding amount IMMEDIATELY AFTER the given record,
+  // signed (positive = they owe you). Deliberately calls balanceBefore WITHOUT a
+  // people map — a statement for a since-deleted person must still count their
+  // full remaining history, not stop dead at 0 the way the people-gated caller does.
+  // Returns 0 if the record isn't found or `debts` isn't an array.
+  function balanceAfterRecord(debts, recordId) {
+    if (!Array.isArray(debts) || !recordId) return 0;
+    const target = debts.find((d) => d && d.id === recordId);
+    if (!target) return 0;
+    const amt = Number(target.convertedAmount != null ? target.convertedAmount : target.amount) || 0;
+    const signed = (target.type === "lend" || target.type === "pay-back") ? amt : -amt;
+    return balanceBefore(debts, recordId) + signed;
+  }
+
   // Returns either a single-record plan or a two-record split plan for an entered debt.
   // `entered` is the user's intended record (no id/createdAt — caller stamps those).
   // `balanceBeforeSigned` is the person's outstanding immediately before this record,
@@ -309,5 +323,5 @@
     return ids.slice(top, tappedPos);
   }
 
-  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, planSplit, wouldOvershoot, evenShares, fillBlanks, stripSplitBreakdown, planPaidBy, blockSelect };
+  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, balanceAfterRecord, planSplit, wouldOvershoot, evenShares, fillBlanks, stripSplitBreakdown, planPaidBy, blockSelect };
 });

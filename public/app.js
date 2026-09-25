@@ -4860,9 +4860,8 @@ async function shareDebtRecords(debtList) {
 
 // Share 2+ of ONE person's records as a single statement PNG (select mode on
 // either debt screen, whenever the selection is all one person's). Same busy
-// guard, alerts and share/fallback rules as
-// shareDebtRecords; the footer shows the outstanding right after the newest
-// selected record.
+// guard, alerts and share/fallback rules as shareDebtRecords; the footer shows
+// the outstanding right after the newest selected record.
 async function shareDebtStatement(debtList) {
   const list = (debtList || []).filter((d) => d && d.id);
   if (!list.length || _debtShareBusy) return;
@@ -4897,11 +4896,7 @@ async function shareDebtStatement(debtList) {
     const last = ordered[ordered.length - 1];
     const person = peopleById[last.personId]
       || { name: "(deleted person)", color: "#888", icon: "person" };
-    // Balance before `last` plus its own signed default-currency amount —
-    // the same sign/amount rule balanceBefore applies to every earlier record.
-    const lastAmt = Number(last.convertedAmount != null ? last.convertedAmount : last.amount) || 0;
-    const balanceAfter = balanceBefore(store.debts || [], last.id, peopleById)
-      + ((last.type === "lend" || last.type === "pay-back") ? lastAmt : -lastAmt);
+    const balanceAfter = balanceAfterRecord(store.debts || [], last.id);
 
     let blob;
     try {
@@ -5217,7 +5212,7 @@ function renderDebtRecords() {
       '</div>';
     el.appendChild(inner);
     // Share button — only when not in multi-select mode (avoids tap conflicts
-    // and visual clutter while the user is bulk-selecting rows to delete).
+    // and visual clutter while the user is bulk-selecting rows to share or delete).
     if (!debtMultiSelect) {
       const shareBtn = document.createElement("button");
       shareBtn.type = "button";

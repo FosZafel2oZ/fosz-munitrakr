@@ -316,6 +316,48 @@ test("balanceBefore: pay-back contributes to lent before the target", () => {
   assert.equal(D.balanceBefore(debts, "c", peopleById), -150);
 });
 
+// --- balanceAfterRecord ---
+
+test("balanceAfterRecord: two lends for a person absent from any people map", () => {
+  const debts = [
+    { id: "a", type: "lend", personId: "p1", date: "2026-09-20", createdAt: 1, amount: 100 },
+    { id: "b", type: "lend", personId: "p1", date: "2026-09-22", createdAt: 2, amount:  50 },
+  ];
+  // No peopleById passed anywhere — p1 doesn't exist in any people map.
+  assert.equal(D.balanceAfterRecord(debts, "b"), 150);
+  assert.equal(D.balanceAfterRecord(debts, "a"), 100);
+});
+
+test("balanceAfterRecord: paid-back and borrow signs", () => {
+  const lendThenPaidBack = [
+    { id: "a", type: "lend",      personId: "p1", date: "2026-01-01", createdAt: 1, amount: 500 },
+    { id: "b", type: "paid-back", personId: "p1", date: "2026-01-05", createdAt: 2, amount: 200 },
+  ];
+  // After "b": 500 lent - 200 paid back = 300.
+  assert.equal(D.balanceAfterRecord(lendThenPaidBack, "b"), 300);
+
+  const borrow = [
+    { id: "c", type: "borrow", personId: "p2", date: "2026-01-10", createdAt: 3, amount: 80 },
+  ];
+  // After "c": nothing before it, then -80 borrowed.
+  assert.equal(D.balanceAfterRecord(borrow, "c"), -80);
+});
+
+test("balanceAfterRecord: uses convertedAmount when present", () => {
+  const debts = [
+    { id: "a", type: "lend", personId: "p1", date: "2026-01-01", createdAt: 1,
+      amount: 450, currency: "USD", convertedAmount: 15750, convertedCurrency: "THB" },
+  ];
+  assert.equal(D.balanceAfterRecord(debts, "a"), 15750);
+});
+
+test("balanceAfterRecord: returns 0 for unknown id", () => {
+  const debts = [
+    { id: "a", type: "lend", personId: "p1", date: "2026-01-01", createdAt: 1, amount: 100 },
+  ];
+  assert.equal(D.balanceAfterRecord(debts, "missing"), 0);
+});
+
 // --- planSplit ---
 
 test("planSplit: no split when entered amount equals outstanding (they-owe exact)", () => {
