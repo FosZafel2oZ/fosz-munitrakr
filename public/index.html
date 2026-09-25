@@ -154,6 +154,7 @@
         <span id="phOutstanding" class="ph-outstanding">—</span>
       </div>
     </div>
+    <div class="muted hidden" id="phSelCount" style="margin-bottom:10px">0 selected</div>
     <div id="phList" class="records-list"></div>
     <div id="phEmpty" class="empty hidden">No debt records with this person yet.</div>
   </main>
@@ -421,6 +422,9 @@
   <button id="dbtMultiBtn" class="fab fab-2 hidden" aria-label="Select debt records">
     <svg viewBox="0 0 24 24" width="24" height="24"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
+  <button id="phShareBtn" class="fab fab-2 hidden" aria-label="Select records to share">
+    <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
   <div id="dbtMultiBar" class="multi-bar hidden">
     <button id="dbtMsCancel" class="ms-btn" aria-label="Cancel">
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
@@ -430,6 +434,7 @@
     </button>
     <button id="dbtMsShare" class="ms-btn" disabled aria-label="Share selected">
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="dbtMsShareLabel">Share</span>
     </button>
     <button id="dbtMsAll" class="ms-btn" aria-label="Select all">
       <svg viewBox="0 0 24 24" width="22" height="22"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 12l3 3 5-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>

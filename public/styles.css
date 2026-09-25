@@ -211,7 +211,7 @@ body.no-dock .multi-bar{bottom:calc(28px + var(--safe-b))}
 .ms-btn:active{transform:scale(.94)}
 #msCancel,#msAll,#msDelete{flex:0 0 52px;width:52px;padding:0}
 #msCat,#msType{flex:1;padding:0 8px}
-#msCat:not([disabled]),#msType:not([disabled]){color:#fff;
+#msCat:not([disabled]),#msType:not([disabled]),#dbtMsShare:not([disabled]){color:#fff;
   background:linear-gradient(135deg,var(--accent),var(--accent-b));
   border-color:transparent}
 #msDelete:not([disabled]){color:#fff;background:var(--out);
@@ -501,7 +501,7 @@ body.modal-open{overflow:hidden}
 .bulk-actions{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
 .records-list.select-mode .rec{align-items:center}
 .rec-check{width:20px;height:20px;accent-color:var(--accent);flex-shrink:0;margin-top:2px}
-.rec.selected{border-color:var(--accent);background:var(--card-2)}
+.rec.selected,.dbt-history-row.selected{border-color:var(--accent);background:var(--card-2)}
 
 /* ---------- SETTINGS ---------- */
 #view-settings .records-head h2{font-size:22px;letter-spacing:-.4px}
@@ -758,6 +758,7 @@ body.theme-aero .settings-block{border-radius:22px}
 body.theme-aero .rec{box-shadow:0 8px 22px rgba(28,86,140,.13),
   inset 0 1px 0 rgba(255,255,255,.95)}
 body.theme-aero .rec.selected,
+body.theme-aero .dbt-history-row.selected,
 body.theme-aero .summary-card.active{
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent) inset,
@@ -891,6 +892,7 @@ body.theme-aero .ms-btn{
   box-shadow:0 8px 20px rgba(28,86,140,.18),inset 0 1px 0 rgba(255,255,255,1)}
 body.theme-aero #msCat:not([disabled]),
 body.theme-aero #msType:not([disabled]),
+body.theme-aero #dbtMsShare:not([disabled]),
 body.theme-aero #msAll.on{
   background:
     linear-gradient(180deg,rgba(255,255,255,.6) 0%,rgba(255,255,255,0) 48%,rgba(0,0,0,.06) 100%),
@@ -999,7 +1001,8 @@ body.theme-yoimiya .ms-btn{
   box-shadow:0 10px 28px rgba(0,0,0,.42),
              inset 0 1px 0 rgba(255,200,140,.18)}
 body.theme-yoimiya .summary-card.active,
-body.theme-yoimiya .rec.selected{
+body.theme-yoimiya .rec.selected,
+body.theme-yoimiya .dbt-history-row.selected{
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent) inset,
              0 12px 26px var(--accent-glow)}
@@ -1048,6 +1051,7 @@ body.theme-yoimiya .rec-back{
   box-shadow:0 8px 20px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,200,140,.2)}
 body.theme-yoimiya #msCat:not([disabled]),
 body.theme-yoimiya #msType:not([disabled]),
+body.theme-yoimiya #dbtMsShare:not([disabled]),
 body.theme-yoimiya #msAll.on{
   background:linear-gradient(135deg,#ffae3b,#ff7a18 55%,#e8482b);color:#fff}
 body.theme-yoimiya .btn-danger,
@@ -1360,6 +1364,7 @@ body.theme-yoimiya .rn-menu{
 .dbt-history-row .dbt-right { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
 .dbt-history-row .dbt-orig { font-size: 11px; color: var(--muted); margin-top: 2px; font-weight: 600; }
 .dbt-history-row .dbt-orig.warn { color: var(--out); }
+.dbt-history-row .rec-check { margin: 0; }
 /* 3-column direction toggle in the Add Debt modal needs slightly tighter padding
    so "Paid back" doesn't push the row to two lines on narrow screens. */
 .type-toggle.three-col button { padding: 10px 4px; font-size: 13px; }
@@ -1383,9 +1388,10 @@ body.theme-yoimiya .rn-menu{
   background: var(--accent-soft); color: var(--accent);
 }
 
-/* DebtTrakr multi-select bar — 4 same-sized 52x52 buttons centered. */
+/* DebtTrakr multi-select bar — 52x52 icon buttons around a wide Share. */
 #dbtMultiBar { justify-content: center; }
-#dbtMsCancel, #dbtMsShare, #dbtMsDelete, #dbtMsAll { flex: 0 0 52px; width: 52px; padding: 0; }
+#dbtMsCancel, #dbtMsDelete, #dbtMsAll { flex: 0 0 52px; width: 52px; padding: 0; }
+#dbtMsShare { flex: 1; padding: 0 12px; }
 #dbtMsDelete:not([disabled]) {
   color: #fff; background: var(--out); border-color: transparent;
 }

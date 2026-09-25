@@ -1259,11 +1259,15 @@ function updateFabs() {
   // MuniTrakr multi
   $("#multiBtn").classList.toggle("hidden", !onRecords || multiSelect);
   $("#multiBar").classList.toggle("hidden", !(onRecords && multiSelect));
-  // DebtTrakr multi
+  // DebtTrakr multi — shared by All Debt Records and a person's history
+  const onPersonHistory = currentView === "person-history";
   const dbtMultiBtn = document.getElementById("dbtMultiBtn");
+  const phShareBtn = document.getElementById("phShareBtn");
   const dbtMultiBar = document.getElementById("dbtMultiBar");
   if (dbtMultiBtn) dbtMultiBtn.classList.toggle("hidden", !onDebtRecords || debtMultiSelect);
-  if (dbtMultiBar) dbtMultiBar.classList.toggle("hidden", !(onDebtRecords && debtMultiSelect));
+  if (phShareBtn) phShareBtn.classList.toggle("hidden", !onPersonHistory || debtMultiSelect);
+  if (dbtMultiBar) dbtMultiBar.classList.toggle("hidden",
+    !((onDebtRecords || onPersonHistory) && debtMultiSelect));
 }
 function enterMulti() {
   multiSelect = true;
@@ -1511,7 +1515,8 @@ function showView(v) {
     multiSelect = false;
     selected.clear();
   }
-  if (v !== "debt-records" && debtMultiSelect) {
+  // DebtTrakr select mode runs on two screens — never carry it off the one it started on.
+  if (debtMultiSelect && v !== currentView) {
     debtMultiSelect = false;
     debtSelected.clear();
   }
@@ -4852,6 +4857,75 @@ async function shareDebtRecords(debtList) {
   }
 }
 
+// Share 2+ of ONE person's records as a single statement PNG (person-history
+// select mode). Same busy guard, alerts and share/fallback rules as
+// shareDebtRecords; the footer shows the outstanding right after the newest
+// selected record.
+async function shareDebtStatement(debtList) {
+  const list = (debtList || []).filter((d) => d && d.id);
+  if (!list.length || _debtShareBusy) return;
+  _debtShareBusy = true;
+  try {
+    loadStore();
+    const peopleById = {};
+    for (const p of (store.settings.people || [])) peopleById[p.id] = p;
+    const defaultCurrency = (store.settings.defaultCurrency || "THB");
+    const userName = (store.profile && store.profile.displayName) || "Me";
+    const debtShareLanguage = store.settings.debtShareLanguage || "en";
+
+    const ordered = list.slice().sort((a, b) =>
+      a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)
+    );
+    const first = ordered[0];
+    const last = ordered[ordered.length - 1];
+    const person = peopleById[last.personId]
+      || { name: "(deleted person)", color: "#888", icon: "person" };
+    // Balance before `last` plus its own signed default-currency amount —
+    // the same sign/amount rule balanceBefore applies to every earlier record.
+    const lastAmt = Number(last.convertedAmount != null ? last.convertedAmount : last.amount) || 0;
+    const balanceAfter = balanceBefore(store.debts || [], last.id, peopleById)
+      + ((last.type === "lend" || last.type === "pay-back") ? lastAmt : -lastAmt);
+
+    let blob;
+    try {
+      blob = await renderStatementCard({
+        debts: list,
+        person,
+        personIconSvg: personIconSvg(person.icon || "person"),
+        balanceAfter,
+        defaultCurrency,
+        userName,
+        language: debtShareLanguage,
+      });
+    } catch (err) {
+      console.error("renderStatementCard failed:", err);
+      alert("Couldn't generate the image — try again.");
+      return;
+    }
+    if (!blob) { alert("Couldn't generate the image — try again."); return; }
+    const safeName = (person.name || "person").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+    const filename = "statement-" + safeName + "-" + (first.date || "record")
+      + "-to-" + (last.date || "record") + ".png";
+    const file = new File([blob], filename, { type: "image/png" });
+
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // files only — adding title/text causes some iOS targets to save extra files
+        await navigator.share({ files: [file] });
+        return;
+      }
+      // Share with files genuinely unsupported → download fallback.
+      _downloadBlob(file, file.name);
+    } catch (err) {
+      // AbortError = user cancelled the share sheet — stay quiet.
+      if (err && err.name === "AbortError") return;
+      alert("Sharing failed — try again or select fewer records.");
+    }
+  } finally {
+    _debtShareBusy = false;
+  }
+}
+
 // Back-compat wrapper — the per-row share buttons call this with one record.
 async function shareDebtRecord(debt) {
   return shareDebtRecords([debt]);
@@ -4912,8 +4986,13 @@ function renderPersonHistory(personId) {
   const rows = personDebts.slice().sort((a, b) =>
     a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0)
   );
+  lastPhRows = rows;
+  // Prune selected ids that fell out of the visible set
+  const visibleIds = new Set(rows.map((r) => r.id));
+  [...debtSelected].forEach((id) => !visibleIds.has(id) && debtSelected.delete(id));
   if (!rows.length) {
     empty.classList.remove("hidden");
+    dbtUpdateSelUI();
     return;
   }
   empty.classList.add("hidden");
@@ -4926,7 +5005,8 @@ function renderPersonHistory(personId) {
   const dirClass = (t) => (t === "lend" || t === "pay-back") ? "is-in" : "is-out";
   for (const d of rows) {
     const card = document.createElement("div");
-    card.className = "dbt-history-row " + dirClass(d.type);
+    card.className = "dbt-history-row " + dirClass(d.type)
+      + (debtMultiSelect && debtSelected.has(d.id) ? " selected" : "");
     const amtStr = fmt(d.convertedAmount != null ? d.convertedAmount : d.amount, cur);
     // Show the original currency+amount only when the record was converted from
     // a different currency than what's displayed.
@@ -4951,15 +5031,36 @@ function renderPersonHistory(personId) {
         '<span class="dbt-amt">' + amtStr + '</span>' +
         origLine +
       '</div>' +
-      '<button type="button" class="dbt-share" aria-label="Share record">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-          'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-          '<path d="M12 3v12"/>' +
-          '<path d="M7 8l5-5 5 5"/>' +
-          '<path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/>' +
-        '</svg>' +
-      '</button>';
-    card.addEventListener("click", () => openDebtModal(d));
+      // Share button — only when not in multi-select mode (the bar shares instead).
+      (debtMultiSelect ? '' :
+        '<button type="button" class="dbt-share" aria-label="Share record">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M12 3v12"/>' +
+            '<path d="M7 8l5-5 5 5"/>' +
+            '<path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/>' +
+          '</svg>' +
+        '</button>');
+    if (debtMultiSelect) {
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.className = "rec-check";
+      chk.checked = debtSelected.has(d.id);
+      chk.tabIndex = -1;
+      card.prepend(chk);
+    }
+    card.addEventListener("click", () => {
+      if (debtMultiSelect) {
+        if (debtSelected.has(d.id)) debtSelected.delete(d.id);
+        else debtSelected.add(d.id);
+        card.classList.toggle("selected", debtSelected.has(d.id));
+        const c = card.querySelector(".rec-check");
+        if (c) c.checked = debtSelected.has(d.id);
+        dbtUpdateSelUI();
+      } else {
+        openDebtModal(d);
+      }
+    });
     const shareBtn = card.querySelector(".dbt-share");
     if (shareBtn) {
       shareBtn.addEventListener("click", (ev) => {
@@ -4969,9 +5070,11 @@ function renderPersonHistory(personId) {
     }
     list.appendChild(card);
   }
+  dbtUpdateSelUI();
 }
 
 document.getElementById("phBack")?.addEventListener("click", () => {
+  if (debtMultiSelect) { dbtExitMulti(); return; }
   _currentHistoryPersonId = null;
   showView("dashboard");
 });
@@ -4984,6 +5087,12 @@ let debtMultiSelect = false;
 let debtSelected = new Set();
 let debtRecFilter = new Set();      // Set<personId> filtering the list
 let lastDbtRows = [];               // currently-visible (post-filter) debt records
+let lastPhRows = [];                // the open person's records, display order
+
+// Rows the select mode acts on — whichever of its two screens is showing.
+function debtSelectRows() {
+  return currentView === "person-history" ? lastPhRows : lastDbtRows;
+}
 
 function renderDebtRecords() {
   loadStore();
@@ -5153,7 +5262,8 @@ function buildDebtFilterMenu() {
 
 function dbtUpdateSelUI() {
   const n = debtSelected.size;
-  const sc = document.getElementById("dbtSelCount");
+  const rows = debtSelectRows();
+  const sc = document.getElementById(currentView === "person-history" ? "phSelCount" : "dbtSelCount");
   if (sc) {
     sc.textContent = n + " selected";
     sc.classList.toggle("hidden", !debtMultiSelect);
@@ -5162,9 +5272,11 @@ function dbtUpdateSelUI() {
   if (delBtn) delBtn.disabled = n === 0;
   const shareBtn = document.getElementById("dbtMsShare");
   if (shareBtn) shareBtn.disabled = n === 0;
+  const shareLabel = document.getElementById("dbtMsShareLabel");
+  if (shareLabel) shareLabel.textContent = n > 0 ? "Share " + n : "Share";
   const allBtn = document.getElementById("dbtMsAll");
   if (allBtn) {
-    const allSel = lastDbtRows.length > 0 && n === lastDbtRows.length;
+    const allSel = rows.length > 0 && n === rows.length;
     allBtn.classList.toggle("on", allSel);
   }
 }
@@ -5172,13 +5284,13 @@ function dbtUpdateSelUI() {
 function dbtEnterMulti() {
   debtMultiSelect = true;
   debtSelected.clear();
-  renderDebtRecords();
+  rerenderActiveDebtView();
   updateFabs();
 }
 function dbtExitMulti() {
   debtMultiSelect = false;
   debtSelected.clear();
-  renderDebtRecords();
+  rerenderActiveDebtView();
   updateFabs();
 }
 
@@ -5210,12 +5322,14 @@ document.addEventListener("click", (e) => {
 
 // Multi-select wiring
 document.getElementById("dbtMultiBtn")?.addEventListener("click", dbtEnterMulti);
+document.getElementById("phShareBtn")?.addEventListener("click", dbtEnterMulti);
 document.getElementById("dbtMsCancel")?.addEventListener("click", dbtExitMulti);
 document.getElementById("dbtMsAll")?.addEventListener("click", () => {
-  const allSel = lastDbtRows.length > 0 && debtSelected.size === lastDbtRows.length;
+  const rows = debtSelectRows();
+  const allSel = rows.length > 0 && debtSelected.size === rows.length;
   debtSelected.clear();
-  if (!allSel) lastDbtRows.forEach((r) => debtSelected.add(r.id));
-  renderDebtRecords();
+  if (!allSel) rows.forEach((r) => debtSelected.add(r.id));
+  rerenderActiveDebtView();
 });
 document.getElementById("dbtMsDelete")?.addEventListener("click", () => {
   if (!debtSelected.size) return;
@@ -5225,10 +5339,17 @@ document.getElementById("dbtMsDelete")?.addEventListener("click", () => {
   saveStore();
   debtSelected.clear();
   // Stay in multi-select mode but re-render
-  renderDebtRecords();
+  rerenderActiveDebtView();
 });
 document.getElementById("dbtMsShare")?.addEventListener("click", () => {
   if (!debtSelected.size) return;
   // Selection survives the share (non-destructive) — stay in multi-select.
-  shareDebtRecords(lastDbtRows.filter((r) => debtSelected.has(r.id)));
+  const selectedRows = debtSelectRows().filter((r) => debtSelected.has(r.id));
+  // A person's history sends 2+ records as ONE statement image; everything
+  // else (1 record there, any count on All Debt Records) sends separate cards.
+  if (currentView === "person-history" && selectedRows.length >= 2) {
+    shareDebtStatement(selectedRows);
+  } else {
+    shareDebtRecords(selectedRows);
+  }
 });
