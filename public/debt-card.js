@@ -372,6 +372,47 @@
     });
   }
 
+  // Outstanding footer: dark card, green + checkmark once the cycle closes.
+  // Shared by renderDebtCard and renderStatementCard — their models expose
+  // the same field names (outstandingLabel, mathText, totalText,
+  // totalCurrency, isSettled), so this needs no per-card branching.
+  // Draws at the given y; caller advances past OUT_H afterward.
+  function drawOutstanding(ctx, y, m) {
+    const P = PALETTE;
+    const rightEdge = WIDTH - PAD;
+
+    ctx.fillStyle = m.isSettled ? P.settled : P.dark;
+    roundRect(ctx, PAD, y, WIDTH - PAD * 2, OUT_H, 26);
+    ctx.fill();
+
+    ctx.textBaseline = "middle";
+    ctx.font = FONT(800, 46);
+    const totW = ctx.measureText(m.totalText).width;
+    ctx.font = FONT(700, 26);
+    const totCurW = m.totalCurrency ? ctx.measureText(m.totalCurrency).width + 10 : 0;
+    const totalX = rightEdge - 34 - totW - totCurW;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = FONT(800, 46);
+    ctx.fillText(m.totalText, totalX, y + OUT_H / 2);
+    if (m.totalCurrency) {
+      ctx.font = FONT(700, 26);
+      ctx.fillStyle = "rgba(255,255,255,0.78)";
+      ctx.fillText(m.totalCurrency, totalX + totW + 10, y + OUT_H / 2 + 2);
+    }
+    if (m.isSettled) drawCheckmark(ctx, totalX - 54, y + OUT_H / 2 - 18, 36, "#ffffff");
+
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "rgba(255,255,255,0.62)";
+    ctx.font = FONT(600, 22);
+    ctx.fillText(m.outstandingLabel, PAD + 34, m.mathText ? y + 34 : y + 56);
+    if (m.mathText) {
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = FONT(600, 30);
+      const mathMaxW = totalX - (m.isSettled ? 60 : 0) - 24 - (PAD + 34);
+      ctx.fillText(clipText(ctx, m.mathText, mathMaxW), PAD + 34, y + 74);
+    }
+  }
+
   // Draws the card and resolves with a PNG Blob.
   // opts: { debt, person: {name, color}, personIconSvg, balanceBefore,
   //         defaultCurrency, userName, language }
@@ -522,40 +563,233 @@
       y += noteH + NOTE_GAP;
     }
 
-    // ---- Outstanding card (green + checkmark once the cycle closes) ----
-    ctx.fillStyle = m.isSettled ? P.settled : P.dark;
-    roundRect(ctx, PAD, y, WIDTH - PAD * 2, OUT_H, 26);
-    ctx.fill();
-
-    ctx.textBaseline = "middle";
-    ctx.font = FONT(800, 46);
-    const totW = ctx.measureText(m.totalText).width;
-    ctx.font = FONT(700, 26);
-    const totCurW = m.totalCurrency ? ctx.measureText(m.totalCurrency).width + 10 : 0;
-    const totalX = rightEdge - 34 - totW - totCurW;
-    ctx.fillStyle = "#ffffff";
-    ctx.font = FONT(800, 46);
-    ctx.fillText(m.totalText, totalX, y + OUT_H / 2);
-    if (m.totalCurrency) {
-      ctx.font = FONT(700, 26);
-      ctx.fillStyle = "rgba(255,255,255,0.78)";
-      ctx.fillText(m.totalCurrency, totalX + totW + 10, y + OUT_H / 2 + 2);
-    }
-    if (m.isSettled) drawCheckmark(ctx, totalX - 54, y + OUT_H / 2 - 18, 36, "#ffffff");
-
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "rgba(255,255,255,0.62)";
-    ctx.font = FONT(600, 22);
-    ctx.fillText(m.outstandingLabel, PAD + 34, m.mathText ? y + 34 : y + 56);
-    if (m.mathText) {
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      ctx.font = FONT(600, 30);
-      const mathMaxW = totalX - (m.isSettled ? 60 : 0) - 24 - (PAD + 34);
-      ctx.fillText(clipText(ctx, m.mathText, mathMaxW), PAD + 34, y + 74);
-    }
+    // ---- Outstanding footer ----
+    drawOutstanding(ctx, y, m);
 
     return await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
   }
 
-  return { debtCardModel, statementModel, renderDebtCard };
+  // Statement-card layout constants. Rows card lives between the header and
+  // the shared Outstanding footer; ROW_LINE doubles as both the wrapped-note
+  // line advance and the gap from a row's kind line down to its first note
+  // line, so a row's reserved height and its drawn content always agree.
+  const ROW_PAD = 22, ROW_DATE_W = 104, ROW_GAP = 24, ROW_LINE = 34, ROW_NOTE_MAX_LINES = 2;
+  const SUBTOTAL_H = 72;
+
+  // Draws the multi-record statement and resolves with a PNG Blob.
+  // opts: { debts, person: {name, color}, personIconSvg, balanceAfter,
+  //         defaultCurrency, userName, language }
+  async function renderStatementCard(opts) {
+    const o = opts || {};
+    const person = o.person || {};
+    const m = statementModel({
+      debts: o.debts,
+      personName: person.name,
+      userName: o.userName,
+      defaultCurrency: o.defaultCurrency,
+      balanceAfter: o.balanceAfter,
+      language: o.language,
+    });
+    const P = PALETTE;
+
+    const headerH = 112;
+    const rowsPadX = PAD + 32;
+    const rowsRightEdge = WIDTH - PAD - 32;
+    const midX = rowsPadX + ROW_DATE_W + ROW_GAP;
+
+    // Measure everything that affects HEIGHT on a throwaway context — the
+    // real canvas can't be sized until every row's height (and thus the
+    // rows card's height) is known, same pattern as renderDebtCard's notes.
+    const measure = document.createElement("canvas").getContext("2d");
+    const rowLayouts = m.rows.map((row) => {
+      measure.font = FONT(800, 30);
+      const amtW = measure.measureText(row.amountText).width;
+      measure.font = FONT(700, 22);
+      const curW = m.totalCurrency ? measure.measureText(m.totalCurrency).width + 8 : 0;
+      return { amtW, curW, rightW: amtW + curW };
+    });
+    const rightColW = rowLayouts.reduce((mx, r) => Math.max(mx, r.rightW), 0);
+    const noteMaxW = Math.max(80, rowsRightEdge - midX - rightColW - ROW_GAP);
+    measure.font = FONT(500, 26);
+    rowLayouts.forEach((layout, i) => {
+      const row = m.rows[i];
+      layout.noteLines = row.notesText
+        ? wrapText(measure, row.notesText, noteMaxW, ROW_NOTE_MAX_LINES)
+        : [];
+      const contentH = layout.noteLines.length ? ROW_LINE * (1 + layout.noteLines.length) : ROW_LINE;
+      layout.rowH = ROW_PAD * 2 + contentH;
+    });
+    const rowsCardH = rowLayouts.reduce((sum, r) => sum + r.rowH, 0) + (m.subtotalText ? SUBTOTAL_H : 0);
+
+    const HEIGHT = TOP + headerH + GAP + rowsCardH + NOTE_GAP + OUT_H + BOTTOM;
+
+    const canvas = document.createElement("canvas");
+    // iOS caps canvas area at 16M px; a long statement backs off DPR to stay
+    // under it instead of clipping or refusing to render.
+    const dpr = Math.max(1, Math.min(DPR, Math.sqrt(16e6 / (WIDTH * HEIGHT))));
+    canvas.width = Math.round(WIDTH * dpr);
+    canvas.height = Math.round(HEIGHT * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    // ---- Background: white bleed behind a rounded gradient card ----
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    const grad = ctx.createLinearGradient(0, 0, WIDTH * 0.6, HEIGHT);
+    grad.addColorStop(0, P.bgTop);
+    grad.addColorStop(1, P.bgBot);
+    ctx.fillStyle = grad;
+    roundRect(ctx, 10, 10, WIDTH - 20, HEIGHT - 20, 40);
+    ctx.fill();
+    ctx.strokeStyle = P.edge;
+    ctx.lineWidth = 2;
+    roundRect(ctx, 10, 10, WIDTH - 20, HEIGHT - 20, 40);
+    ctx.stroke();
+
+    let y = TOP;
+
+    // ---- Header, right column first: its width bounds the left column ----
+    ctx.textBaseline = "top";
+    ctx.font = FONT(800, 44);
+    const countW = ctx.measureText(m.countText).width;
+    ctx.font = FONT(500, 26);
+    const rangeW = m.rangeText ? ctx.measureText(m.rangeText).width : 0;
+    const rightW = Math.max(countW, rangeW);
+    const rightEdge = WIDTH - PAD;
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = P.text;
+    ctx.font = FONT(800, 44);
+    ctx.fillText(m.countText, rightEdge, y + 6);
+    if (m.rangeText) {
+      ctx.fillStyle = P.faint;
+      ctx.font = FONT(500, 26);
+      ctx.fillText(m.rangeText, rightEdge, y + 60);
+    }
+    ctx.textAlign = "left";
+
+    // ---- Header, left column: icon tile + name + statement pill ----
+    const ICON = 112;
+    ctx.fillStyle = person.color || "#8a97a6";
+    roundRect(ctx, PAD, y, ICON, ICON, 30);
+    ctx.fill();
+    if (o.personIconSvg) {
+      try {
+        const svg = String(o.personIconSvg).replace('stroke="currentColor"', 'stroke="#ffffff"');
+        const img = await loadImageFromSvg(svg, ICON - 26);
+        ctx.drawImage(img, PAD + 13, y + 13, ICON - 26, ICON - 26);
+      } catch (_e) { /* the coloured tile alone still reads fine */ }
+    }
+
+    const textX = PAD + ICON + 28;
+    const leftMaxW = Math.max(120, rightEdge - textX - rightW - 28);
+
+    ctx.fillStyle = P.text;
+    ctx.font = FONT(700, 48);
+    ctx.fillText(clipText(ctx, m.name, leftMaxW), textX, y + 2);
+
+    ctx.font = FONT(700, 24);
+    const pillPadX = 20, pillH = 46;
+    const pillLabel = clipText(ctx, m.pill, leftMaxW - pillPadX * 2);
+    const pillW = ctx.measureText(pillLabel).width + pillPadX * 2;
+    ctx.fillStyle = P.text;
+    roundRect(ctx, textX, y + 62, pillW, pillH, pillH / 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(pillLabel, textX + pillPadX, y + 62 + pillH / 2 + 1);
+    ctx.textBaseline = "top";
+
+    y += headerH + GAP;
+
+    // ---- Rows card: one continuous sheet holding every row + the subtotal ----
+    const rowsY = y;
+    ctx.fillStyle = P.card;
+    roundRect(ctx, PAD, rowsY, WIDTH - PAD * 2, rowsCardH, 26);
+    ctx.fill();
+    ctx.strokeStyle = P.line;
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, PAD, rowsY, WIDTH - PAD * 2, rowsCardH, 26);
+    ctx.stroke();
+
+    let rowY = rowsY;
+    m.rows.forEach((row, i) => {
+      const layout = rowLayouts[i];
+      const contentTop = rowY + ROW_PAD;
+
+      ctx.fillStyle = P.text;
+      ctx.font = FONT(700, 26);
+      ctx.fillText(row.dateText, rowsPadX, contentTop);
+
+      ctx.font = FONT(700, 20);
+      ctx.fillStyle = row.direction === "out" ? P.out : P.in;
+      ctx.fillText(clipText(ctx, row.kindText, noteMaxW), midX, contentTop);
+
+      if (layout.noteLines.length) {
+        ctx.font = FONT(500, 26);
+        ctx.fillStyle = P.muted;
+        layout.noteLines.forEach((ln, li) => ctx.fillText(ln, midX, contentTop + ROW_LINE * (li + 1)));
+      }
+
+      ctx.fillStyle = P.text;
+      ctx.font = FONT(800, 30);
+      const amtX = rowsRightEdge - layout.amtW - layout.curW;
+      ctx.fillText(row.amountText, amtX, contentTop);
+      if (m.totalCurrency) {
+        ctx.font = FONT(700, 22);
+        ctx.fillStyle = P.muted;
+        ctx.fillText(m.totalCurrency, amtX + layout.amtW + 8, contentTop + 4);
+      }
+
+      rowY += layout.rowH;
+      if (i < m.rows.length - 1) {
+        ctx.strokeStyle = P.line;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(rowsPadX, rowY);
+        ctx.lineTo(rowsRightEdge, rowY);
+        ctx.stroke();
+      }
+    });
+
+    // ---- Subtotal row: only when every selected record points one way ----
+    if (m.subtotalText) {
+      ctx.strokeStyle = P.line;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(PAD, rowY);
+      ctx.lineTo(WIDTH - PAD, rowY);
+      ctx.stroke();
+
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = P.muted;
+      ctx.font = FONT(700, 26);
+      ctx.fillText(m.subtotalLabel, rowsPadX, rowY + SUBTOTAL_H / 2);
+
+      ctx.font = FONT(800, 32);
+      const subW = ctx.measureText(m.subtotalText).width;
+      ctx.font = FONT(700, 22);
+      const subCurW = m.totalCurrency ? ctx.measureText(m.totalCurrency).width + 8 : 0;
+      const subX = rowsRightEdge - subW - subCurW;
+      ctx.fillStyle = P.text;
+      ctx.font = FONT(800, 32);
+      ctx.fillText(m.subtotalText, subX, rowY + SUBTOTAL_H / 2);
+      if (m.totalCurrency) {
+        ctx.font = FONT(700, 22);
+        ctx.fillStyle = P.muted;
+        ctx.fillText(m.totalCurrency, subX + subW + 8, rowY + SUBTOTAL_H / 2 + 2);
+      }
+      ctx.textBaseline = "top";
+      rowY += SUBTOTAL_H;
+    }
+
+    y = rowsY + rowsCardH + NOTE_GAP;
+
+    // ---- Outstanding footer ----
+    drawOutstanding(ctx, y, m);
+
+    return await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+  }
+
+  return { debtCardModel, statementModel, renderDebtCard, renderStatementCard };
 });
