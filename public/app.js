@@ -5076,12 +5076,12 @@ function renderPersonHistory(personId) {
     }
     card.addEventListener("click", () => {
       if (debtMultiSelect) {
-        if (debtSelected.has(d.id)) debtSelected.delete(d.id);
-        else debtSelected.add(d.id);
-        card.classList.toggle("selected", debtSelected.has(d.id));
-        const c = card.querySelector(".rec-check");
-        if (c) c.checked = debtSelected.has(d.id);
-        dbtUpdateSelUI();
+        // The selection is always one gap-free block, so a tap can change
+        // several rows — re-render (it refreshes the count and bar too).
+        const next = blockSelect(debtSelectRows().map((r) => r.id), debtSelected, d.id);
+        debtSelected.clear();
+        next.forEach((id) => debtSelected.add(id));
+        rerenderActiveDebtView();
       } else {
         openDebtModal(d);
       }
@@ -5237,12 +5237,12 @@ function renderDebtRecords() {
     }
     el.addEventListener("click", () => {
       if (debtMultiSelect) {
-        if (debtSelected.has(d.id)) debtSelected.delete(d.id);
-        else debtSelected.add(d.id);
-        el.classList.toggle("selected", debtSelected.has(d.id));
-        const c = el.querySelector(".rec-check");
-        if (c) c.checked = debtSelected.has(d.id);
-        dbtUpdateSelUI();
+        // The selection is always one gap-free block, so a tap can change
+        // several rows — re-render (it refreshes the count and bar too).
+        const next = blockSelect(debtSelectRows().map((r) => r.id), debtSelected, d.id);
+        debtSelected.clear();
+        next.forEach((id) => debtSelected.add(id));
+        rerenderActiveDebtView();
       } else {
         openDebtModal(d);
       }
@@ -5373,9 +5373,11 @@ document.getElementById("dbtMsShare")?.addEventListener("click", () => {
   if (!debtSelected.size) return;
   // Selection survives the share (non-destructive) — stay in multi-select.
   const selectedRows = debtSelectRows().filter((r) => debtSelected.has(r.id));
-  // A person's history sends 2+ records as ONE statement image; everything
-  // else (1 record there, any count on All Debt Records) sends separate cards.
-  if (currentView === "person-history" && selectedRows.length >= 2) {
+  // 2+ records that all belong to one person go as ONE statement image — on
+  // either screen; 1 record, or records spanning several people, go as
+  // separate cards.
+  if (selectedRows.length >= 2
+      && selectedRows.every((r) => r.personId === selectedRows[0].personId)) {
     shareDebtStatement(selectedRows);
   } else {
     shareDebtRecords(selectedRows);
