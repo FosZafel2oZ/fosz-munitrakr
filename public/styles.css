@@ -453,9 +453,13 @@ body.modal-open{overflow:hidden}
 /* Duplicate — the record modal's secondary action, in the outlined style
    this modal's split buttons already use, so each theme's accent carries
    it. Scoped to #recordForm: other modal action rows (e.g. the floodgate's
-   "Start from today") keep their own sizing. */
+   "Start from today") keep their own sizing. The base is opaque because the
+   sticky action row above relies on opaque buttons to hide content
+   scrolling behind it, and --card is translucent in Aero and Yoimiya. */
 #recordForm .modal-actions .btn-secondary{flex:1;display:flex;align-items:center;
-  justify-content:center;gap:9px;font-size:15px}
+  justify-content:center;gap:9px;font-size:15px;
+  --btn-base:var(--card);background:var(--btn-base)}
+#recordForm .modal-actions .btn-secondary:active{background:linear-gradient(var(--accent-soft),var(--accent-soft)),var(--btn-base)}
 #recordForm .modal-actions .btn-secondary svg{width:18px;height:18px}
 #recordForm .modal-actions svg{flex:0 0 auto}
 .btn-danger{padding:14px 18px;border-radius:13px;font-weight:700;font-size:14px;
@@ -890,6 +894,7 @@ body.theme-aero .btn-danger{
   color:#fff;
   box-shadow:0 8px 20px rgba(255,90,106,.30),inset 0 1px 0 rgba(255,255,255,.55);
   text-shadow:0 1px 0 rgba(0,0,0,.18)}
+body.theme-aero #recordForm .modal-actions .btn-secondary{--btn-base:#eef4f6}
 
 /* misc text bits */
 body.theme-aero .rec-orig,
@@ -1038,6 +1043,7 @@ body.theme-yoimiya .btn-danger,
 body.theme-yoimiya #msDelete:not([disabled]){
   background:linear-gradient(135deg,#ff5a4a,#c12d1f 60%,#7a1611);color:#fff;
   box-shadow:0 8px 22px rgba(160,30,20,.45),inset 0 1px 0 rgba(255,200,140,.18)}
+body.theme-yoimiya #recordForm .modal-actions .btn-secondary{--btn-base:#2a1832}
 body.theme-yoimiya .modal-overlay{background:rgba(15,6,20,.6)}
 body.theme-yoimiya .chart-pct{color:var(--accent-2)}
 
