@@ -13,6 +13,7 @@ const SHELL = [
   "./manifest.webmanifest",
   "./icon.svg",
   "./icon.png",
+  "./icon-wallet.png",
   "./chevron.svg",
   "./chevron-dark.svg",
 ];
