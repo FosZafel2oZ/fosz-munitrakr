@@ -185,19 +185,80 @@
     return l;
   }
 
+  /* ---------- iconHref ----------
+     Generic icon-choice resolver shared by the home-screen icon and both
+     header icons. "yoimiya" always wins; "custom" only resolves to the
+     stored picture when it's a valid data:image/ string; anything else
+     (including an unrecognized choice) falls back to walletSrc.
+  */
+  function iconHref(choice, custom, walletSrc) {
+    if (choice === "yoimiya") return "./icon.png";
+    if (choice === "custom" && typeof custom === "string" && custom.startsWith("data:image/")) {
+      return custom;
+    }
+    return walletSrc;
+  }
+
   /* ---------- homeIconHref ----------
      Picks the apple-touch-icon href for settings.homeIcon. Falls back to
      the wallet PNG (the default) for anything unrecognized, including a
      "custom" pick whose stored picture is missing or not a data:image/ URL.
   */
   function homeIconHref(s) {
-    if (s && s.homeIcon === "yoimiya") return "./icon.png";
-    if (s && s.homeIcon === "custom" && typeof s.homeIconCustom === "string" &&
-        s.homeIconCustom.startsWith("data:image/")) {
-      return s.homeIconCustom;
-    }
-    return "./icon-wallet.png";
+    return iconHref(s && s.homeIcon, s && s.homeIconCustom, "./icon-wallet.png");
   }
 
-  return { reconcileRenames, makeRateService, currencyChoices, homeIconHref };
+  /* ---------- effectiveIconChoice ----------
+     Which tile is really in effect for a (choice, custom) pair — the same
+     resolution iconHref does, but naming the tile instead of the href. Used
+     so a "custom" pick with no valid picture highlights "wallet" instead.
+  */
+  function effectiveIconChoice(choice, custom) {
+    if (choice === "yoimiya") return "yoimiya";
+    if (choice === "custom" && typeof custom === "string" && custom.startsWith("data:image/")) {
+      return "custom";
+    }
+    return "wallet";
+  }
+
+  /* ---------- headerIconHref ----------
+     Picks the header-icon href for the given mode ("debt" or anything else,
+     treated as finance), reading that mode's choice + stored picture off
+     settings `s` and defaulting to that mode's own wallet PNG (rose for
+     debt).
+  */
+  function headerIconHref(s, mode) {
+    if (mode === "debt") {
+      return iconHref(s && s.headerIconDebtChoice, s && s.headerIconDebt, "./icon-wallet-red.png");
+    }
+    return iconHref(s && s.headerIconFinanceChoice, s && s.headerIconFinance, "./icon-wallet.png");
+  }
+
+  /* ---------- migrateIconChoices ----------
+     Mutates and returns settings object `s` (no-op for null/non-object):
+     for each header slot, an invalid/missing choice becomes "custom" when
+     that slot's stored picture is a data:image/ string, else "wallet" — so
+     a never-changed header (no choice field yet, no picture) lands on
+     Wallet instead of the old implicit Yoimiya default. Also normalizes the
+     home-icon fields the same way loadStore used to do inline.
+  */
+  function migrateIconChoices(s) {
+    if (!s || typeof s !== "object") return s;
+    const CHOICES = ["wallet", "yoimiya", "custom"];
+    const hasPic = (v) => typeof v === "string" && v.startsWith("data:image/");
+    if (!CHOICES.includes(s.headerIconFinanceChoice)) {
+      s.headerIconFinanceChoice = hasPic(s.headerIconFinance) ? "custom" : "wallet";
+    }
+    if (!CHOICES.includes(s.headerIconDebtChoice)) {
+      s.headerIconDebtChoice = hasPic(s.headerIconDebt) ? "custom" : "wallet";
+    }
+    if (!CHOICES.includes(s.homeIcon)) s.homeIcon = "wallet";
+    if (s.homeIconCustom === undefined) s.homeIconCustom = null;
+    return s;
+  }
+
+  return {
+    reconcileRenames, makeRateService, currencyChoices,
+    iconHref, homeIconHref, effectiveIconChoice, headerIconHref, migrateIconChoices,
+  };
 });

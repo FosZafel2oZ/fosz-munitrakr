@@ -204,6 +204,8 @@ function defaultSettings() {
     theme: "default",
     headerIconFinance: null,
     headerIconDebt: null,
+    headerIconFinanceChoice: "wallet",
+    headerIconDebtChoice: "wallet",
     homeIcon: "wallet",
     homeIconCustom: null,
     defaultCurrency: "THB",
@@ -267,11 +269,9 @@ function loadStore() {
   if (store.settings.headerIconFinance === undefined) store.settings.headerIconFinance = null;
   if (store.settings.headerIconDebt === undefined) store.settings.headerIconDebt = null;
 
-  // Home-screen icon pick: must be one of the three known values, and the
-  // custom-picture slot defaults to null so homeIconHref() has a clean input.
-  if (!["wallet", "yoimiya", "custom"].includes(store.settings.homeIcon))
-    store.settings.homeIcon = "wallet";
-  if (store.settings.homeIconCustom === undefined) store.settings.homeIconCustom = null;
+  // Normalizes headerIconFinanceChoice/headerIconDebtChoice/homeIcon/homeIconCustom
+  // in place (missing/invalid header choice inferred from the stored picture).
+  migrateIconChoices(store.settings);
 
   // Migration: createdAt / updatedAt on records must be numeric ms — the
   // records-list sort tiebreaker uses (b.createdAt - a.createdAt). Records
@@ -1603,15 +1603,13 @@ function applyTheme(name) {
   else Fireworks.stop();
 }
 function applyHeaderIcon() {
-  const key = currentMode === "debt" ? "headerIconDebt" : "headerIconFinance";
-  const src = (settings && settings[key]) || "./icon.png";
   const a = document.getElementById("headerIcon");
-  if (a) a.src = src;
+  if (a) a.src = headerIconHref(settings, currentMode === "debt" ? "debt" : "finance");
   // Update both Settings previews (each mode's preview shows its own slot's icon).
   const bF = document.getElementById("hiPreviewFinance");
   const bD = document.getElementById("hiPreviewDebt");
-  if (bF) bF.src = (settings && settings.headerIconFinance) || "./icon.png";
-  if (bD) bD.src = (settings && settings.headerIconDebt) || "./icon.png";
+  if (bF) bF.src = headerIconHref(settings, "finance");
+  if (bD) bD.src = headerIconHref(settings, "debt");
 }
 // iOS reads the home-screen icon from <link rel="apple-touch-icon"> only at
 // the moment of Share -> Add to Home Screen, so this swaps in a FRESH link
@@ -1671,6 +1669,7 @@ function _showIconReadError(msg) {
   if (msg) { msg.style.color = ""; msg.textContent = "Couldn't read that image."; }
 }
 function _wireHeaderIconControls(inputId, resetId, settingsKey, modeLabel) {
+  const choiceKey = settingsKey + "Choice"; // headerIconFinance -> headerIconFinanceChoice, etc.
   const inEl = document.getElementById(inputId);
   const rsEl = document.getElementById(resetId);
   if (inEl) {
@@ -1686,6 +1685,7 @@ function _wireHeaderIconControls(inputId, resetId, settingsKey, modeLabel) {
           return;
         }
         settings[settingsKey] = url;
+        settings[choiceKey] = "custom";
         applyHeaderIcon();
         await persistSettings();
         if (msg) { msg.style.color = "var(--in)"; msg.textContent = modeLabel + " header icon updated."; }
@@ -1695,6 +1695,7 @@ function _wireHeaderIconControls(inputId, resetId, settingsKey, modeLabel) {
   if (rsEl) {
     rsEl.addEventListener("click", async () => {
       settings[settingsKey] = null;
+      settings[choiceKey] = "wallet";
       applyHeaderIcon();
       await persistSettings();
       const msg = document.getElementById("hiMsg");
@@ -2201,6 +2202,10 @@ function buildSettingsPayload() {
     settings.headerIconFinance === undefined ? null : settings.headerIconFinance;
   p.headerIconDebt =
     settings.headerIconDebt === undefined ? null : settings.headerIconDebt;
+  p.headerIconFinanceChoice =
+    settings.headerIconFinanceChoice === undefined ? "wallet" : settings.headerIconFinanceChoice;
+  p.headerIconDebtChoice =
+    settings.headerIconDebtChoice === undefined ? "wallet" : settings.headerIconDebtChoice;
   p.homeIcon = settings.homeIcon === undefined ? "wallet" : settings.homeIcon;
   p.homeIconCustom =
     settings.homeIconCustom === undefined ? null : settings.homeIconCustom;

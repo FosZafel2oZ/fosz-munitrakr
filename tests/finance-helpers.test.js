@@ -501,3 +501,163 @@ test("homeIconHref: null/undefined settings -> wallet", () => {
   assert.equal(H.homeIconHref(null), "./icon-wallet.png");
   assert.equal(H.homeIconHref(undefined), "./icon-wallet.png");
 });
+
+
+/* ============================================================ */
+/* iconHref                                                      */
+/* ============================================================ */
+
+test("iconHref: yoimiya -> icon.png regardless of custom/walletSrc", () => {
+  assert.equal(H.iconHref("yoimiya", null, "./icon-wallet-red.png"), "./icon.png");
+});
+test("iconHref: custom with a valid data:image/ picture -> that picture", () => {
+  const pic = "data:image/png;base64,AAAA";
+  assert.equal(H.iconHref("custom", pic, "./icon-wallet.png"), pic);
+});
+test("iconHref: custom with null picture -> walletSrc", () => {
+  assert.equal(H.iconHref("custom", null, "./icon-wallet-red.png"), "./icon-wallet-red.png");
+});
+test("iconHref: custom with a non-data:image/ string -> walletSrc", () => {
+  assert.equal(H.iconHref("custom", "https://evil.example/x.png", "./icon-wallet.png"), "./icon-wallet.png");
+});
+test("iconHref: wallet -> walletSrc", () => {
+  assert.equal(H.iconHref("wallet", null, "./icon-wallet-red.png"), "./icon-wallet-red.png");
+});
+test("iconHref: unrecognized choice -> walletSrc", () => {
+  assert.equal(H.iconHref("bogus", "data:image/png;base64,AAAA", "./icon-wallet.png"), "./icon-wallet.png");
+});
+
+
+/* ============================================================ */
+/* effectiveIconChoice                                           */
+/* ============================================================ */
+
+test("effectiveIconChoice: yoimiya stays yoimiya", () => {
+  assert.equal(H.effectiveIconChoice("yoimiya", null), "yoimiya");
+});
+test("effectiveIconChoice: custom with a valid picture stays custom", () => {
+  assert.equal(H.effectiveIconChoice("custom", "data:image/png;base64,AAAA"), "custom");
+});
+test("effectiveIconChoice: custom without a valid picture falls back to wallet", () => {
+  assert.equal(H.effectiveIconChoice("custom", null), "wallet");
+  assert.equal(H.effectiveIconChoice("custom", "https://evil.example/x.png"), "wallet");
+});
+test("effectiveIconChoice: wallet stays wallet", () => {
+  assert.equal(H.effectiveIconChoice("wallet", null), "wallet");
+});
+test("effectiveIconChoice: unrecognized choice falls back to wallet", () => {
+  assert.equal(H.effectiveIconChoice("bogus", "data:image/png;base64,AAAA"), "wallet");
+});
+
+
+/* ============================================================ */
+/* headerIconHref                                                */
+/* ============================================================ */
+
+test("headerIconHref: finance mode, wallet choice -> finance wallet PNG", () => {
+  const s = { headerIconFinanceChoice: "wallet", headerIconFinance: null };
+  assert.equal(H.headerIconHref(s, "finance"), "./icon-wallet.png");
+});
+test("headerIconHref: debt mode, wallet choice -> rose wallet PNG", () => {
+  const s = { headerIconDebtChoice: "wallet", headerIconDebt: null };
+  assert.equal(H.headerIconHref(s, "debt"), "./icon-wallet-red.png");
+});
+test("headerIconHref: finance mode, yoimiya choice -> icon.png", () => {
+  const s = { headerIconFinanceChoice: "yoimiya", headerIconFinance: null };
+  assert.equal(H.headerIconHref(s, "finance"), "./icon.png");
+});
+test("headerIconHref: debt mode, yoimiya choice -> icon.png", () => {
+  const s = { headerIconDebtChoice: "yoimiya", headerIconDebt: null };
+  assert.equal(H.headerIconHref(s, "debt"), "./icon.png");
+});
+test("headerIconHref: finance mode, custom choice with a stored picture -> that picture", () => {
+  const pic = "data:image/png;base64,AAAA";
+  const s = { headerIconFinanceChoice: "custom", headerIconFinance: pic };
+  assert.equal(H.headerIconHref(s, "finance"), pic);
+});
+test("headerIconHref: debt mode, custom choice with a stored picture -> that picture", () => {
+  const pic = "data:image/png;base64,BBBB";
+  const s = { headerIconDebtChoice: "custom", headerIconDebt: pic };
+  assert.equal(H.headerIconHref(s, "debt"), pic);
+});
+test("headerIconHref: custom choice without a stored picture falls back to the mode's wallet", () => {
+  assert.equal(
+    H.headerIconHref({ headerIconFinanceChoice: "custom", headerIconFinance: null }, "finance"),
+    "./icon-wallet.png"
+  );
+  assert.equal(
+    H.headerIconHref({ headerIconDebtChoice: "custom", headerIconDebt: null }, "debt"),
+    "./icon-wallet-red.png"
+  );
+});
+test("headerIconHref: any mode other than 'debt' is treated as finance", () => {
+  const s = { headerIconFinanceChoice: "wallet", headerIconFinance: null };
+  assert.equal(H.headerIconHref(s, "finance"), "./icon-wallet.png");
+  assert.equal(H.headerIconHref(s, undefined), "./icon-wallet.png");
+});
+test("headerIconHref: null settings -> wallet PNG for the given mode", () => {
+  assert.equal(H.headerIconHref(null, "finance"), "./icon-wallet.png");
+  assert.equal(H.headerIconHref(null, "debt"), "./icon-wallet-red.png");
+});
+
+
+/* ============================================================ */
+/* migrateIconChoices                                            */
+/* ============================================================ */
+
+test("migrateIconChoices: missing choice + data-URL picture -> custom (both header slots)", () => {
+  const pic = "data:image/png;base64,AAAA";
+  const s = { headerIconFinance: pic, headerIconDebt: pic };
+  H.migrateIconChoices(s);
+  assert.equal(s.headerIconFinanceChoice, "custom");
+  assert.equal(s.headerIconDebtChoice, "custom");
+});
+test("migrateIconChoices: missing choice + null picture -> wallet (both header slots)", () => {
+  const s = { headerIconFinance: null, headerIconDebt: null };
+  H.migrateIconChoices(s);
+  assert.equal(s.headerIconFinanceChoice, "wallet");
+  assert.equal(s.headerIconDebtChoice, "wallet");
+});
+test("migrateIconChoices: invalid choice is recomputed from the stored picture", () => {
+  const pic = "data:image/png;base64,AAAA";
+  const s = {
+    headerIconFinanceChoice: "bogus", headerIconFinance: pic,
+    headerIconDebtChoice: 42, headerIconDebt: null,
+  };
+  H.migrateIconChoices(s);
+  assert.equal(s.headerIconFinanceChoice, "custom");
+  assert.equal(s.headerIconDebtChoice, "wallet");
+});
+test("migrateIconChoices: valid choices (incl. yoimiya with a stored picture) are left alone", () => {
+  const pic = "data:image/png;base64,AAAA";
+  const s = {
+    headerIconFinanceChoice: "yoimiya", headerIconFinance: pic,
+    headerIconDebtChoice: "custom", headerIconDebt: pic,
+  };
+  H.migrateIconChoices(s);
+  assert.equal(s.headerIconFinanceChoice, "yoimiya");
+  assert.equal(s.headerIconDebtChoice, "custom");
+});
+test("migrateIconChoices: normalizes home fields the same way loadStore used to", () => {
+  const s = { homeIcon: "bogus", homeIconCustom: undefined };
+  H.migrateIconChoices(s);
+  assert.equal(s.homeIcon, "wallet");
+  assert.equal(s.homeIconCustom, null);
+});
+test("migrateIconChoices: valid home fields are left alone", () => {
+  const pic = "data:image/png;base64,AAAA";
+  const s = { homeIcon: "custom", homeIconCustom: pic };
+  H.migrateIconChoices(s);
+  assert.equal(s.homeIcon, "custom");
+  assert.equal(s.homeIconCustom, pic);
+});
+test("migrateIconChoices: mutates and returns the same object", () => {
+  const s = { headerIconFinance: null, headerIconDebt: null };
+  const out = H.migrateIconChoices(s);
+  assert.equal(out, s);
+});
+test("migrateIconChoices: no-op for null/non-object input", () => {
+  assert.equal(H.migrateIconChoices(null), null);
+  assert.equal(H.migrateIconChoices(undefined), undefined);
+  assert.equal(H.migrateIconChoices("x"), "x");
+});
