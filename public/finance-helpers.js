@@ -185,5 +185,19 @@
     return l;
   }
 
-  return { reconcileRenames, makeRateService, currencyChoices };
+  /* ---------- homeIconHref ----------
+     Picks the apple-touch-icon href for settings.homeIcon. Falls back to
+     the wallet PNG (the default) for anything unrecognized, including a
+     "custom" pick whose stored picture is missing or not a data:image/ URL.
+  */
+  function homeIconHref(s) {
+    if (s && s.homeIcon === "yoimiya") return "./icon.png";
+    if (s && s.homeIcon === "custom" && typeof s.homeIconCustom === "string" &&
+        s.homeIconCustom.startsWith("data:image/")) {
+      return s.homeIconCustom;
+    }
+    return "./icon-wallet.png";
+  }
+
+  return { reconcileRenames, makeRateService, currencyChoices, homeIconHref };
 });

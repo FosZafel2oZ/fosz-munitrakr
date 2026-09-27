@@ -469,3 +469,35 @@ test("currencyChoices: a non-array list is treated as empty", () => {
   assert.deepEqual(H.currencyChoices(null, "JPY"), ["JPY"]);
   assert.deepEqual(H.currencyChoices(undefined, ""), []);
 });
+
+
+/* ============================================================ */
+/* homeIconHref                                                  */
+/* ============================================================ */
+
+test("homeIconHref: explicit wallet -> wallet PNG", () => {
+  assert.equal(H.homeIconHref({ homeIcon: "wallet" }), "./icon-wallet.png");
+});
+test("homeIconHref: yoimiya -> icon.png", () => {
+  assert.equal(H.homeIconHref({ homeIcon: "yoimiya" }), "./icon.png");
+});
+test("homeIconHref: custom with a valid data:image/ picture -> that picture", () => {
+  const pic = "data:image/png;base64,AAAA";
+  assert.equal(H.homeIconHref({ homeIcon: "custom", homeIconCustom: pic }), pic);
+});
+test("homeIconHref: custom with null picture -> wallet", () => {
+  assert.equal(H.homeIconHref({ homeIcon: "custom", homeIconCustom: null }), "./icon-wallet.png");
+});
+test("homeIconHref: custom with a non-data:image/ string -> wallet", () => {
+  assert.equal(
+    H.homeIconHref({ homeIcon: "custom", homeIconCustom: "https://evil.example/x.png" }),
+    "./icon-wallet.png"
+  );
+});
+test("homeIconHref: unknown homeIcon value -> wallet", () => {
+  assert.equal(H.homeIconHref({ homeIcon: "bogus" }), "./icon-wallet.png");
+});
+test("homeIconHref: null/undefined settings -> wallet", () => {
+  assert.equal(H.homeIconHref(null), "./icon-wallet.png");
+  assert.equal(H.homeIconHref(undefined), "./icon-wallet.png");
+});

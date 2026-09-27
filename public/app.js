@@ -204,6 +204,8 @@ function defaultSettings() {
     theme: "default",
     headerIconFinance: null,
     headerIconDebt: null,
+    homeIcon: "wallet",
+    homeIconCustom: null,
     defaultCurrency: "THB",
     debtShareLanguage: "en",
     currencies: ["THB", "USD", "EUR", "GBP", "INR", "PHP", "JPY", "AUD", "CAD"],
@@ -264,6 +266,12 @@ function loadStore() {
   }
   if (store.settings.headerIconFinance === undefined) store.settings.headerIconFinance = null;
   if (store.settings.headerIconDebt === undefined) store.settings.headerIconDebt = null;
+
+  // Home-screen icon pick: must be one of the three known values, and the
+  // custom-picture slot defaults to null so homeIconHref() has a clean input.
+  if (!["wallet", "yoimiya", "custom"].includes(store.settings.homeIcon))
+    store.settings.homeIcon = "wallet";
+  if (store.settings.homeIconCustom === undefined) store.settings.homeIconCustom = null;
 
   // Migration: createdAt / updatedAt on records must be numeric ms — the
   // records-list sort tiebreaker uses (b.createdAt - a.createdAt). Records
@@ -525,6 +533,7 @@ async function enterApp() {
   settings = me.settings || { expense: [], investment: [] };
   applyTheme(settings.theme || "default");
   applyHeaderIcon();
+  applyHomeIcon();
   $("#helloName").textContent = "MuniTrakr";
   loadPrefs();
   if (range.type === "custom" && range.start && range.end) {
@@ -1603,6 +1612,18 @@ function applyHeaderIcon() {
   if (bF) bF.src = (settings && settings.headerIconFinance) || "./icon.png";
   if (bD) bD.src = (settings && settings.headerIconDebt) || "./icon.png";
 }
+// iOS reads the home-screen icon from <link rel="apple-touch-icon"> only at
+// the moment of Share -> Add to Home Screen, so this swaps in a FRESH link
+// element (not an href edit) for the user's pick, at startup and on change.
+function applyHomeIcon() {
+  document.head
+    .querySelectorAll('link[rel="apple-touch-icon"]')
+    .forEach((el) => el.remove());
+  const link = document.createElement("link");
+  link.rel = "apple-touch-icon";
+  link.href = homeIconHref(settings);
+  document.head.appendChild(link);
+}
 // Resize an uploaded image to a small square data-URL (keeps localStorage tiny)
 function fileToIconDataURL(file, cb) {
   const fr = new FileReader();
@@ -2059,6 +2080,9 @@ function buildSettingsPayload() {
     settings.headerIconFinance === undefined ? null : settings.headerIconFinance;
   p.headerIconDebt =
     settings.headerIconDebt === undefined ? null : settings.headerIconDebt;
+  p.homeIcon = settings.homeIcon === undefined ? "wallet" : settings.homeIcon;
+  p.homeIconCustom =
+    settings.homeIconCustom === undefined ? null : settings.homeIconCustom;
   return p;
 }
 function syncDraftsFromSettings() {
