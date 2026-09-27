@@ -325,71 +325,74 @@
       </div>
 
       <label style="display:block;margin-top:18px;margin-bottom:8px">Home-screen icon</label>
-      <div id="homeIconChoices" class="homeicon-row" role="radiogroup" aria-label="Home-screen icon">
-        <button type="button" role="radio" class="homeicon-tile" data-icon="wallet" aria-checked="false">
-          <img class="homeicon-img" src="./icon-wallet.png" alt="" />
-          <span class="homeicon-cap">Wallet</span>
-        </button>
-        <button type="button" role="radio" class="homeicon-tile" data-icon="yoimiya" aria-checked="false">
-          <img class="homeicon-img" src="./icon.png" alt="" />
-          <span class="homeicon-cap">Yoimiya</span>
-        </button>
-        <button type="button" role="radio" class="homeicon-tile" data-icon="custom" aria-checked="false">
-          <img id="homeIconCustomImg" class="homeicon-img" alt="" hidden />
-          <span id="homeIconPlus" class="homeicon-img homeicon-plus" aria-hidden="true">+</span>
-          <span class="homeicon-cap">Your picture</span>
-        </button>
-      </div>
-      <div id="homeIconUploadWrap" class="homeicon-upload-wrap">
-        <label class="btn-primary file-btn homeicon-upload" for="homeIconInput">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
-          Upload picture
-        </label>
-        <!-- wrapped: aero's `.settings-block > *{position:relative}` would un-hide a direct child -->
-        <input id="homeIconInput" type="file"
-          accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-          class="visually-hidden" />
+      <div id="iconPickHome" class="iconpick">
+        <div class="iconpick-row" role="radiogroup" aria-label="Home-screen icon">
+          <button type="button" role="radio" class="iconpick-tile" data-icon="wallet" aria-checked="false">
+            <img class="iconpick-img" src="./icon-wallet.png" alt="" />
+            <span class="iconpick-cap">Wallet</span>
+          </button>
+          <button type="button" role="radio" class="iconpick-tile" data-icon="yoimiya" aria-checked="false">
+            <img class="iconpick-img" src="./icon.png" alt="" />
+            <span class="iconpick-cap">Yoimiya</span>
+          </button>
+          <button type="button" role="radio" class="iconpick-tile" data-icon="custom" aria-checked="false">
+            <img class="iconpick-img iconpick-pic" alt="" hidden />
+            <span class="iconpick-img iconpick-plus" aria-hidden="true">+</span>
+            <span class="iconpick-cap">Your picture</span>
+          </button>
+        </div>
+        <!-- inside the wrapper: aero's `.settings-block > *{position:relative}` would un-hide a direct child -->
+        <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+          class="visually-hidden iconpick-input" tabindex="-1" aria-hidden="true" />
       </div>
       <div class="muted" id="homeIconHint"></div>
       <div id="homeIconMsg" class="form-error"></div>
 
       <label style="display:block;margin-top:18px;margin-bottom:8px">Header icon (MuniTrakr)</label>
-      <div class="hicon-row">
-        <img id="hiPreviewFinance" class="header-icon" src="./icon.png" alt="" />
-        <div class="hicon-btns">
-          <label class="btn-primary file-btn" for="hiInputFinance">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
-            Upload
-          </label>
-          <input id="hiInputFinance" type="file"
-            accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-            class="visually-hidden" />
-          <button class="btn-primary" id="hiResetFinance">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-            Reset
+      <div id="iconPickFinance" class="iconpick">
+        <div class="iconpick-row" role="radiogroup" aria-label="Header icon (MuniTrakr)">
+          <button type="button" role="radio" class="iconpick-tile" data-icon="wallet" aria-checked="false">
+            <img class="iconpick-img" src="./icon-wallet.png" alt="" />
+            <span class="iconpick-cap">Wallet</span>
+          </button>
+          <button type="button" role="radio" class="iconpick-tile" data-icon="yoimiya" aria-checked="false">
+            <img class="iconpick-img" src="./icon.png" alt="" />
+            <span class="iconpick-cap">Yoimiya</span>
+          </button>
+          <button type="button" role="radio" class="iconpick-tile" data-icon="custom" aria-checked="false">
+            <img class="iconpick-img iconpick-pic" alt="" hidden />
+            <span class="iconpick-img iconpick-plus" aria-hidden="true">+</span>
+            <span class="iconpick-cap">Your picture</span>
           </button>
         </div>
+        <!-- inside the wrapper: aero's `.settings-block > *{position:relative}` would un-hide a direct child -->
+        <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+          class="visually-hidden iconpick-input" tabindex="-1" aria-hidden="true" />
       </div>
+      <div id="hiFinanceMsg" class="form-error"></div>
 
       <label style="display:block;margin-top:18px;margin-bottom:8px">Header icon (DebtTrakr)</label>
-      <div class="hicon-row">
-        <img id="hiPreviewDebt" class="header-icon" src="./icon.png" alt="" />
-        <div class="hicon-btns">
-          <label class="btn-primary file-btn" for="hiInputDebt">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
-            Upload
-          </label>
-          <input id="hiInputDebt" type="file"
-            accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-            class="visually-hidden" />
-          <button class="btn-primary" id="hiResetDebt">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-            Reset
+      <div id="iconPickDebt" class="iconpick">
+        <div class="iconpick-row" role="radiogroup" aria-label="Header icon (DebtTrakr)">
+          <button type="button" role="radio" class="iconpick-tile" data-icon="wallet" aria-checked="false">
+            <img class="iconpick-img" src="./icon-wallet-red.png" alt="" />
+            <span class="iconpick-cap">Wallet</span>
+          </button>
+          <button type="button" role="radio" class="iconpick-tile" data-icon="yoimiya" aria-checked="false">
+            <img class="iconpick-img" src="./icon.png" alt="" />
+            <span class="iconpick-cap">Yoimiya</span>
+          </button>
+          <button type="button" role="radio" class="iconpick-tile" data-icon="custom" aria-checked="false">
+            <img class="iconpick-img iconpick-pic" alt="" hidden />
+            <span class="iconpick-img iconpick-plus" aria-hidden="true">+</span>
+            <span class="iconpick-cap">Your picture</span>
           </button>
         </div>
+        <!-- inside the wrapper: aero's `.settings-block > *{position:relative}` would un-hide a direct child -->
+        <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+          class="visually-hidden iconpick-input" tabindex="-1" aria-hidden="true" />
       </div>
-
-      <div id="hiMsg" class="form-error"></div>
+      <div id="hiDebtMsg" class="form-error"></div>
     </div>
 
     <div class="settings-block" data-mode="any">

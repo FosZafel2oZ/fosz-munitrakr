@@ -534,7 +534,7 @@ async function enterApp() {
   applyTheme(settings.theme || "default");
   applyHeaderIcon();
   applyHomeIcon();
-  renderHomeIconChoices();
+  renderIconPickers();
   $("#helloName").textContent = "MuniTrakr";
   loadPrefs();
   if (range.type === "custom" && range.start && range.end) {
@@ -1605,11 +1605,6 @@ function applyTheme(name) {
 function applyHeaderIcon() {
   const a = document.getElementById("headerIcon");
   if (a) a.src = headerIconHref(settings, currentMode === "debt" ? "debt" : "finance");
-  // Update both Settings previews (each mode's preview shows its own slot's icon).
-  const bF = document.getElementById("hiPreviewFinance");
-  const bD = document.getElementById("hiPreviewDebt");
-  if (bF) bF.src = headerIconHref(settings, "finance");
-  if (bD) bD.src = headerIconHref(settings, "debt");
 }
 // iOS reads the home-screen icon from <link rel="apple-touch-icon"> only at
 // the moment of Share -> Add to Home Screen, so this swaps in a FRESH link
@@ -1664,53 +1659,9 @@ async function persistSettings() {
     syncDraftsFromSettings();
   } catch {}
 }
-// Shared failure message for the icon uploads (header icons + home-screen icon).
+// Shared failure message for the icon-picker uploads.
 function _showIconReadError(msg) {
   if (msg) { msg.style.color = ""; msg.textContent = "Couldn't read that image."; }
-}
-function _wireHeaderIconControls(inputId, resetId, settingsKey, modeLabel) {
-  const choiceKey = settingsKey + "Choice"; // headerIconFinance -> headerIconFinanceChoice, etc.
-  const inEl = document.getElementById(inputId);
-  const rsEl = document.getElementById(resetId);
-  if (inEl) {
-    inEl.addEventListener("change", (e) => {
-      const f = e.target.files[0];
-      e.target.value = "";
-      if (!f) return;
-      const msg = document.getElementById("hiMsg");
-      if (msg) msg.textContent = "";
-      fileToIconDataURL(f, async (url) => {
-        if (!url) {
-          _showIconReadError(msg);
-          return;
-        }
-        settings[settingsKey] = url;
-        settings[choiceKey] = "custom";
-        applyHeaderIcon();
-        await persistSettings();
-        if (msg) { msg.style.color = "var(--in)"; msg.textContent = modeLabel + " header icon updated."; }
-      });
-    });
-  }
-  if (rsEl) {
-    rsEl.addEventListener("click", async () => {
-      settings[settingsKey] = null;
-      settings[choiceKey] = "wallet";
-      applyHeaderIcon();
-      await persistSettings();
-      const msg = document.getElementById("hiMsg");
-      if (msg) { msg.style.color = "var(--in)"; msg.textContent = modeLabel + " header icon reset."; }
-    });
-  }
-}
-_wireHeaderIconControls("hiInputFinance", "hiResetFinance", "headerIconFinance", "MuniTrakr");
-_wireHeaderIconControls("hiInputDebt",    "hiResetDebt",    "headerIconDebt",    "DebtTrakr");
-
-/* ---- Home-screen icon picker (Settings → Theme) ---- */
-const HOME_ICON_LABELS = { wallet: "Wallet", yoimiya: "Yoimiya", custom: "your picture" };
-function _hasHomeIconCustom() {
-  const u = settings && settings.homeIconCustom;
-  return typeof u === "string" && u.startsWith("data:image/");
 }
 function _isStandalone() {
   return (
@@ -1718,59 +1669,90 @@ function _isStandalone() {
     (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
   );
 }
-function renderHomeIconChoices() {
-  const hasCustom = _hasHomeIconCustom();
-  // A "custom" pick without a stored picture falls back to the wallet, the same
-  // way homeIconHref() does, so the highlighted tile matches the real icon.
-  let sel = (settings && settings.homeIcon) || "wallet";
-  if (sel === "custom" && !hasCustom) sel = "wallet";
-  $$("#homeIconChoices .homeicon-tile").forEach((b) => {
-    const on = b.dataset.icon === sel;
-    b.classList.toggle("selected", on);
-    b.setAttribute("aria-checked", on ? "true" : "false");
-  });
-  const img = $("#homeIconCustomImg");
-  const plus = $("#homeIconPlus");
-  if (img) {
-    if (hasCustom) img.src = settings.homeIconCustom;
-    else img.removeAttribute("src");
-    img.hidden = !hasCustom;
-  }
-  if (plus) plus.hidden = hasCustom;
-  // In the installed app the icon is already fixed, so the pick/upload controls
-  // are hidden — only the label, the hint and the message line stay.
+
+/* ---- Icon pickers (Settings → Theme): home-screen icon + both header icons ----
+   One component serves all three: each entry names its wrapper, the settings
+   keys it edits (choice + uploaded picture), its message line, the upload
+   size/fill and what to re-apply after a change. */
+const ICON_PICKERS = [
+  {
+    wrap: "iconPickHome", title: "Home-screen icon", msg: "homeIconMsg",
+    choiceKey: "homeIcon", picKey: "homeIconCustom",
+    size: 180, fill: "#ffffff", apply: () => applyHomeIcon(), home: true,
+  },
+  {
+    wrap: "iconPickFinance", title: "MuniTrakr header icon", msg: "hiFinanceMsg",
+    choiceKey: "headerIconFinanceChoice", picKey: "headerIconFinance",
+    size: 160, fill: null, apply: () => applyHeaderIcon(),
+  },
+  {
+    wrap: "iconPickDebt", title: "DebtTrakr header icon", msg: "hiDebtMsg",
+    choiceKey: "headerIconDebtChoice", picKey: "headerIconDebt",
+    size: 160, fill: null, apply: () => applyHeaderIcon(),
+  },
+];
+const ICON_CHOICE_LABELS = { wallet: "Wallet", yoimiya: "Yoimiya", custom: "your picture" };
+function _iconPicture(p) {
+  const u = settings && settings[p.picKey];
+  return typeof u === "string" && u.startsWith("data:image/") ? u : null;
+}
+// The tile really in effect: a "custom" pick without a stored picture falls
+// back to the wallet, the same way iconHref() does.
+function _iconPickerChoice(p) {
+  return effectiveIconChoice(settings && settings[p.choiceKey], settings && settings[p.picKey]);
+}
+function renderIconPickers() {
   const standalone = _isStandalone();
-  const row = $("#homeIconChoices");
-  const upWrap = $("#homeIconUploadWrap");
-  if (row) row.hidden = standalone;
-  if (upWrap) upWrap.hidden = standalone;
-  const hint = $("#homeIconHint");
-  if (hint) {
-    hint.textContent = standalone
-      ? "Your Home Screen icon is already set. To change it: back up (Backup & Restore below), remove the app from your Home Screen, open the site in Safari, pick an icon here, add it again, then restore your backup in the new copy — it starts empty."
-      : "Pick this before Safari → Share → Add to Home Screen. Once added, the icon can't change. To switch later, back up first (Backup & Restore below) — a re-added app starts empty — then remove it, pick again here in Safari, add it again, and restore your backup.";
-  }
+  ICON_PICKERS.forEach((p) => {
+    const wrap = document.getElementById(p.wrap);
+    if (!wrap) return;
+    const sel = _iconPickerChoice(p);
+    wrap.querySelectorAll(".iconpick-tile").forEach((b) => {
+      const on = b.dataset.icon === sel;
+      b.classList.toggle("selected", on);
+      b.setAttribute("aria-checked", on ? "true" : "false");
+    });
+    const pic = _iconPicture(p);
+    const img = wrap.querySelector(".iconpick-pic");
+    const plus = wrap.querySelector(".iconpick-plus");
+    if (img) {
+      if (pic) img.src = pic;
+      else img.removeAttribute("src");
+      img.hidden = !pic;
+    }
+    if (plus) plus.hidden = !!pic;
+    if (!p.home) return;
+    // In the installed app the home-screen icon is already fixed, so its tiles
+    // are hidden — only the label, the hint and the message line stay.
+    wrap.hidden = standalone;
+    const hint = $("#homeIconHint");
+    if (hint) {
+      hint.textContent = standalone
+        ? "Your Home Screen icon is already set. To change it: back up (Backup & Restore below), remove the app from your Home Screen, open the site in Safari, pick an icon here, add it again, then restore your backup in the new copy — it starts empty."
+        : "Pick this before Safari → Share → Add to Home Screen. Once added, the icon can't change. To switch later, back up first (Backup & Restore below) — a re-added app starts empty — then remove it, pick again here in Safari, add it again, and restore your backup.";
+    }
+  });
 }
 // saveStore() swallows storage errors (e.g. localStorage full), so read the
-// saved copy back to confirm the home-icon pick (and picture) really landed.
-function _homeIconSaved(choice, custom) {
+// saved copy back to confirm the pick (and picture) really landed.
+function _iconChoiceSaved(p, choice, pic) {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     const saved = s && s.settings;
-    if (!saved || saved.homeIcon !== choice) return false;
-    return choice !== "custom" || saved.homeIconCustom === custom;
+    if (!saved || saved[p.choiceKey] !== choice) return false;
+    return choice !== "custom" || saved[p.picKey] === pic;
   } catch {
     return false;
   }
 }
-async function _setHomeIcon(choice) {
-  settings.homeIcon = choice;
-  const custom = settings.homeIconCustom;
-  applyHomeIcon();
-  renderHomeIconChoices();
+async function _setIconChoice(p, choice) {
+  settings[p.choiceKey] = choice;
+  const pic = settings[p.picKey];
+  p.apply();
+  renderIconPickers();
   await persistSettings();
-  const msg = $("#homeIconMsg");
-  if (!_homeIconSaved(choice, custom)) {
+  const msg = document.getElementById(p.msg);
+  if (!_iconChoiceSaved(p, choice, pic)) {
     if (msg) {
       msg.style.color = "";
       msg.textContent =
@@ -1780,42 +1762,47 @@ async function _setHomeIcon(choice) {
   }
   if (msg) {
     msg.style.color = "var(--in)";
-    msg.textContent = "Home-screen icon set to " + HOME_ICON_LABELS[choice] + ".";
+    msg.textContent = p.title + " set to " + ICON_CHOICE_LABELS[choice] + ".";
   }
 }
-$$("#homeIconChoices .homeicon-tile").forEach((b) => {
-  b.addEventListener("click", () => {
-    const choice = b.dataset.icon;
-    if (choice === "custom" && !_hasHomeIconCustom()) {
-      const inEl = $("#homeIconInput");
-      if (inEl) inEl.click();
-      return;
-    }
-    _setHomeIcon(choice);
+ICON_PICKERS.forEach((p) => {
+  const wrap = document.getElementById(p.wrap);
+  if (!wrap) return;
+  const inEl = wrap.querySelector(".iconpick-input");
+  wrap.querySelectorAll(".iconpick-tile").forEach((b) => {
+    b.addEventListener("click", () => {
+      const choice = b.dataset.icon;
+      // "Your picture": no picture yet → pick one; already selected → replace it.
+      if (choice === "custom" && (!_iconPicture(p) || _iconPickerChoice(p) === "custom")) {
+        if (inEl) inEl.click();
+        return;
+      }
+      _setIconChoice(p, choice);
+    });
   });
+  if (inEl) {
+    inEl.addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      e.target.value = "";
+      if (!f) return;
+      const msg = document.getElementById(p.msg);
+      if (msg) msg.textContent = "";
+      fileToIconDataURL(
+        f,
+        async (url) => {
+          if (!url) {
+            _showIconReadError(msg);
+            return;
+          }
+          settings[p.picKey] = url;
+          await _setIconChoice(p, "custom");
+        },
+        p.size,
+        p.fill
+      );
+    });
+  }
 });
-if ($("#homeIconInput")) {
-  $("#homeIconInput").addEventListener("change", (e) => {
-    const f = e.target.files[0];
-    e.target.value = "";
-    if (!f) return;
-    const msg = $("#homeIconMsg");
-    if (msg) msg.textContent = "";
-    fileToIconDataURL(
-      f,
-      async (url) => {
-        if (!url) {
-          _showIconReadError(msg);
-          return;
-        }
-        settings.homeIconCustom = url;
-        await _setHomeIcon("custom");
-      },
-      180,
-      "#ffffff"
-    );
-  });
-}
 
 /* ---- Fireworks backdrop (Yoimiya) — 3–6 random bursts at a time ---- */
 const Fireworks = (() => {
@@ -3143,10 +3130,12 @@ function openSettings() {
     if ($("#fxMarkupMsg")) $("#fxMarkupMsg").textContent = "";
   }
   if ($("#setTheme")) $("#setTheme").value = settings.theme || "default";
-  $("#hiMsg") && ($("#hiMsg").textContent = "");
-  $("#homeIconMsg") && ($("#homeIconMsg").textContent = "");
+  ICON_PICKERS.forEach((p) => {
+    const m = document.getElementById(p.msg);
+    if (m) m.textContent = "";
+  });
   applyHeaderIcon();
-  renderHomeIconChoices();
+  renderIconPickers();
   settingsDraft = JSON.parse(JSON.stringify(settings));
   curDraft = (settings.currencies || []).slice();
   catTypeTab = "expense";

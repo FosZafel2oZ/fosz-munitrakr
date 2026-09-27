@@ -114,39 +114,33 @@ label.btn-primary{cursor:pointer;box-sizing:border-box;
   background:var(--bg);z-index:11}
 .header-icon{width:44px;height:44px;border-radius:12px;object-fit:cover;
   flex-shrink:0;border:1px solid var(--line);background:var(--card-2)}
-.hicon-row{display:flex;align-items:center;gap:14px;margin-top:6px}
-.hicon-row .header-icon{width:56px;height:56px;border-radius:14px}
-.hicon-btns{flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px;min-width:0}
-.hicon-btns .file-btn,.hicon-btns .btn-primary{width:100%;height:48px;
-  padding:0 12px;min-width:0;white-space:nowrap}
-.hicon-btns .btn-primary{margin-top:0}
 .backup-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .backup-actions .btn-primary{width:100%;height:48px;margin-top:0;padding:0 12px;
   min-width:0;white-space:nowrap}
 @media (max-width:390px){
-  .hicon-btns,.backup-actions{grid-template-columns:1fr}
+  .backup-actions{grid-template-columns:1fr}
 }
-/* Home-screen icon picker: own classes (not .header-icon, which aero turns round) */
-.homeicon-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;
+/* Icon pickers (home-screen + both header icons): own classes (not .header-icon,
+   which aero turns round) */
+.iconpick-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;
   margin-top:6px}
-.homeicon-tile{display:flex;flex-direction:column;align-items:center;gap:7px;
+.iconpick-tile{display:flex;flex-direction:column;align-items:center;gap:7px;
   padding:10px 4px 9px;border:2px solid transparent;border-radius:16px;
   background:transparent;min-width:0;transition:border-color .15s,background .15s}
-.homeicon-tile:active{transform:scale(.96)}
-.homeicon-tile.selected{border-color:var(--accent);background:var(--accent-soft)}
-.homeicon-img{display:block;width:60px;height:60px;border-radius:13.4px;
+.iconpick-tile:active{transform:scale(.96)}
+.iconpick-tile.selected{border-color:var(--accent);background:var(--accent-soft)}
+.iconpick-img{display:block;width:60px;height:60px;border-radius:13.4px;
   object-fit:cover;flex-shrink:0}
-.homeicon-img[hidden]{display:none}
-/* hidden in the installed (standalone) app — beat the display:grid above */
-.homeicon-row[hidden],.homeicon-upload-wrap[hidden]{display:none}
-.homeicon-plus{box-sizing:border-box;display:flex;align-items:center;
+.iconpick-img[hidden]{display:none}
+/* home picker hidden in the installed (standalone) app — beat any display rule */
+.iconpick[hidden],.iconpick-row[hidden]{display:none}
+.iconpick-plus{box-sizing:border-box;display:flex;align-items:center;
   justify-content:center;background:var(--card-2);border:2px dashed var(--line);
   color:var(--muted);font-size:28px;font-weight:500;line-height:1}
-.homeicon-cap{font-size:12px;font-weight:600;color:var(--muted);max-width:100%;
+.iconpick-cap{font-size:12px;font-weight:600;color:var(--muted);max-width:100%;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.homeicon-tile.selected .homeicon-cap{color:var(--text)}
-.settings-block .homeicon-upload{width:100%;height:48px;margin-top:12px;margin-bottom:10px !important}
+.iconpick-tile.selected .iconpick-cap{color:var(--text)}
+.iconpick:not([hidden]) + .muted{margin-top:10px}
 .hello{font-size:20px;font-weight:700;letter-spacing:-.3px}
 .topbar-sub{font-size:13px;color:var(--muted);margin-top:2px}
 .ghost-btn{color:var(--muted);font-size:13px;font-weight:600;padding:8px 12px;
