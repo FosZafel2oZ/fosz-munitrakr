@@ -214,19 +214,48 @@ Section visibility is driven by `data-mode` attributes on each `.settings-block`
 
 iOS reads the home-screen icon from `<link rel="apple-touch-icon">` only at the moment the user taps
 Share → Add to Home Screen, and the icon is then fixed — editing the app afterwards can't change it.
-`applyHomeIcon()` works around the "only reads it once" part by replacing the `apple-touch-icon` link
-with a brand-new element (an href edit alone isn't enough) at every app startup and on every change of
-`settings.homeIcon`/`homeIconCustom`, so the tag always reflects the current pick by the time the user
-does Add to Home Screen. `homeIconHref(settings)` (`finance-helpers.js`, pure) resolves the pick to a
+`applyHomeIcon()` removes the `apple-touch-icon` link and appends a fresh `<link>` element (the approach
+reported to work on iOS) at every app startup and on every change of
+`settings.homeIcon`/`homeIconCustom`, so the tag reflects the current pick when the user does Add to
+Home Screen. `homeIconHref(settings)` (`finance-helpers.js`, pure) resolves the pick to a
 URL: `"wallet"` → `./icon-wallet.png` (default), `"yoimiya"` → `./icon.png`, `"custom"` → the stored
 `homeIconCustom` data URL when it's a valid `data:image/...` string, else it falls back to the wallet
 PNG. The Settings tile grid (Wallet / Yoimiya / Your picture) lives in the Theme block; picking "Your
 picture" with no picture stored yet opens the file input instead of selecting the tile. Uploads go
-through `fileToIconDataURL` center-cropped to 180×180 with transparent areas filled white. A hint line
-under the picker explains the Add-to-Home-Screen timing, worded differently depending on whether the
-app is currently running standalone (`_isStandalone()`) or in Safari. The fresh-link approach above is
-documented as working on iOS; the custom-upload (data URL) path through it has not yet been verified
-on a real iPhone.
+through `fileToIconDataURL` center-cropped to 180×180 with transparent areas filled white. The
+fresh-link approach above is reported to work on iOS; the custom-upload (data URL) path through it has
+not yet been verified on a real iPhone.
+
+**Storage separation (why switching needs a backup).** On iOS a home-screen web app has its own
+localStorage, separate from Safari's and from any other home-screen copy, and all MuniTrakr data lives
+only in localStorage. Removing the icon and adding it again gives a new, empty copy. So the only way to
+change the icon is: back up (Backup & Restore) → remove the app from the Home Screen → open the site in
+Safari and pick an icon → Add to Home Screen again → restore the backup in the new copy.
+
+**Hint + standalone mode.** `renderHomeIconChoices()` picks the hint by `_isStandalone()`
+(`navigator.standalone === true` or `(display-mode: standalone)`):
+- In Safari: "Pick this before Safari → Share → Add to Home Screen. Once added, the icon can't change. To
+  switch later, back up first (Backup & Restore below) — a re-added app starts empty — then remove it, pick
+  again here in Safari, add it again, and restore your backup."
+- Standalone: "Your Home Screen icon is already set. To change it: back up (Backup & Restore below), remove
+  the app from your Home Screen, open the site in Safari, pick an icon here, add it again, then restore your
+  backup in the new copy — it starts empty."
+
+In standalone mode it also hides the tile radiogroup (`#homeIconChoices`) and the Upload picture button's
+wrapper (`#homeIconUploadWrap`) via the `hidden` attribute, leaving only the "Home-screen icon" label, the
+hint and `#homeIconMsg`: a pick made inside the installed app can never reach its icon, and that copy's
+settings aren't shared with Safari, so the controls would only mislead. `styles.css` has explicit
+`.homeicon-row[hidden],.homeicon-upload-wrap[hidden]{display:none}` so the row's `display:grid` can't
+override `[hidden]`. `renderHomeIconChoices()` runs once at boot in `enterApp()` (right after
+`applyHomeIcon()`), again in `openSettings()`, and after every pick, so the picker is correct even when
+Settings is reached via `showView("settings")` without `openSettings()`.
+
+**Save check.** Because `saveStore()` swallows write errors, `_setHomeIcon()` (used by both the tile taps
+and the upload) reads `fin_store` back from localStorage after `persistSettings()` via
+`_homeIconSaved(choice, custom)`, and checks that the saved `settings.homeIcon` equals the pick (and, for
+`"custom"`, that the saved `homeIconCustom` equals the picture). If not, `#homeIconMsg` shows "Couldn't save
+your choice — storage may be full. It's used for now but won't be remembered." in the default error colour
+instead of the success message; the icon is still applied to the live page.
 
 ---
 
@@ -268,8 +297,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 - **Backup uses Web Share API** with `{ files: [file] }` only (no `text`/`title` — those cause iOS targets to save extra files). Falls back to direct download when `canShare(files)` is false.
 - **iOS emoji rendering:** Unicode characters like ⏸ ▶ get substituted with Apple's emoji font. All icon buttons use inline SVG instead. The share card follows the same rule: its checkmark and note glyph are canvas paths, and the person icon is a rasterized SVG injected by the caller.
 - **iOS PWA cold start:** mode is reset to `"finance"`, but persisted `currentView` is restored. `showView`'s mode-compatibility gate redirects orphaned debt-only views to dashboard.
-- **`saveStore()` / `persistSettings()` swallow localStorage write errors app-wide** (bare `catch {}`) — a known limitation, not just for the home-screen icon. If a custom home-screen picture is too large for the remaining localStorage quota, the write silently fails, `_setHomeIcon` still shows its "Home-screen icon set to your picture." success message, and the live page keeps using the picture in memory until the next reload (when the unsaved pick is gone). No code currently distinguishes a failed save from a successful one here.
-- **Aero's `.settings-block > *{position:relative}`** (see `styles.css`, the "Make sure normal content stacks above the gloss" rule) overrides `position:absolute` on any direct child, which would silently un-hide a `.visually-hidden` element placed directly inside a `.settings-block`. The home-screen icon upload's `<input type="file" class="visually-hidden">` is wrapped in a plain `<div>` for this reason, so the input itself is a grandchild, not a direct child.
+- **`saveStore()` / `persistSettings()` swallow localStorage write errors app-wide** (bare `catch {}`) — a known limitation. The home-screen icon path is the one exception that notices: `_setHomeIcon` reads the saved store back (`_homeIconSaved`) and, if the pick or picture didn't land (e.g. a custom picture too large for the remaining quota), shows "Couldn't save your choice — storage may be full. It's used for now but won't be remembered." instead of its success message (see §6 Home-screen icon picker). Everywhere else a failed save still looks like success, and the live page keeps the change in memory until the next reload.
+- **Aero's `.settings-block > *{position:relative}`** (see `styles.css`, the "Make sure normal content stacks above the gloss" rule) overrides `position:absolute` on any direct child, which would silently un-hide a `.visually-hidden` element placed directly inside a `.settings-block`. The home-screen icon upload's `<input type="file" class="visually-hidden">` is wrapped in a `<div>` (`#homeIconUploadWrap`, which standalone mode also hides) for this reason, so the input itself is a grandchild, not a direct child.
 
 ---
 
