@@ -35,7 +35,7 @@ ProjectExpenses/
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
-│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + iconHref/homeIconHref/effectiveIconChoice/headerIconHref/migrateIconChoices
+│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + iconHref/homeIconHref/effectiveIconChoice/headerIconHref/iconChoiceFromPicture/migrateIconChoices
 │  ├─ debts.test.js                personBalances + cycle reset + settlements
 │  └─ debt-card.test.js          share-card model wording + balance math
 ├─ serve.js                        zero-dep static server (local preview)
@@ -120,7 +120,7 @@ type Debt = {
 }
 ```
 
-Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring`), legacy `headerIcon` → `headerIconFinance` split, one call to `migrateIconChoices(store.settings)` (`finance-helpers.js`, pure — mutates and returns its argument) that normalizes `headerIconFinanceChoice` / `headerIconDebtChoice` / `homeIcon` / `homeIconCustom` together: a missing/invalid header choice becomes `"custom"` when that header's stored picture is a `data:image/` string, else `"wallet"` (so a header that was never touched switches from the old implicit Yoimiya default to Wallet), `homeIcon` is coerced to one of the three known values (default `"wallet"`) and `homeIconCustom` defaults to `null`, and numeric coercion of any stale string `createdAt` / `updatedAt`.
+Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring`), legacy `headerIcon` → `headerIconFinance` split, and one call to `migrateIconChoices(store.settings)` (`finance-helpers.js` — mutates and returns its argument) that normalizes `headerIconFinanceChoice` / `headerIconDebtChoice` / `homeIcon` / `homeIconCustom` together: a missing/invalid header choice becomes `"custom"` when that header's stored picture is a `data:image/` string, else `"wallet"` (so a header that was never touched switches from the old implicit Yoimiya default to Wallet), `homeIcon` is coerced to one of the three known values (default `"wallet"`) and `homeIconCustom` defaults to `null`. Separately, `loadStore()` also walks `store.records` doing its own numeric coercion of any stale string `createdAt` / `updatedAt` — that step is unrelated to `migrateIconChoices`, which only touches `store.settings`.
 
 ---
 
@@ -287,8 +287,8 @@ icons apply live and don't need any of this.)
 Only the Home-screen picker's tiles (and its upload input) are hidden in standalone mode — its label, hint
 and message line stay visible, unchanged from v84. The two header pickers always show, in every mode: a
 header pick applies immediately to the running app and isn't subject to the apple-touch-icon lock, so
-hiding them would serve no purpose. `styles.css` has explicit `.iconpick[hidden],.iconpick-row[hidden]
-{display:none}` so the row's `display:grid` can't override `[hidden]`.
+hiding them would serve no purpose. `styles.css` has an explicit `.iconpick[hidden]{display:none}` so no
+future display rule on the wrapper can override `[hidden]`.
 
 **Save check.** Because `saveStore()` swallows write errors, `_setIconChoice()` reads `fin_store` back
 from localStorage after `persistSettings()` via `_iconChoiceSaved(p, choice, pic)`, and checks that the
@@ -375,7 +375,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `homeIconHref(s)` | pure (from `finance-helpers.js`), built on `iconHref` — resolves `settings.homeIcon`/`homeIconCustom` to an icon URL against `"./icon-wallet.png"` as the wallet default |
 | `effectiveIconChoice(choice, custom)` | pure (from `finance-helpers.js`) — names the tile really in effect for a `(choice, custom)` pair, using the same resolution as `iconHref`; a `"custom"` pick with no valid stored picture resolves to `"wallet"` |
 | `headerIconHref(s, mode)` | pure (from `finance-helpers.js`), built on `iconHref` — resolves the header icon for `mode` (`"debt"` or finance) against that mode's own choice/picture/wallet default: `"./icon-wallet-red.png"` for `mode === "debt"`, `"./icon-wallet.png"` otherwise |
-| `migrateIconChoices(s)` | mutates-and-returns (from `finance-helpers.js`) — normalizes `headerIconFinanceChoice`/`headerIconDebtChoice`/`homeIcon`/`homeIconCustom` on settings object `s` in place; a missing/invalid header choice becomes `"custom"` when that header's stored picture is a `data:image/` string, else `"wallet"` |
+| `iconChoiceFromPicture(pic)` | pure (from `finance-helpers.js`) — the header-choice inference rule standalone: `"custom"` when `pic` is a `data:image/` string, else `"wallet"`; shared by `migrateIconChoices` and by `buildSettingsPayload`'s fallback for a missing header choice |
+| `migrateIconChoices(s)` | mutates-and-returns (from `finance-helpers.js`), built on `iconChoiceFromPicture` — normalizes `headerIconFinanceChoice`/`headerIconDebtChoice`/`homeIcon`/`homeIconCustom` on settings object `s` in place; a missing/invalid header choice becomes `"custom"` when that header's stored picture is a `data:image/` string, else `"wallet"` |
 | `ICON_PICKERS` / `renderIconPickers()` | `ICON_PICKERS` is the 3-entry config (home-screen icon + both header icons) driving the shared icon-picker component; `renderIconPickers()` re-renders all three (tile selection, picture/plus visibility) and, for the home entry only, the standalone-mode hiding + hint text |
 | `_setIconChoice(p, choice)` / `_iconChoiceSaved(p, choice, pic)` | `_setIconChoice` applies a pick for one `ICON_PICKERS` entry (sets the choice, calls the entry's `apply()`, re-renders, persists, sets the message); `_iconChoiceSaved` is the post-persist read-back check it uses to detect a swallowed storage-write failure |
 | `withCurrencyOption(sel, code)` | patches a missing option into an already-filled currency `<select>` via `currencyChoices`; called for `#fCurrency` and `#dbtCurrency` after those are populated — without it a removed currency would read as `""` and silently change on save. `#ruleCurrency` doesn't call it: `populateRuleCurrency` builds its options from `currencyChoices` directly |

@@ -602,6 +602,19 @@ test("headerIconHref: null settings -> wallet PNG for the given mode", () => {
 
 
 /* ============================================================ */
+/* iconChoiceFromPicture                                         */
+/* ============================================================ */
+
+test("iconChoiceFromPicture: data:image/ string -> custom", () => {
+  assert.equal(H.iconChoiceFromPicture("data:image/png;base64,AAAA"), "custom");
+});
+test("iconChoiceFromPicture: null/non-data-URL/undefined -> wallet", () => {
+  assert.equal(H.iconChoiceFromPicture(null), "wallet");
+  assert.equal(H.iconChoiceFromPicture(undefined), "wallet");
+  assert.equal(H.iconChoiceFromPicture("https://evil.example/x.png"), "wallet");
+});
+
+/* ============================================================ */
 /* migrateIconChoices                                            */
 /* ============================================================ */
 

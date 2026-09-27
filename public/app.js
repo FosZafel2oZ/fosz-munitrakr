@@ -2190,9 +2190,13 @@ function buildSettingsPayload() {
   p.headerIconDebt =
     settings.headerIconDebt === undefined ? null : settings.headerIconDebt;
   p.headerIconFinanceChoice =
-    settings.headerIconFinanceChoice === undefined ? "wallet" : settings.headerIconFinanceChoice;
+    settings.headerIconFinanceChoice === undefined
+      ? iconChoiceFromPicture(settings.headerIconFinance)
+      : settings.headerIconFinanceChoice;
   p.headerIconDebtChoice =
-    settings.headerIconDebtChoice === undefined ? "wallet" : settings.headerIconDebtChoice;
+    settings.headerIconDebtChoice === undefined
+      ? iconChoiceFromPicture(settings.headerIconDebt)
+      : settings.headerIconDebtChoice;
   p.homeIcon = settings.homeIcon === undefined ? "wallet" : settings.homeIcon;
   p.homeIconCustom =
     settings.homeIconCustom === undefined ? null : settings.homeIconCustom;

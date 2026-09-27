@@ -133,7 +133,7 @@ label.btn-primary{cursor:pointer;box-sizing:border-box;
   object-fit:cover;flex-shrink:0}
 .iconpick-img[hidden]{display:none}
 /* home picker hidden in the installed (standalone) app — beat any display rule */
-.iconpick[hidden],.iconpick-row[hidden]{display:none}
+.iconpick[hidden]{display:none}
 .iconpick-plus{box-sizing:border-box;display:flex;align-items:center;
   justify-content:center;background:var(--card-2);border:2px dashed var(--line);
   color:var(--muted);font-size:28px;font-weight:500;line-height:1}

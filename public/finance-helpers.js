@@ -234,6 +234,16 @@
     return iconHref(s && s.headerIconFinanceChoice, s && s.headerIconFinance, "./icon-wallet.png");
   }
 
+  /* ---------- iconChoiceFromPicture ----------
+     The header-choice inference rule, standalone: "custom" when `pic` is a
+     data:image/ string, else "wallet". Shared by migrateIconChoices (below)
+     and by buildSettingsPayload's fallback for a missing header choice, so
+     the rule lives in exactly one place.
+  */
+  function iconChoiceFromPicture(pic) {
+    return typeof pic === "string" && pic.startsWith("data:image/") ? "custom" : "wallet";
+  }
+
   /* ---------- migrateIconChoices ----------
      Mutates and returns settings object `s` (no-op for null/non-object):
      for each header slot, an invalid/missing choice becomes "custom" when
@@ -245,12 +255,11 @@
   function migrateIconChoices(s) {
     if (!s || typeof s !== "object") return s;
     const CHOICES = ["wallet", "yoimiya", "custom"];
-    const hasPic = (v) => typeof v === "string" && v.startsWith("data:image/");
     if (!CHOICES.includes(s.headerIconFinanceChoice)) {
-      s.headerIconFinanceChoice = hasPic(s.headerIconFinance) ? "custom" : "wallet";
+      s.headerIconFinanceChoice = iconChoiceFromPicture(s.headerIconFinance);
     }
     if (!CHOICES.includes(s.headerIconDebtChoice)) {
-      s.headerIconDebtChoice = hasPic(s.headerIconDebt) ? "custom" : "wallet";
+      s.headerIconDebtChoice = iconChoiceFromPicture(s.headerIconDebt);
     }
     if (!CHOICES.includes(s.homeIcon)) s.homeIcon = "wallet";
     if (s.homeIconCustom === undefined) s.homeIconCustom = null;
@@ -259,6 +268,7 @@
 
   return {
     reconcileRenames, makeRateService, currencyChoices,
-    iconHref, homeIconHref, effectiveIconChoice, headerIconHref, migrateIconChoices,
+    iconHref, homeIconHref, effectiveIconChoice, headerIconHref,
+    iconChoiceFromPicture, migrateIconChoices,
   };
 });
