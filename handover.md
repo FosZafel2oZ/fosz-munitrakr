@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v84**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v85**.
 
 ---
 
@@ -22,18 +22,20 @@ ProjectExpenses/
 │  ├─ styles.css                   all styles incl. per-theme overrides
 │  ├─ sw.js                        service worker (stale-while-revalidate)
 │  ├─ manifest.webmanifest         PWA manifest — icon entries point at icon-wallet.png only
-│  ├─ icon-wallet.png              Wallet icon (512×512) — default favicon/apple-touch-icon/manifest icon, and the default home-screen-icon-picker choice
-│  ├─ icon.png                     Yoimiya icon — unchanged default for the header icons; also a home-screen-icon-picker choice
+│  ├─ icon-wallet.png              Wallet icon (512×512) — default favicon/apple-touch-icon/manifest icon; also the default Wallet tile for the home-screen icon picker and the MuniTrakr header-icon picker
+│  ├─ icon-wallet-red.png          Rose wallet icon (512×512) — the default Wallet tile for the DebtTrakr header-icon picker only (caption is still "Wallet")
+│  ├─ icon.png                     Yoimiya icon — the Yoimiya tile shared by all three icon pickers (home-screen icon and both header icons); no longer any picker's default
 │  ├─ icon.svg                     old "₿" icon — dropped from the manifest, but the file still exists and is still cached in sw.js's SHELL
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
 ├─ design/
-│  └─ icon-wallet.svg              source drawing for icon-wallet.png — not deployed, not read by the app
-├─ tests/                          node tests/run.js — 175 unit tests
+│  ├─ icon-wallet.svg              source drawing for icon-wallet.png — not deployed, not read by the app
+│  └─ icon-wallet-red.svg          source drawing for icon-wallet-red.png — not deployed, not read by the app
+├─ tests/                          node tests/run.js — 203 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
-│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + homeIconHref
+│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + iconHref/homeIconHref/effectiveIconChoice/headerIconHref/migrateIconChoices
 │  ├─ debts.test.js                personBalances + cycle reset + settlements
 │  └─ debt-card.test.js          share-card model wording + balance math
 ├─ serve.js                        zero-dep static server (local preview)
@@ -44,7 +46,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `175/175 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `203/203 passed, 0 failed`.
 
 ---
 
@@ -66,8 +68,10 @@ A single in-memory `currentMode: "finance" | "debt"` drives which UI surfaces ar
     theme: "default" | "aero" | "yoimiya",
     defaultCurrency: "THB",
     currencies: ["THB","USD","EUR",...],   // user-editable, ISO-validated
-    headerIconFinance: dataURL | null,     // per-mode header icon (160×160 PNG)
-    headerIconDebt:    dataURL | null,
+    headerIconFinance: dataURL | null,     // MuniTrakr header's uploaded picture only (160×160 PNG); default null
+    headerIconDebt:    dataURL | null,     // DebtTrakr header's uploaded picture only (160×160 PNG); default null
+    headerIconFinanceChoice: "wallet" | "yoimiya" | "custom",  // default "wallet"; which MuniTrakr header tile is picked
+    headerIconDebtChoice:    "wallet" | "yoimiya" | "custom",  // default "wallet"; which DebtTrakr header tile is picked (its "wallet" is the rose PNG)
     homeIcon: "wallet" | "yoimiya" | "custom",  // default "wallet"; picks the apple-touch-icon
     homeIconCustom: dataURL | null,        // "custom" pick's uploaded picture (180×180 PNG); default null
     fxMarkupPct: number,                   // global card FX markup % applied to fetched rates
@@ -116,7 +120,7 @@ type Debt = {
 }
 ```
 
-Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring`), legacy `headerIcon` → `headerIconFinance` split, `homeIcon` coerced to one of the three known values (default `"wallet"`) and `homeIconCustom` defaulted to `null`, and numeric coercion of any stale string `createdAt` / `updatedAt`.
+Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring`), legacy `headerIcon` → `headerIconFinance` split, one call to `migrateIconChoices(store.settings)` (`finance-helpers.js`, pure — mutates and returns its argument) that normalizes `headerIconFinanceChoice` / `headerIconDebtChoice` / `homeIcon` / `homeIconCustom` together: a missing/invalid header choice becomes `"custom"` when that header's stored picture is a `data:image/` string, else `"wallet"` (so a header that was never touched switches from the old implicit Yoimiya default to Wallet), `homeIcon` is coerced to one of the three known values (default `"wallet"`) and `homeIconCustom` defaults to `null`, and numeric coercion of any stale string `createdAt` / `updatedAt`.
 
 ---
 
@@ -202,7 +206,7 @@ In MuniTrakr mode:
 2. Categories (drag-reorder, icon picker modal + color, add-form with icon picker)
 3. Preferences (Your name, Debt share image language, Card FX markup %)
 4. Currencies (Default currency + ISO-validated add/remove + reorder; every valid code auto-converts)
-5. Theme (theme select, then the Home-screen icon picker, then per-mode header icons — "Upload" / "Reset" buttons, both modes editable from either side)
+5. Theme (theme select, then three identical icon pickers, in order: Home-screen icon, Header icon (MuniTrakr), Header icon (DebtTrakr) — each a row of three tiles, Wallet / Yoimiya / Your picture, no upload/reset buttons)
 6. Backup & Restore ("Back up" via Web Share / download, "Restore" from file)
 7. App version (current version + Check for updates + "Vibe coded by FosZ")
 
@@ -210,29 +214,68 @@ In DebtTrakr mode: **People** replaces Recurring + Categories; everything else i
 
 Section visibility is driven by `data-mode` attributes on each `.settings-block` (`"finance"`, `"debt"`, or `"any"`); `showView` toggles `display` per-block when entering Settings.
 
-### Home-screen icon picker
+### Icon pickers (home-screen icon + both header icons)
 
-iOS reads the home-screen icon from `<link rel="apple-touch-icon">` only at the moment the user taps
-Share → Add to Home Screen, and the icon is then fixed — editing the app afterwards can't change it.
-`applyHomeIcon()` removes the `apple-touch-icon` link and appends a fresh `<link>` element (the approach
-reported to work on iOS) at every app startup and on every change of
-`settings.homeIcon`/`homeIconCustom`, so the tag reflects the current pick when the user does Add to
-Home Screen. `homeIconHref(settings)` (`finance-helpers.js`, pure) resolves the pick to a
-URL: `"wallet"` → `./icon-wallet.png` (default), `"yoimiya"` → `./icon.png`, `"custom"` → the stored
-`homeIconCustom` data URL when it's a valid `data:image/...` string, else it falls back to the wallet
-PNG. The Settings tile grid (Wallet / Yoimiya / Your picture) lives in the Theme block; picking "Your
-picture" with no picture stored yet opens the file input instead of selecting the tile. Uploads go
-through `fileToIconDataURL` center-cropped to 180×180 with transparent areas filled white. The
-fresh-link approach above is reported to work on iOS; the custom-upload (data URL) path through it has
-not yet been verified on a real iPhone.
+One generic component (`app.js`) serves all three pickers in Settings → Theme, in this order: Home-screen
+icon, Header icon (MuniTrakr), Header icon (DebtTrakr). Each is a row of three tiles — Wallet, Yoimiya,
+Your picture — with no upload/reset buttons: tapping Wallet or Yoimiya selects it directly; tapping "Your
+picture" opens the file picker when no picture is stored yet, selects the already-stored picture when it
+isn't the current pick, or opens the file picker to replace it when it's already selected.
 
-**Storage separation (why switching needs a backup).** On iOS a home-screen web app has its own
-localStorage, separate from Safari's and from any other home-screen copy, and all MuniTrakr data lives
-only in localStorage. Removing the icon and adding it again gives a new, empty copy. So the only way to
-change the icon is: back up (Backup & Restore) → remove the app from the Home Screen → open the site in
-Safari and pick an icon → Add to Home Screen again → restore the backup in the new copy.
+The `ICON_PICKERS` array configures the three instances, each naming its wrapper element, title, message
+line, the settings keys it edits, and its upload size/fill:
+- `{ wrap: "iconPickHome", title: "Home-screen icon", msg: "homeIconMsg", choiceKey: "homeIcon", picKey: "homeIconCustom", size: 180, fill: "#ffffff", apply: () => applyHomeIcon(), home: true }`
+- `{ wrap: "iconPickFinance", title: "MuniTrakr header icon", msg: "hiFinanceMsg", choiceKey: "headerIconFinanceChoice", picKey: "headerIconFinance", size: 160, fill: null, apply: () => applyHeaderIcon() }`
+- `{ wrap: "iconPickDebt", title: "DebtTrakr header icon", msg: "hiDebtMsg", choiceKey: "headerIconDebtChoice", picKey: "headerIconDebt", size: 160, fill: null, apply: () => applyHeaderIcon() }`
 
-**Hint + standalone mode.** `renderHomeIconChoices()` picks the hint by `_isStandalone()`
+Each wrapper's markup (`.iconpick` div containing a `.iconpick-row` of three `.iconpick-tile` buttons plus
+a hidden `.iconpick-input` file input) is identical across the three; only the tile hrefs differ — the
+DebtTrakr Wallet tile points at the rose `./icon-wallet-red.png` (caption is still "Wallet"), the other two
+Wallet tiles point at `./icon-wallet.png`.
+
+`renderIconPickers()` walks `ICON_PICKERS` and, per entry: highlights the tile matching
+`_iconPickerChoice(p)` (wraps `effectiveIconChoice()`, so a `"custom"` pick with no valid stored picture
+highlights Wallet instead), shows/hides the picture image and the `+` placeholder on the "Your picture"
+tile, and — only for the `home: true` entry — hides the whole wrapper (tiles + file input) in standalone
+mode and refreshes `#homeIconHint`. It runs once at boot in `enterApp()` (right after `applyHomeIcon()`),
+again in `openSettings()`, and after every pick.
+
+Picking a tile or finishing an upload both go through `_setIconChoice(p, choice)`: sets
+`settings[p.choiceKey]` (and, for uploads, `settings[p.picKey]` first), calls the entry's `apply()`
+(`applyHomeIcon` or `applyHeaderIcon`), re-renders, persists, then sets the message. Header choices apply
+immediately to the live top-bar `#headerIcon` for the mode currently on screen — `applyHeaderIcon()` sets
+`#headerIcon.src` via `headerIconHref(settings, currentMode === "debt" ? "debt" : "finance")`; there are no
+more per-mode Settings preview images (`hiPreviewFinance`/`hiPreviewDebt` were removed with the old
+Upload/Reset controls). Upload failures (any of the three) show the shared "Couldn't read that image."
+via `_showIconReadError`. Successful picks/uploads show `"<Title> set to Wallet."` /
+`"…Yoimiya."` / `"…your picture."` in each picker's own message line, where `<Title>` is
+`"Home-screen icon"`, `"MuniTrakr header icon"`, or `"DebtTrakr header icon"`.
+
+**Resolving a pick to a URL.** `iconHref(choice, custom, walletSrc)` (`finance-helpers.js`, pure) is the
+shared resolver: `"yoimiya"` → `./icon.png`; `"custom"` → `custom` only when it's a valid
+`data:image/...` string; anything else → `walletSrc`. `homeIconHref(s)` calls it with
+`s.homeIcon`/`s.homeIconCustom`/`"./icon-wallet.png"`. `headerIconHref(s, mode)` calls it per mode with
+that mode's choice/picture/default wallet PNG — `"./icon-wallet-red.png"` for `mode === "debt"`,
+`"./icon-wallet.png"` otherwise. `effectiveIconChoice(choice, custom)` runs the same resolution but names
+the tile instead of the href, so the UI and the applied icon can never disagree.
+
+**iOS home-screen icon specifics.** iOS reads the home-screen icon from `<link rel="apple-touch-icon">`
+only at the moment the user taps Share → Add to Home Screen, and the icon is then fixed — editing the app
+afterwards can't change it. `applyHomeIcon()` removes the `apple-touch-icon` link and appends a fresh
+`<link>` element (the approach reported to work on iOS) at every app startup and on every change of
+`settings.homeIcon`/`homeIconCustom`, so the tag reflects the current pick when the user does Add to Home
+Screen. The fresh-link approach is reported to work on iOS; the custom-upload (data URL) path through it
+has not yet been verified on a real iPhone.
+
+**Storage separation (why switching the home-screen icon needs a backup).** On iOS a home-screen web app
+has its own localStorage, separate from Safari's and from any other home-screen copy, and all MuniTrakr
+data lives only in localStorage. Removing the icon and adding it again gives a new, empty copy. So the
+only way to change the home-screen icon is: back up (Backup & Restore) → remove the app from the Home
+Screen → open the site in Safari and pick an icon → Add to Home Screen again → restore the backup in the
+new copy. (This limitation is specific to the home-screen icon's apple-touch-icon lock; the two header
+icons apply live and don't need any of this.)
+
+**Hint + standalone mode.** `renderIconPickers()` picks the home-screen picker's hint by `_isStandalone()`
 (`navigator.standalone === true` or `(display-mode: standalone)`):
 - In Safari: "Pick this before Safari → Share → Add to Home Screen. Once added, the icon can't change. To
   switch later, back up first (Backup & Restore below) — a re-added app starts empty — then remove it, pick
@@ -241,21 +284,19 @@ Safari and pick an icon → Add to Home Screen again → restore the backup in t
   the app from your Home Screen, open the site in Safari, pick an icon here, add it again, then restore your
   backup in the new copy — it starts empty."
 
-In standalone mode it also hides the tile radiogroup (`#homeIconChoices`) and the Upload picture button's
-wrapper (`#homeIconUploadWrap`) via the `hidden` attribute, leaving only the "Home-screen icon" label, the
-hint and `#homeIconMsg`: a pick made inside the installed app can never reach its icon, and that copy's
-settings aren't shared with Safari, so the controls would only mislead. `styles.css` has explicit
-`.homeicon-row[hidden],.homeicon-upload-wrap[hidden]{display:none}` so the row's `display:grid` can't
-override `[hidden]`. `renderHomeIconChoices()` runs once at boot in `enterApp()` (right after
-`applyHomeIcon()`), again in `openSettings()`, and after every pick, so the picker is correct even when
-Settings is reached via `showView("settings")` without `openSettings()`.
+Only the Home-screen picker's tiles (and its upload input) are hidden in standalone mode — its label, hint
+and message line stay visible, unchanged from v84. The two header pickers always show, in every mode: a
+header pick applies immediately to the running app and isn't subject to the apple-touch-icon lock, so
+hiding them would serve no purpose. `styles.css` has explicit `.iconpick[hidden],.iconpick-row[hidden]
+{display:none}` so the row's `display:grid` can't override `[hidden]`.
 
-**Save check.** Because `saveStore()` swallows write errors, `_setHomeIcon()` (used by both the tile taps
-and the upload) reads `fin_store` back from localStorage after `persistSettings()` via
-`_homeIconSaved(choice, custom)`, and checks that the saved `settings.homeIcon` equals the pick (and, for
-`"custom"`, that the saved `homeIconCustom` equals the picture). If not, `#homeIconMsg` shows "Couldn't save
-your choice — storage may be full. It's used for now but won't be remembered." in the default error colour
-instead of the success message; the icon is still applied to the live page.
+**Save check.** Because `saveStore()` swallows write errors, `_setIconChoice()` reads `fin_store` back
+from localStorage after `persistSettings()` via `_iconChoiceSaved(p, choice, pic)`, and checks that the
+saved `settings[p.choiceKey]` equals the pick (and, for `"custom"`, that the saved `settings[p.picKey]`
+equals the picture). This read-back check now covers all three pickers, not just the home-screen one. If
+it fails, that picker's own message line shows "Couldn't save your choice — storage may be full. It's used
+for now but won't be remembered." in the default error colour instead of the success message; the icon is
+still applied to the live page.
 
 ---
 
@@ -279,7 +320,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v84` / `munitrakr-v84`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v85` / `munitrakr-v85`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -297,8 +338,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 - **Backup uses Web Share API** with `{ files: [file] }` only (no `text`/`title` — those cause iOS targets to save extra files). Falls back to direct download when `canShare(files)` is false.
 - **iOS emoji rendering:** Unicode characters like ⏸ ▶ get substituted with Apple's emoji font. All icon buttons use inline SVG instead. The share card follows the same rule: its checkmark and note glyph are canvas paths, and the person icon is a rasterized SVG injected by the caller.
 - **iOS PWA cold start:** mode is reset to `"finance"`, but persisted `currentView` is restored. `showView`'s mode-compatibility gate redirects orphaned debt-only views to dashboard.
-- **`saveStore()` / `persistSettings()` swallow localStorage write errors app-wide** (bare `catch {}`) — a known limitation. The home-screen icon path is the one exception that notices: `_setHomeIcon` reads the saved store back (`_homeIconSaved`) and, if the pick or picture didn't land (e.g. a custom picture too large for the remaining quota), shows "Couldn't save your choice — storage may be full. It's used for now but won't be remembered." instead of its success message (see §6 Home-screen icon picker). Everywhere else a failed save still looks like success, and the live page keeps the change in memory until the next reload.
-- **Aero's `.settings-block > *{position:relative}`** (see `styles.css`, the "Make sure normal content stacks above the gloss" rule) overrides `position:absolute` on any direct child, which would silently un-hide a `.visually-hidden` element placed directly inside a `.settings-block`. The home-screen icon upload's `<input type="file" class="visually-hidden">` is wrapped in a `<div>` (`#homeIconUploadWrap`, which standalone mode also hides) for this reason, so the input itself is a grandchild, not a direct child.
+- **`saveStore()` / `persistSettings()` swallow localStorage write errors app-wide** (bare `catch {}`) — a known limitation. The three icon pickers (home-screen + both header icons) are the one exception that notices: `_setIconChoice` reads the saved store back (`_iconChoiceSaved`) and, if the pick or picture didn't land (e.g. a custom picture too large for the remaining quota), shows "Couldn't save your choice — storage may be full. It's used for now but won't be remembered." in that picker's own message line instead of its success message (see §6 Icon pickers). Everywhere else a failed save still looks like success, and the live page keeps the change in memory until the next reload.
+- **Aero's `.settings-block > *{position:relative}`** (see `styles.css`, the "Make sure normal content stacks above the gloss" rule) overrides `position:absolute` on any direct child, which would silently un-hide a `.visually-hidden` element placed directly inside a `.settings-block`. Each icon picker's `<input type="file" class="visually-hidden iconpick-input">` is wrapped inside its own `.iconpick` wrapper (`#iconPickHome`/`#iconPickFinance`/`#iconPickDebt`; the home one is also what standalone mode hides) for this reason, so the input itself is a grandchild, not a direct child.
 
 ---
 
@@ -330,7 +371,13 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `computeOccurrences` / `applyEndChecks` / `buildRecordFromRule` / `unpauseRule` | recurring math (from `recurring.js`) |
 | `reconcileRenames` / `makeRateService` | shared helpers (from `finance-helpers.js`) |
 | `currencyChoices(list, current)` | pure (from `finance-helpers.js`) — returns `list` plus `current` appended when it's a non-empty string not already in `list`; never mutates `list` — lets an item keep its own currency after it's removed from Settings |
-| `homeIconHref(s)` | pure (from `finance-helpers.js`) — resolves `settings.homeIcon`/`homeIconCustom` to an icon URL: `"wallet"` → `./icon-wallet.png` (also the fallback for anything unrecognized), `"yoimiya"` → `./icon.png`, `"custom"` → `homeIconCustom` when it's a valid `data:image/...` string |
+| `iconHref(choice, custom, walletSrc)` | pure (from `finance-helpers.js`) — generic icon-choice resolver shared by all three icon pickers: `"yoimiya"` → `./icon.png`; `"custom"` → `custom` only when it's a valid `data:image/...` string; anything else (including an unrecognized choice) → `walletSrc` |
+| `homeIconHref(s)` | pure (from `finance-helpers.js`), built on `iconHref` — resolves `settings.homeIcon`/`homeIconCustom` to an icon URL against `"./icon-wallet.png"` as the wallet default |
+| `effectiveIconChoice(choice, custom)` | pure (from `finance-helpers.js`) — names the tile really in effect for a `(choice, custom)` pair, using the same resolution as `iconHref`; a `"custom"` pick with no valid stored picture resolves to `"wallet"` |
+| `headerIconHref(s, mode)` | pure (from `finance-helpers.js`), built on `iconHref` — resolves the header icon for `mode` (`"debt"` or finance) against that mode's own choice/picture/wallet default: `"./icon-wallet-red.png"` for `mode === "debt"`, `"./icon-wallet.png"` otherwise |
+| `migrateIconChoices(s)` | mutates-and-returns (from `finance-helpers.js`) — normalizes `headerIconFinanceChoice`/`headerIconDebtChoice`/`homeIcon`/`homeIconCustom` on settings object `s` in place; a missing/invalid header choice becomes `"custom"` when that header's stored picture is a `data:image/` string, else `"wallet"` |
+| `ICON_PICKERS` / `renderIconPickers()` | `ICON_PICKERS` is the 3-entry config (home-screen icon + both header icons) driving the shared icon-picker component; `renderIconPickers()` re-renders all three (tile selection, picture/plus visibility) and, for the home entry only, the standalone-mode hiding + hint text |
+| `_setIconChoice(p, choice)` / `_iconChoiceSaved(p, choice, pic)` | `_setIconChoice` applies a pick for one `ICON_PICKERS` entry (sets the choice, calls the entry's `apply()`, re-renders, persists, sets the message); `_iconChoiceSaved` is the post-persist read-back check it uses to detect a swallowed storage-write failure |
 | `withCurrencyOption(sel, code)` | patches a missing option into an already-filled currency `<select>` via `currencyChoices`; called for `#fCurrency` and `#dbtCurrency` after those are populated — without it a removed currency would read as `""` and silently change on save. `#ruleCurrency` doesn't call it: `populateRuleCurrency` builds its options from `currencyChoices` directly |
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
 | `evenShares` / `fillBlanks` | pure (from `debts.js`) — cent-exact splits: evenShares over everyone, fillBlanks over blank fields only |
