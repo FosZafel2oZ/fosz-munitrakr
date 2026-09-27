@@ -534,6 +534,7 @@ async function enterApp() {
   applyTheme(settings.theme || "default");
   applyHeaderIcon();
   applyHomeIcon();
+  renderHomeIconChoices();
   $("#helloName").textContent = "MuniTrakr";
   loadPrefs();
   if (range.type === "custom" && range.start && range.end) {
@@ -1735,19 +1736,47 @@ function renderHomeIconChoices() {
     img.hidden = !hasCustom;
   }
   if (plus) plus.hidden = hasCustom;
+  // In the installed app the icon is already fixed, so the pick/upload controls
+  // are hidden — only the label, the hint and the message line stay.
+  const standalone = _isStandalone();
+  const row = $("#homeIconChoices");
+  const upWrap = $("#homeIconUploadWrap");
+  if (row) row.hidden = standalone;
+  if (upWrap) upWrap.hidden = standalone;
   const hint = $("#homeIconHint");
   if (hint) {
-    hint.textContent = _isStandalone()
-      ? "Your Home Screen icon is already set. To change it, remove the app from your Home Screen, open it in Safari, pick an icon here, then add it again."
-      : "Pick this before Safari → Share → Add to Home Screen. Once added, the icon can't change — to switch, remove it from your Home Screen and add it again.";
+    hint.textContent = standalone
+      ? "Your Home Screen icon is already set. To change it: back up (Backup & Restore below), remove the app from your Home Screen, open the site in Safari, pick an icon here, add it again, then restore your backup in the new copy — it starts empty."
+      : "Pick this before Safari → Share → Add to Home Screen. Once added, the icon can't change. To switch later, back up first (Backup & Restore below) — a re-added app starts empty — then remove it, pick again here in Safari, add it again, and restore your backup.";
+  }
+}
+// saveStore() swallows storage errors (e.g. localStorage full), so read the
+// saved copy back to confirm the home-icon pick (and picture) really landed.
+function _homeIconSaved(choice, custom) {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    const saved = s && s.settings;
+    if (!saved || saved.homeIcon !== choice) return false;
+    return choice !== "custom" || saved.homeIconCustom === custom;
+  } catch {
+    return false;
   }
 }
 async function _setHomeIcon(choice) {
   settings.homeIcon = choice;
+  const custom = settings.homeIconCustom;
   applyHomeIcon();
   renderHomeIconChoices();
   await persistSettings();
   const msg = $("#homeIconMsg");
+  if (!_homeIconSaved(choice, custom)) {
+    if (msg) {
+      msg.style.color = "";
+      msg.textContent =
+        "Couldn't save your choice — storage may be full. It's used for now but won't be remembered.";
+    }
+    return;
+  }
   if (msg) {
     msg.style.color = "var(--in)";
     msg.textContent = "Home-screen icon set to " + HOME_ICON_LABELS[choice] + ".";
