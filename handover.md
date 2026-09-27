@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v83**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v84**.
 
 ---
 
@@ -21,15 +21,19 @@ ProjectExpenses/
 │  ├─ finance-helpers.js           UMD: reconcileRenames + FX rate service factory
 │  ├─ styles.css                   all styles incl. per-theme overrides
 │  ├─ sw.js                        service worker (stale-while-revalidate)
-│  ├─ manifest.webmanifest         PWA manifest
-│  ├─ icon.png / icon.svg          default app icon
+│  ├─ manifest.webmanifest         PWA manifest — icon entries point at icon-wallet.png only
+│  ├─ icon-wallet.png              Wallet icon (512×512) — default favicon/apple-touch-icon/manifest icon, and the default home-screen-icon-picker choice
+│  ├─ icon.png                     Yoimiya icon — unchanged default for the header icons; also a home-screen-icon-picker choice
+│  ├─ icon.svg                     old "₿" icon — dropped from the manifest, but the file still exists and is still cached in sw.js's SHELL
 │  ├─ chevron.svg / chevron-dark.svg   white/dark select arrows
 │  └─ vendor/chart.umd.min.js      Chart.js (vendored for offline)
-├─ tests/                          node tests/run.js — 168 unit tests
+├─ design/
+│  └─ icon-wallet.svg              source drawing for icon-wallet.png — not deployed, not read by the app
+├─ tests/                          node tests/run.js — 175 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
-│  ├─ finance-helpers.test.js      reconcileRenames + FX caching
+│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + homeIconHref
 │  ├─ debts.test.js                personBalances + cycle reset + settlements
 │  └─ debt-card.test.js          share-card model wording + balance math
 ├─ serve.js                        zero-dep static server (local preview)
@@ -40,7 +44,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `168/168 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `175/175 passed, 0 failed`.
 
 ---
 
@@ -64,6 +68,8 @@ A single in-memory `currentMode: "finance" | "debt"` drives which UI surfaces ar
     currencies: ["THB","USD","EUR",...],   // user-editable, ISO-validated
     headerIconFinance: dataURL | null,     // per-mode header icon (160×160 PNG)
     headerIconDebt:    dataURL | null,
+    homeIcon: "wallet" | "yoimiya" | "custom",  // default "wallet"; picks the apple-touch-icon
+    homeIconCustom: dataURL | null,        // "custom" pick's uploaded picture (180×180 PNG); default null
     fxMarkupPct: number,                   // global card FX markup % applied to fetched rates
 
     // MuniTrakr-only
@@ -110,7 +116,7 @@ type Debt = {
 }
 ```
 
-Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring`), legacy `headerIcon` → `headerIconFinance` split, and numeric coercion of any stale string `createdAt` / `updatedAt`.
+Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring`), legacy `headerIcon` → `headerIconFinance` split, `homeIcon` coerced to one of the three known values (default `"wallet"`) and `homeIconCustom` defaulted to `null`, and numeric coercion of any stale string `createdAt` / `updatedAt`.
 
 ---
 
@@ -196,13 +202,31 @@ In MuniTrakr mode:
 2. Categories (drag-reorder, icon picker modal + color, add-form with icon picker)
 3. Preferences (Your name, Debt share image language, Card FX markup %)
 4. Currencies (Default currency + ISO-validated add/remove + reorder; every valid code auto-converts)
-5. Theme (theme select + per-mode header icons — "Upload" / "Reset" buttons, both modes editable from either side)
+5. Theme (theme select, then the Home-screen icon picker, then per-mode header icons — "Upload" / "Reset" buttons, both modes editable from either side)
 6. Backup & Restore ("Back up" via Web Share / download, "Restore" from file)
 7. App version (current version + Check for updates + "Vibe coded by FosZ")
 
 In DebtTrakr mode: **People** replaces Recurring + Categories; everything else is identical and shared.
 
 Section visibility is driven by `data-mode` attributes on each `.settings-block` (`"finance"`, `"debt"`, or `"any"`); `showView` toggles `display` per-block when entering Settings.
+
+### Home-screen icon picker
+
+iOS reads the home-screen icon from `<link rel="apple-touch-icon">` only at the moment the user taps
+Share → Add to Home Screen, and the icon is then fixed — editing the app afterwards can't change it.
+`applyHomeIcon()` works around the "only reads it once" part by replacing the `apple-touch-icon` link
+with a brand-new element (an href edit alone isn't enough) at every app startup and on every change of
+`settings.homeIcon`/`homeIconCustom`, so the tag always reflects the current pick by the time the user
+does Add to Home Screen. `homeIconHref(settings)` (`finance-helpers.js`, pure) resolves the pick to a
+URL: `"wallet"` → `./icon-wallet.png` (default), `"yoimiya"` → `./icon.png`, `"custom"` → the stored
+`homeIconCustom` data URL when it's a valid `data:image/...` string, else it falls back to the wallet
+PNG. The Settings tile grid (Wallet / Yoimiya / Your picture) lives in the Theme block; picking "Your
+picture" with no picture stored yet opens the file input instead of selecting the tile. Uploads go
+through `fileToIconDataURL` center-cropped to 180×180 with transparent areas filled white. A hint line
+under the picker explains the Add-to-Home-Screen timing, worded differently depending on whether the
+app is currently running standalone (`_isStandalone()`) or in Safari. The fresh-link approach above is
+confirmed working on a real iPhone; the custom-upload (data URL) path through it has not yet been
+verified on a real device.
 
 ---
 
@@ -226,7 +250,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v83` / `munitrakr-v83`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v84` / `munitrakr-v84`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -244,6 +268,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 - **Backup uses Web Share API** with `{ files: [file] }` only (no `text`/`title` — those cause iOS targets to save extra files). Falls back to direct download when `canShare(files)` is false.
 - **iOS emoji rendering:** Unicode characters like ⏸ ▶ get substituted with Apple's emoji font. All icon buttons use inline SVG instead. The share card follows the same rule: its checkmark and note glyph are canvas paths, and the person icon is a rasterized SVG injected by the caller.
 - **iOS PWA cold start:** mode is reset to `"finance"`, but persisted `currentView` is restored. `showView`'s mode-compatibility gate redirects orphaned debt-only views to dashboard.
+- **`saveStore()` / `persistSettings()` swallow localStorage write errors app-wide** (bare `catch {}`) — a known limitation, not just for the home-screen icon. If a custom home-screen picture is too large for the remaining localStorage quota, the write silently fails, `_setHomeIcon` still shows its "Home-screen icon set to your picture." success message, and the live page keeps using the picture in memory until the next reload (when the unsaved pick is gone). No code currently distinguishes a failed save from a successful one here.
+- **Aero's `.settings-block > *{position:relative}`** (see `styles.css`, the "Make sure normal content stacks above the gloss" rule) overrides `position:absolute` on any direct child, which would silently un-hide a `.visually-hidden` element placed directly inside a `.settings-block`. The home-screen icon upload's `<input type="file" class="visually-hidden">` is wrapped in a plain `<div>` for this reason, so the input itself is a grandchild, not a direct child.
 
 ---
 
@@ -264,6 +290,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `_currentHistoryPersonId` | which person's history is open |
 | `PEOPLE_ICONS` / `personIconSvg(id, cls)` | people-icon library (separate from category `ICONS`) |
 | `THEMES` / `applyTheme()` / `applyHeaderIcon()` | theming |
+| `applyHomeIcon()` | replaces the `apple-touch-icon` `<link>` with a fresh element pointing at `homeIconHref(settings)`; called at startup and on every home-screen-icon change, since iOS only reads the tag at Add-to-Home-Screen time |
 | `Fireworks` | IIFE — `.start()` / `.stop()` (Yoimiya only) |
 | `setMode(next)` | mode switcher orchestrator |
 | `showView(v)` | view router with mode-compatibility gate |
@@ -274,6 +301,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `computeOccurrences` / `applyEndChecks` / `buildRecordFromRule` / `unpauseRule` | recurring math (from `recurring.js`) |
 | `reconcileRenames` / `makeRateService` | shared helpers (from `finance-helpers.js`) |
 | `currencyChoices(list, current)` | pure (from `finance-helpers.js`) — returns `list` plus `current` appended when it's a non-empty string not already in `list`; never mutates `list` — lets an item keep its own currency after it's removed from Settings |
+| `homeIconHref(s)` | pure (from `finance-helpers.js`) — resolves `settings.homeIcon`/`homeIconCustom` to an icon URL: `"wallet"` → `./icon-wallet.png` (also the fallback for anything unrecognized), `"yoimiya"` → `./icon.png`, `"custom"` → `homeIconCustom` when it's a valid `data:image/...` string |
 | `withCurrencyOption(sel, code)` | patches a missing option into an already-filled currency `<select>` via `currencyChoices`; called for `#fCurrency` and `#dbtCurrency` after those are populated — without it a removed currency would read as `""` and silently change on save. `#ruleCurrency` doesn't call it: `populateRuleCurrency` builds its options from `currencyChoices` directly |
 | `processRecurring()` | runs at boot + after Restore — generates due records & queues banners |
 | `evenShares` / `fillBlanks` | pure (from `debts.js`) — cent-exact splits: evenShares over everyone, fillBlanks over blank fields only |
