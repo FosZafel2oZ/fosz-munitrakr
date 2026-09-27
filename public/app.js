@@ -1624,16 +1624,21 @@ function applyHomeIcon() {
   link.href = homeIconHref(settings);
   document.head.appendChild(link);
 }
-// Resize an uploaded image to a small square data-URL (keeps localStorage tiny)
-function fileToIconDataURL(file, cb) {
+// Resize an uploaded image to a small square data-URL (keeps localStorage tiny).
+// size defaults to 160px; fill (e.g. "#ffffff") paints behind transparent areas.
+function fileToIconDataURL(file, cb, size, fill) {
   const fr = new FileReader();
   fr.onload = () => {
     const img = new Image();
     img.onload = () => {
-      const S = 160;
+      const S = size || 160;
       const c = document.createElement("canvas");
       c.width = c.height = S;
       const g = c.getContext("2d");
+      if (fill) {
+        g.fillStyle = fill;
+        g.fillRect(0, 0, S, S);
+      }
       const m = Math.min(img.width, img.height);
       g.drawImage(
         img,
@@ -1694,6 +1699,89 @@ function _wireHeaderIconControls(inputId, resetId, settingsKey, modeLabel) {
 }
 _wireHeaderIconControls("hiInputFinance", "hiResetFinance", "headerIconFinance", "MuniTrakr");
 _wireHeaderIconControls("hiInputDebt",    "hiResetDebt",    "headerIconDebt",    "DebtTrakr");
+
+/* ---- Home-screen icon picker (Settings → Theme) ---- */
+const HOME_ICON_LABELS = { wallet: "Wallet", yoimiya: "Yoimiya", custom: "your picture" };
+function _hasHomeIconCustom() {
+  const u = settings && settings.homeIconCustom;
+  return typeof u === "string" && u.startsWith("data:image/");
+}
+function _isStandalone() {
+  return (
+    navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+  );
+}
+function renderHomeIconChoices() {
+  const hasCustom = _hasHomeIconCustom();
+  // A "custom" pick without a stored picture falls back to the wallet, the same
+  // way homeIconHref() does, so the highlighted tile matches the real icon.
+  let sel = (settings && settings.homeIcon) || "wallet";
+  if (sel === "custom" && !hasCustom) sel = "wallet";
+  $$("#homeIconChoices .homeicon-tile").forEach((b) => {
+    const on = b.dataset.icon === sel;
+    b.classList.toggle("selected", on);
+    b.setAttribute("aria-checked", on ? "true" : "false");
+  });
+  const img = $("#homeIconCustomImg");
+  const plus = $("#homeIconPlus");
+  if (img) {
+    if (hasCustom) img.src = settings.homeIconCustom;
+    else img.removeAttribute("src");
+    img.hidden = !hasCustom;
+  }
+  if (plus) plus.hidden = hasCustom;
+  const hint = $("#homeIconHint");
+  if (hint) {
+    hint.textContent = _isStandalone()
+      ? "Your Home Screen icon is already set. To change it, remove the app from your Home Screen, open it in Safari, pick an icon here, then add it again."
+      : "Pick this before Safari → Share → Add to Home Screen. Once added, the icon can't change — to switch, remove it from your Home Screen and add it again.";
+  }
+}
+async function _setHomeIcon(choice) {
+  settings.homeIcon = choice;
+  applyHomeIcon();
+  renderHomeIconChoices();
+  await persistSettings();
+  const msg = $("#homeIconMsg");
+  if (msg) {
+    msg.style.color = "var(--in)";
+    msg.textContent = "Home-screen icon set to " + HOME_ICON_LABELS[choice] + ".";
+  }
+}
+$$("#homeIconChoices .homeicon-tile").forEach((b) => {
+  b.addEventListener("click", () => {
+    const choice = b.dataset.icon;
+    if (choice === "custom" && !_hasHomeIconCustom()) {
+      const inEl = $("#homeIconInput");
+      if (inEl) inEl.click();
+      return;
+    }
+    _setHomeIcon(choice);
+  });
+});
+if ($("#homeIconInput")) {
+  $("#homeIconInput").addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    const msg = $("#homeIconMsg");
+    if (msg) msg.textContent = "";
+    fileToIconDataURL(
+      f,
+      async (url) => {
+        if (!url) {
+          if (msg) { msg.style.color = ""; msg.textContent = "Couldn't read that image."; }
+          return;
+        }
+        settings.homeIconCustom = url;
+        await _setHomeIcon("custom");
+      },
+      180,
+      "#ffffff"
+    );
+  });
+}
 
 /* ---- Fireworks backdrop (Yoimiya) — 3–6 random bursts at a time ---- */
 const Fireworks = (() => {
@@ -3018,7 +3106,9 @@ function openSettings() {
   }
   if ($("#setTheme")) $("#setTheme").value = settings.theme || "default";
   $("#hiMsg") && ($("#hiMsg").textContent = "");
+  $("#homeIconMsg") && ($("#homeIconMsg").textContent = "");
   applyHeaderIcon();
+  renderHomeIconChoices();
   settingsDraft = JSON.parse(JSON.stringify(settings));
   curDraft = (settings.currencies || []).slice();
   catTypeTab = "expense";
