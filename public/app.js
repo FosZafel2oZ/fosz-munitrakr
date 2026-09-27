@@ -1665,6 +1665,10 @@ async function persistSettings() {
     syncDraftsFromSettings();
   } catch {}
 }
+// Shared failure message for the icon uploads (header icons + home-screen icon).
+function _showIconReadError(msg) {
+  if (msg) { msg.style.color = ""; msg.textContent = "Couldn't read that image."; }
+}
 function _wireHeaderIconControls(inputId, resetId, settingsKey, modeLabel) {
   const inEl = document.getElementById(inputId);
   const rsEl = document.getElementById(resetId);
@@ -1677,7 +1681,7 @@ function _wireHeaderIconControls(inputId, resetId, settingsKey, modeLabel) {
       if (msg) msg.textContent = "";
       fileToIconDataURL(f, async (url) => {
         if (!url) {
-          if (msg) { msg.style.color = ""; msg.textContent = "Couldn't read that image."; }
+          _showIconReadError(msg);
           return;
         }
         settings[settingsKey] = url;
@@ -1771,7 +1775,7 @@ if ($("#homeIconInput")) {
       f,
       async (url) => {
         if (!url) {
-          if (msg) { msg.style.color = ""; msg.textContent = "Couldn't read that image."; }
+          _showIconReadError(msg);
           return;
         }
         settings.homeIconCustom = url;
