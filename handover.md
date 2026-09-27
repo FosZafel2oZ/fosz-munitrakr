@@ -225,8 +225,8 @@ picture" with no picture stored yet opens the file input instead of selecting th
 through `fileToIconDataURL` center-cropped to 180×180 with transparent areas filled white. A hint line
 under the picker explains the Add-to-Home-Screen timing, worded differently depending on whether the
 app is currently running standalone (`_isStandalone()`) or in Safari. The fresh-link approach above is
-confirmed working on a real iPhone; the custom-upload (data URL) path through it has not yet been
-verified on a real device.
+documented as working on iOS; the custom-upload (data URL) path through it has not yet been verified
+on a real iPhone.
 
 ---
 
