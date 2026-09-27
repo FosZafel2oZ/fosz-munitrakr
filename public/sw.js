@@ -14,6 +14,7 @@ const SHELL = [
   "./icon.svg",
   "./icon.png",
   "./icon-wallet.png",
+  "./icon-wallet-red.png",
   "./chevron.svg",
   "./chevron-dark.svg",
 ];

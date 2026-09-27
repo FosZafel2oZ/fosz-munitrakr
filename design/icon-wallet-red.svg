@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5f7e"/><stop offset="1" stop-color="#d4204d"/></linearGradient>
+    <radialGradient id="hl" cx="0.25" cy="0.12" r="0.8"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffe9ee"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe8a3"/><stop offset=".55" stop-color="#f8bb2c"/><stop offset="1" stop-color="#e0900c"/></linearGradient>
+    <linearGradient id="lav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd6de"/><stop offset="1" stop-color="#ffbccb"/></linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#5c0a1f" flood-opacity=".35"/></filter>
+    <filter id="csh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#5c0a1f" flood-opacity=".3"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#hl)"/>
+  <g transform="rotate(-8 500 330)"><rect x="290" y="236" width="440" height="200" rx="36" fill="url(#lav)"/><rect x="290" y="286" width="440" height="34" fill="#ff5f7e" fill-opacity=".35"/></g>
+  <rect x="216" y="352" width="592" height="432" rx="80" fill="url(#body)" filter="url(#sh)"/>  <rect x="580" y="500" width="260" height="140" rx="70" fill="#d4204d"/>  <circle cx="654" cy="570" r="30" fill="#fff"/>
+</svg>
