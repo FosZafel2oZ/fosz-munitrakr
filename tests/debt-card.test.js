@@ -330,3 +330,56 @@ test("statementModel: a converted record contributes its converted amount to the
   assert.equal(m.rows[0].amountText, "15,750");
   assert.equal(m.subtotalText, "15,750");
 });
+
+/* ---- shared counting rule (finance-helpers amountInDefault, v86) ---- */
+
+test("debtCardModel: an in-default record counts its own amount", () => {
+  const m = model({
+    debt: { type: "paid-back", amount: 200, currency: "THB", date: "2026-07-21",
+            convertedAmount: 5, convertedCurrency: "USD" },
+    balanceBefore: 500,
+  });
+  assert.equal(m.mathText, "500 − 200");
+  assert.equal(m.totalText, "300");
+});
+
+test("debtCardModel: a stale-converted record is not counted (no stale number in the math)", () => {
+  const m = model({
+    debt: { type: "lend", amount: 450, currency: "USD", date: "2026-07-21",
+            convertedAmount: 400, convertedCurrency: "EUR" },
+    balanceBefore: 1000,
+  });
+  assert.equal(m.mathText, null);
+  assert.equal(m.totalText, "1,000");
+  assert.equal(m.isSettled, false);
+});
+
+test("debtCardModel: a rateUnavailable record is not counted (never its raw number)", () => {
+  const m = model({
+    debt: { type: "paid-back", amount: 1000, currency: "USD", date: "2026-07-21", rateUnavailable: true },
+    balanceBefore: 1000,
+  });
+  assert.equal(m.mathText, null);
+  assert.equal(m.totalText, "1,000");
+  assert.equal(m.isSettled, false);
+});
+
+test("statementModel: not-counted rows show their original amount and are left out of net and subtotal", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-09-01" },
+      { type: "lend", amount: 450, currency: "USD", date: "2026-09-02",
+        convertedAmount: 400, convertedCurrency: "EUR" },
+      { type: "lend", amount: 9, currency: "JPY", date: "2026-09-03", rateUnavailable: true },
+    ],
+    balanceAfter: 300,
+  });
+  assert.equal(m.rows[0].amountText, "100");
+  assert.equal(m.rows[1].amountText, "450 USD");
+  assert.equal(m.rows[2].amountText, "9 JPY");
+  assert.equal(m.subtotalText, null);
+  assert.equal(m.subtotalLabel, null);
+  // previous = 300 - 100 (only the counted row moves the net).
+  assert.equal(m.mathText, "200 + 100");
+  assert.equal(m.totalText, "300");
+});

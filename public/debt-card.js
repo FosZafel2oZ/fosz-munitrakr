@@ -3,11 +3,12 @@
    renderDebtCard() draws that model onto a canvas — browser only. */
 (function (root, factory) {
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = factory();
+    module.exports = factory(require("./finance-helpers").amountInDefault);
   } else {
-    Object.assign(root, factory());
+    // finance-helpers.js loads first in index.html and exports the global.
+    Object.assign(root, factory(root.amountInDefault));
   }
-})(typeof window !== "undefined" ? window : globalThis, function () {
+})(typeof window !== "undefined" ? window : globalThis, function (amountInDefault) {
 
   // Money: whole amounts stay clean ("450"), fractional ones always show both
   // cents ("4,162.37", "11,111,111.10" — never a lone "….1").
@@ -26,15 +27,10 @@
     return (type === "lend" || type === "pay-back") ? 1 : -1;
   }
 
-  // Running balances are always expressed in the default currency. Shared by
-  // the single card and the statement.
-  function amountInDefault(debt, defaultCurrency) {
-    return (debt.convertedAmount != null && debt.convertedCurrency === defaultCurrency)
-      ? Number(debt.convertedAmount)
-      : (debt.currency === defaultCurrency
-          ? Number(debt.amount)
-          : Number(debt.convertedAmount || debt.amount));
-  }
+  // Running balances are always expressed in the default currency, via the
+  // shared finance-helpers amountInDefault (null = "not counted"). The app
+  // refuses to share a not-counted debt; if one still reaches these models it
+  // moves no balance (never a stale or raw foreign number).
 
   // Turns a debt + its context into every string the card draws. Pure: no
   // canvas, no DOM, no store access — so the wording and the running-balance
@@ -72,13 +68,15 @@
       : null;
 
     const recordAmtInDefault = amountInDefault(debt, defaultCurrency);
+    const counted = recordAmtInDefault !== null;
 
-    const delta = (direction === "out" ? 1 : -1) * recordAmtInDefault;
+    const delta = counted ? (direction === "out" ? 1 : -1) * recordAmtInDefault : 0;
     const newBalance = balanceBefore + delta;
     // Magnitudes only — the operator carries direction, so the equation reads
-    // the same whether the cycle is "they owe me" or "I owe them".
+    // the same whether the cycle is "they owe me" or "I owe them". No math
+    // line for a not-counted record (it would read "X − 0").
     const grows = balanceBefore === 0 ? true : (Math.sign(delta) === Math.sign(balanceBefore));
-    const mathText = balanceBefore === 0
+    const mathText = (balanceBefore === 0 || !counted)
       ? null
       : fmtNum(Math.abs(balanceBefore)) + (grows ? " + " : " − ") + fmtNum(Math.abs(delta));
 
@@ -155,12 +153,16 @@
     let netCents = 0;
     let sameSign = true;
     let firstSign = null;
+    let allCounted = true;
 
     const rows = debts.map((d) => {
       const amt = amountInDefault(d, defaultCurrency);
-      const cents = Math.round(amt * 100);
       const sign = signOf(d.type);
-      netCents += sign * cents;
+      // A not-counted row shows its original amount + currency and is left
+      // out of the net (and suppresses the subtotal, which would no longer be
+      // the sum of the rows shown).
+      if (amt === null) allCounted = false;
+      else netCents += sign * Math.round(amt * 100);
       if (firstSign === null) firstSign = sign;
       else if (sign !== firstSign) sameSign = false;
 
@@ -170,7 +172,7 @@
         kindText: kindText(d.type),
         direction: sign > 0 ? "out" : "in",
         notesText: rawNotes || null,
-        amountText: fmtNum(amt),
+        amountText: amt === null ? (fmtNum(d.amount) + " " + (d.currency || "")).trim() : fmtNum(amt),
       };
     });
 
@@ -192,7 +194,7 @@
     }
 
     // Subtotal only reads as a true sum when every row points the same way.
-    const hasSubtotal = debts.length > 0 && sameSign;
+    const hasSubtotal = debts.length > 0 && sameSign && allCounted;
     const subtotalText = hasSubtotal ? fmtNum(Math.abs(netCents) / 100) : null;
     const subtotalLabel = hasSubtotal
       ? (lang === "th" ? "รวม " + debts.length + " รายการ"

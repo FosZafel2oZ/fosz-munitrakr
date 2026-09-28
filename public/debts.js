@@ -1,11 +1,17 @@
 /* MuniTrakr debt helpers — pure functions. Browser global + Node require. */
 (function (root, factory) {
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = factory();
+    module.exports = factory(require("./finance-helpers").amountInDefault);
   } else {
-    Object.assign(root, factory());
+    // finance-helpers.js loads first in index.html and exports the global.
+    Object.assign(root, factory(root.amountInDefault));
   }
-})(typeof window !== "undefined" ? window : globalThis, function () {
+})(typeof window !== "undefined" ? window : globalThis, function (amountInDefault) {
+
+  // Every balance below counts only items in `defaultCurrency` — the ONE rule
+  // is finance-helpers' amountInDefault. An item it returns null for ("not
+  // counted": converted to an old default, or rateUnavailable) is skipped
+  // entirely: it moves no balance and takes no part in the cycle/settlement math.
 
   // Returns a Map<personId, { lent, back, outstanding, direction, progress }>.
   // - lent  = sum of "lend" amounts in the CURRENT cycle for the person.
@@ -19,7 +25,7 @@
   // on a fresh post-settlement debt starts at 0%, not at the inflated historical
   // ratio. Records of type "borrow" and "paid-back" are mathematically identical
   // here; only the badge text in the UI differs.
-  function personBalances(debts, peopleById) {
+  function personBalances(debts, peopleById, defaultCurrency) {
     if (!Array.isArray(debts)) return new Map();
     const groups = new Map();
     for (const d of debts) {
@@ -34,7 +40,9 @@
       list.sort(_chronoCmp);
       let lent = 0, back = 0;
       for (const d of list) {
-        const amt = Number(d.convertedAmount != null ? d.convertedAmount : d.amount) || 0;
+        const inDef = amountInDefault(d, defaultCurrency);
+        if (inDef === null) continue; // not counted
+        const amt = inDef || 0;
         if (d.type === "lend" || d.type === "pay-back") lent += amt;
         else if (d.type === "borrow" || d.type === "paid-back") back += amt;
         // Cycle reset: when net hits zero with non-zero activity, reset.
@@ -60,7 +68,8 @@
   // Walks a list of debts in chronological order; returns Map<debt.id, { settled }>.
   // `settled === true` for records that brought the running net to exactly zero
   // (i.e. fully closed out the previous cycle). Use to render a "Settled" badge.
-  function annotateSettlements(debts) {
+  // Not-counted records get { settled: false } and don't touch the running net.
+  function annotateSettlements(debts, defaultCurrency) {
     const out = new Map();
     if (!Array.isArray(debts)) return out;
     const groups = new Map();
@@ -73,7 +82,9 @@
       list.sort(_chronoCmp);
       let lent = 0, back = 0;
       for (const d of list) {
-        const amt = Number(d.convertedAmount != null ? d.convertedAmount : d.amount) || 0;
+        const inDef = amountInDefault(d, defaultCurrency);
+        if (inDef === null) { out.set(d.id, { settled: false }); continue; } // not counted
+        const amt = inDef || 0;
         const prevNet = lent - back;
         if (d.type === "lend" || d.type === "pay-back") lent += amt;
         else if (d.type === "borrow" || d.type === "paid-back") back += amt;
@@ -109,7 +120,7 @@
   // using the same cycle-reset logic as personBalances. Returns 0 if the record
   // isn't found, has no person, or is the first chronological record for the person.
   // The "outstanding" is signed (positive = they owe you).
-  function balanceBefore(debts, recordId, peopleById) {
+  function balanceBefore(debts, recordId, peopleById, defaultCurrency) {
     if (!Array.isArray(debts) || !recordId) return 0;
     const target = debts.find((d) => d && d.id === recordId);
     if (!target || !target.personId) return 0;
@@ -120,7 +131,9 @@
     let lent = 0, back = 0;
     for (const d of list) {
       if (d.id === recordId) break;
-      const amt = Number(d.convertedAmount != null ? d.convertedAmount : d.amount) || 0;
+      const inDef = amountInDefault(d, defaultCurrency);
+      if (inDef === null) continue; // not counted
+      const amt = inDef || 0;
       if (d.type === "lend" || d.type === "pay-back") lent += amt;
       else if (d.type === "borrow" || d.type === "paid-back") back += amt;
       if (lent === back && lent > 0) { lent = 0; back = 0; }
@@ -132,14 +145,15 @@
   // signed (positive = they owe you). Deliberately calls balanceBefore WITHOUT a
   // people map — a statement for a since-deleted person must still count their
   // full remaining history, not stop dead at 0 the way the people-gated caller does.
-  // Returns 0 if the record isn't found or `debts` isn't an array.
-  function balanceAfterRecord(debts, recordId) {
+  // Returns 0 if the record isn't found or `debts` isn't an array. A
+  // not-counted target adds nothing (after === before).
+  function balanceAfterRecord(debts, recordId, defaultCurrency) {
     if (!Array.isArray(debts) || !recordId) return 0;
     const target = debts.find((d) => d && d.id === recordId);
     if (!target) return 0;
-    const amt = Number(target.convertedAmount != null ? target.convertedAmount : target.amount) || 0;
+    const amt = amountInDefault(target, defaultCurrency) || 0;
     const signed = (target.type === "lend" || target.type === "pay-back") ? amt : -amt;
-    return balanceBefore(debts, recordId) + signed;
+    return balanceBefore(debts, recordId, undefined, defaultCurrency) + signed;
   }
 
   // Returns either a single-record plan or a two-record split plan for an entered debt.
@@ -147,6 +161,9 @@
   // `balanceBeforeSigned` is the person's outstanding immediately before this record,
   // signed (positive = they owe me, negative = I owe them).
   // `defaultCurrency` is store.settings.defaultCurrency.
+  // A not-counted `entered` (rateUnavailable offline save, or an old item
+  // converted to a previous default) contributes 0 in the default currency, so
+  // it can never overshoot: it passes through unsplit and never throws.
   function planSplit(entered, balanceBeforeSigned, defaultCurrency) {
     if (!entered || typeof entered !== "object") return { split: false, a: entered };
     const settlingType = entered.type === "paid-back" || entered.type === "pay-back";
@@ -155,9 +172,7 @@
     const outstandingAbs = Math.abs(balanceBeforeSigned);
     if (outstandingAbs === 0) return { split: false, a: entered };
 
-    const enteredAmtDefault = Number(
-      entered.convertedAmount != null ? entered.convertedAmount : entered.amount
-    ) || 0;
+    const enteredAmtDefault = amountInDefault(entered, defaultCurrency) || 0;
     const overshoot = enteredAmtDefault - outstandingAbs;
     if (overshoot <= 0) return { split: false, a: entered };
 
@@ -188,6 +203,9 @@
   // same id, or appending if none) would produce a settling-type record whose amount overshoots
   // the cycle's open balance — i.e. the equivalent of an Add-time overshoot that the split modal
   // would handle. Edits that would trigger this are blocked in the UI.
+  // A not-counted `editedRecord` (only possible when editing an old item)
+  // contributes 0: it never overshoots by amount, but the direction-mismatch
+  // rule below still applies unchanged. Never throws.
   function wouldOvershoot(debts, editedRecord, defaultCurrency) {
     if (!editedRecord || (editedRecord.type !== "paid-back" && editedRecord.type !== "pay-back")) {
       return false;
@@ -196,11 +214,9 @@
     const swapped = debts.map((d) => (d && d.id === editedRecord.id) ? editedRecord : d);
     if (!swapped.some((d) => d && d.id === editedRecord.id)) swapped.push(editedRecord);
 
-    const before = balanceBefore(swapped, editedRecord.id);
+    const before = balanceBefore(swapped, editedRecord.id, undefined, defaultCurrency);
 
-    const amt = Number(
-      editedRecord.convertedAmount != null ? editedRecord.convertedAmount : editedRecord.amount
-    ) || 0;
+    const amt = amountInDefault(editedRecord, defaultCurrency) || 0;
 
     // Direction-cycle mismatch: paid-back assumes they-owe (before > 0); pay-back assumes i-owe (before < 0).
     // Anything else is an "anti-direction" edit -> treat as overshoot.
@@ -264,6 +280,10 @@
   // `balanceBeforeSigned` is the person's outstanding immediately before this
   // record, signed (positive = they owe me, negative = I owe them).
   // `defaultCurrency` is store.settings.defaultCurrency.
+  // The positivity check below validates what the user typed (its own
+  // currency), so an offline not-counted entry still plans a plain borrow.
+  // Its default-currency value is read by planSplit via amountInDefault: a
+  // not-counted entry contributes 0 there, so it never splits (never throws).
   function planPaidBy(entered, balanceBeforeSigned, defaultCurrency) {
     if (!entered || typeof entered !== "object") return { records: [] };
     const amt = Number(entered.amount);

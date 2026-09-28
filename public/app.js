@@ -2959,7 +2959,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
           amount: 0, currency: payload.currency,
           createdAt: Date.now() + 1000000,
         }]);
-        if (balanceBefore(debtsForCalc, sentinel) > 0)
+        if (balanceBefore(debtsForCalc, sentinel, undefined, pbDefaultCurrency) > 0)
           return ($("#modalError").textContent =
             "No exchange rate right now — can't deduct from what they owe you. Use " +
             pbDefaultCurrency + " or try again online.");
@@ -3039,7 +3039,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
         id: sentinel,
         createdAt: Date.now() + 1000000, // ensures sentinel sorts last
       })]);
-      const balanceBeforeSigned = balanceBefore(debtsForCalc, sentinel);
+      const balanceBeforeSigned = balanceBefore(debtsForCalc, sentinel, undefined, store.settings.defaultCurrency || "THB");
       const { records } = planPaidBy(
         entered, balanceBeforeSigned, store.settings.defaultCurrency || "THB");
       const base = Date.now();
@@ -4318,7 +4318,7 @@ function renderDebtDashboard() {
   loadStore();
   const peopleById = {};
   for (const p of (store.settings.people || [])) peopleById[p.id] = p;
-  const balances = personBalances(store.debts || [], peopleById);
+  const balances = personBalances(store.debts || [], peopleById, store.settings.defaultCurrency || "THB");
   const { totalLend, totalBorrow } = totalsAcrossPeople(balances);
 
   const cur = (store.settings.defaultCurrency || "THB");
@@ -4527,7 +4527,7 @@ function renderDebtDirectionToggle(personId, preferType) {
   if (personId) {
     const peopleById = {};
     for (const p of (store.settings.people || [])) peopleById[p.id] = p;
-    const row = personBalances(store.debts || [], peopleById).get(personId);
+    const row = personBalances(store.debts || [], peopleById, store.settings.defaultCurrency || "THB").get(personId);
     if (row) direction = row.direction;
   }
 
@@ -4717,7 +4717,7 @@ function refreshMatchOutstanding() {
   loadStore();
   const peopleById = {};
   for (const p of (store.settings.people || [])) peopleById[p.id] = p;
-  const balances = personBalances(store.debts || [], peopleById);
+  const balances = personBalances(store.debts || [], peopleById, store.settings.defaultCurrency || "THB");
   const row = balances.get(pid);
   if (!row || row.direction === "clear") { btn.classList.add("hidden"); return; }
   const cur = store.settings.defaultCurrency || "THB";
@@ -4803,7 +4803,7 @@ async function saveDebtFromModal() {
     date: entered.date,
     createdAt: Date.now() + 1000000,  // ensures sentinel sorts last
   })]);
-  const balanceBeforeSigned = balanceBefore(debtsForCalc, sentinel);
+  const balanceBeforeSigned = balanceBefore(debtsForCalc, sentinel, undefined, defaultCurrency);
 
   const plan = planSplit(entered, balanceBeforeSigned, defaultCurrency);
   if (!plan.split) {
@@ -4959,7 +4959,7 @@ async function shareDebtRecords(debtList) {
       const debt = ordered[i];
       const person = peopleById[debt.personId]
         || { name: "(deleted person)", color: "#888", icon: "person" };
-      const before = balanceBefore(store.debts || [], debt.id, peopleById);
+      const before = balanceBefore(store.debts || [], debt.id, peopleById, defaultCurrency);
       let blob;
       try {
         blob = await renderDebtCard({
@@ -5041,7 +5041,7 @@ async function shareDebtStatement(debtList) {
     const last = ordered[ordered.length - 1];
     const person = peopleById[last.personId]
       || { name: "(deleted person)", color: "#888", icon: "person" };
-    const balanceAfter = balanceAfterRecord(store.debts || [], last.id);
+    const balanceAfter = balanceAfterRecord(store.debts || [], last.id, defaultCurrency);
 
     let blob;
     try {
@@ -5120,7 +5120,7 @@ function renderPersonHistory(personId) {
   // Outstanding label
   const peopleById = {};
   for (const x of store.settings.people) peopleById[x.id] = x;
-  const balances = personBalances(store.debts || [], peopleById);
+  const balances = personBalances(store.debts || [], peopleById, store.settings.defaultCurrency || "THB");
   const row = balances.get(personId);
   const cur = store.settings.defaultCurrency || "THB";
   const out = document.getElementById("phOutstanding");
@@ -5141,7 +5141,7 @@ function renderPersonHistory(personId) {
   list.innerHTML = "";
   // Personal subset for both rendering AND settlement annotation.
   const personDebts = (store.debts || []).filter((d) => d.personId === personId);
-  const settlementMap = annotateSettlements(personDebts);
+  const settlementMap = annotateSettlements(personDebts, store.settings.defaultCurrency || "THB");
 
   // Display order is newest-first (opposite of chronological).
   const rows = personDebts.slice().sort((a, b) =>
@@ -5269,7 +5269,7 @@ function renderDebtRecords() {
   for (const p of (store.settings.people || [])) peopleById[p.id] = p;
 
   // Top summary cards (mirror dashboard math)
-  const balances = personBalances(store.debts || [], peopleById);
+  const balances = personBalances(store.debts || [], peopleById, store.settings.defaultCurrency || "THB");
   const { totalLend, totalBorrow } = totalsAcrossPeople(balances);
   const cur = store.settings.defaultCurrency || "THB";
   document.getElementById("dbtRecTotalLend").textContent = fmt(totalLend);
@@ -5294,7 +5294,7 @@ function renderDebtRecords() {
   document.getElementById("dbtRecFilterBtn").classList.toggle("on", debtRecFilter.size > 0);
 
   // Settlement annotations for the "Settled" badge in each row
-  const settlementMap = annotateSettlements(store.debts || []);
+  const settlementMap = annotateSettlements(store.debts || [], store.settings.defaultCurrency || "THB");
 
   const wrap = document.getElementById("dbtRecList");
   wrap.classList.toggle("select-mode", debtMultiSelect);
