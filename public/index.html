@@ -55,6 +55,7 @@
         <strong id="sumInvest" class="amt-in">0</strong>
       </button>
     </div>
+    <button type="button" class="nc-warn hidden" id="dashNcWarn"></button>
 
     <div class="chart-card">
       <div class="chart-head">
@@ -99,6 +100,7 @@
         <strong id="dbtTotalBorrow" class="amt-out">0</strong>
       </div>
     </div>
+    <button type="button" class="nc-warn hidden" id="dbtNcWarn"></button>
     <div class="records-head dash-head">
       <h2>People</h2>
       <button type="button" class="view-all-btn" id="viewAllDebtBtn">
@@ -122,6 +124,7 @@
         <strong id="dbtRecTotalBorrow" class="amt-out">0</strong>
       </div>
     </div>
+    <button type="button" class="nc-warn hidden" id="dbtRecNcWarn"></button>
 
     <div class="records-head">
       <div class="rh-left">
@@ -152,6 +155,7 @@
       <div class="ph-meta">
         <h2 id="phName">—</h2>
         <span id="phOutstanding" class="ph-outstanding">—</span>
+        <button type="button" class="nc-warn hidden" id="phNcWarn"></button>
       </div>
     </div>
     <div class="muted hidden" id="phSelCount" style="margin-bottom:10px">0 selected</div>
@@ -171,6 +175,7 @@
         <strong id="totInv" class="amt-in">0</strong>
       </button>
     </div>
+    <button type="button" class="nc-warn hidden" id="recNcWarn"></button>
 
     <div class="records-head">
       <div class="rh-left">
@@ -282,7 +287,7 @@
 
     </div>
 
-    <div class="settings-block" data-mode="any">
+    <div class="settings-block" id="currencyBlock" data-mode="any">
       <div class="block-title">Currencies</div>
       <label>Default currency
         <div class="inline-edit">

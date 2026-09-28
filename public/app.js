@@ -821,17 +821,57 @@ function primaryCurrency(list) {
   list.forEach((r) => (c[r.currency] = (c[r.currency] || 0) + 1));
   return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || "USD";
 }
-// amount/currency to use for totals + charts (converted to default when available)
-function dispAmt(r) {
-  return r.convertedAmount != null ? r.convertedAmount : r.amount;
-}
-function dispCur(r) {
-  return r.convertedCurrency || r.currency;
+// The current default currency (store is re-read by every api()/loadStore()).
+function defCur() {
+  return (store && store.settings && store.settings.defaultCurrency) || "THB";
 }
 function baseCur(list) {
   return (settings && settings.defaultCurrency) || primaryCurrency(list);
 }
-const sum = (l) => l.reduce((s, r) => s + dispAmt(r), 0);
+// Totals + charts use the shared counting rule (finance-helpers.js
+// amountInDefault): an item not in the default currency, and not converted
+// to it, is "not counted" (null) and left out of every sum.
+const sum = (l) => {
+  const def = defCur();
+  return l.reduce((s, r) => {
+    const v = amountInDefault(r, def);
+    return v === null ? s : s + v;
+  }, 0);
+};
+// Row amount under the same rule: a counted item shows its amount in the
+// default currency (+ the original on a sub-line when it was converted); a
+// not-counted item shows its ORIGINAL amount + a warning sub-line — never a
+// stale converted number. `origCls` is the row's sub-line class.
+function rowAmount(item, origCls) {
+  const def = defCur();
+  const v = amountInDefault(item, def);
+  // "not counted · not in USD" — non-breaking spaces leave one break point
+  // (after "·"), so the narrow sub-line wraps as "not counted ·" / "not in USD".
+  if (v === null)
+    return {
+      main: fmt(item.amount, item.currency),
+      sub: `<div class="${origCls} warn">${escapeHtml(
+        "not\u00a0counted\u00a0· not\u00a0in\u00a0" + def)}</div>`,
+    };
+  return {
+    main: fmt(v, def),
+    sub: item.currency !== def
+      ? `<div class="${origCls}">${fmt(item.amount, item.currency)}</div>`
+      : "",
+  };
+}
+// "N records not counted — not in USD. Convert" under a screen's totals;
+// hidden at 0. Tapping it (bound once, below) opens Settings → Currencies.
+function renderNcWarn(id, n) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle("hidden", !(n > 0));
+  if (!(n > 0)) return;
+  el.innerHTML =
+    escapeHtml(n + (n === 1 ? " record" : " records") +
+      " not counted — not in " + defCur() + ".") +
+    ' <span class="nc-link">Convert</span>';
+}
 // Year shown in the top totals = most recent year in the selected range
 function selectedYear() {
   return rangeBounds().to.slice(0, 4);
@@ -898,6 +938,7 @@ function recordCardHTML(r) {
   const sign = r.type === "investment" ? "+" : "-";
   const cls = r.type === "investment" ? "amt-in" : "amt-out";
   const color = catColor(r.type, r.category);
+  const amt = rowAmount(r, "rec-orig");
   return `
     <div class="rec-ico" style="background:${color}">
       ${iconSvg(catIcon(r.type, r.category), "rec-ico-svg")}
@@ -912,14 +953,8 @@ function recordCardHTML(r) {
       ${r.notes ? `<div class="rec-notes">${escapeHtml(r.notes)}</div>` : ""}
     </div>
     <div class="rec-right">
-      <div class="rec-amt ${cls}">${sign}${fmt(dispAmt(r), dispCur(r))}</div>
-      ${
-        r.convertedAmount != null
-          ? `<div class="rec-orig">${fmt(r.amount, r.currency)}</div>`
-          : r.rateUnavailable
-          ? `<div class="rec-orig warn">${fmt(r.amount, r.currency)} · rate n/a</div>`
-          : ""
-      }
+      <div class="rec-amt ${cls}">${sign}${amt.main}</div>
+      ${amt.sub}
       <div class="rec-date">${formatDate(r.date)}${
         r.ruleId
           ? ` <span class="rec-rule-badge" title="Generated from a recurring rule">↻</span>`
@@ -961,6 +996,7 @@ function renderDashboard(list) {
   $("#cardInvest").classList.toggle("active", activeType === "investment");
   fitText($("#sumExpense"), 22, 11);
   fitText($("#sumInvest"), 22, 11);
+  renderNcWarn("dashNcWarn", countNotCounted(records, defCur()));
 
   const typed = activeType === "expense" ? expenses : invest;
   const label = activeType === "expense" ? "Expense" : "Investment";
@@ -968,9 +1004,14 @@ function renderDashboard(list) {
   if (drillCategory && !typed.some((r) => r.category === drillCategory))
     drillCategory = null;
 
+  // Chart groups skip not-counted records (amountInDefault null).
+  const def = defCur();
   let groups = {};
   if (!drillCategory) {
-    typed.forEach((r) => (groups[r.category] = (groups[r.category] || 0) + dispAmt(r)));
+    typed.forEach((r) => {
+      const v = amountInDefault(r, def);
+      if (v !== null) groups[r.category] = (groups[r.category] || 0) + v;
+    });
     $("#chartTitle").textContent = label + "s by Category";
     $("#chartSub").textContent = "Tap a category, tap again to drill in";
     $("#chartBack").classList.add("hidden");
@@ -978,8 +1019,10 @@ function renderDashboard(list) {
     typed
       .filter((r) => r.category === drillCategory)
       .forEach((r) => {
+        const v = amountInDefault(r, def);
+        if (v === null) return;
         const k = r.subcategory || NO_SUB_LABEL;
-        groups[k] = (groups[k] || 0) + dispAmt(r);
+        groups[k] = (groups[k] || 0) + v;
       });
     $("#chartTitle").textContent = drillCategory;
     $("#chartSub").textContent = "Sub-category breakdown";
@@ -1197,6 +1240,7 @@ function renderBulk(list) {
   $("#recCardInvest .muted").textContent = yr + " Investments" + (cur ? " · " + cur : "");
   fitText($("#totExp"), 22, 11);
   fitText($("#totInv"), 22, 11);
+  renderNcWarn("recNcWarn", countNotCounted(records, defCur()));
   $("#recCardExpense").classList.toggle("active", activeType === "expense");
   $("#recCardInvest").classList.toggle("active", activeType === "investment");
 
@@ -1962,15 +2006,29 @@ $("#setTheme") &&
 $("#viewAllBtn").addEventListener("click", () => showView("records"));
 $("#recBack").addEventListener("click", () => showView("dashboard"));
 let prevView = "dashboard";
+function enterSettings() {
+  prevView = currentView;
+  openSettings();
+  showView("settings");
+}
 $("#settingsBtn").addEventListener("click", () => {
   if (currentView === "settings") {
     showView(prevView === "settings" ? "dashboard" : prevView);
   } else {
-    prevView = currentView;
-    openSettings();
-    showView("settings");
+    enterSettings();
   }
 });
+// Not-counted warning (all five screens) → Settings, Currencies block
+// expanded and scrolled into view. The back button returns to the screen.
+$$(".nc-warn").forEach((w) =>
+  w.addEventListener("click", () => {
+    if (currentView !== "settings") enterSettings();
+    const block = document.getElementById("currencyBlock");
+    if (!block) return;
+    block.classList.remove("collapsed");
+    block.scrollIntoView({ block: "start" });
+  })
+);
 
 /* ---------------- Record modal (select-only pickers) ---------------- */
 function buildCatMenu() {
@@ -4330,6 +4388,7 @@ function renderDebtDashboard() {
     fitText(document.getElementById("dbtTotalLend"), 22, 11);
     fitText(document.getElementById("dbtTotalBorrow"), 22, 11);
   }
+  renderNcWarn("dbtNcWarn", countNotCounted(store.debts || [], cur));
 
   const list = document.getElementById("dbtPersonList");
   const empty = document.getElementById("dbtEmpty");
@@ -4936,6 +4995,18 @@ let _currentHistoryPersonId = null;
 // Falls back to per-file downloads only when Web Share with files is
 // genuinely unsupported.
 let _debtShareBusy = false;
+// A not-counted debt (not in the default currency and not converted to it)
+// has no balance in the default currency, so no card or statement can show
+// one. Returns the refusal text, or "" when every selected debt is counted.
+function notCountedShareMsg(list, def) {
+  const n = countNotCounted(list, def);
+  if (!n) return "";
+  return n === 1
+    ? "This record isn't in " + def + " yet, so its balance can't be shown. " +
+      "Convert it in Settings → Currencies first."
+    : n + " selected records aren't in " + def + " yet, so their balance can't be shown. " +
+      "Convert them in Settings → Currencies first.";
+}
 async function shareDebtRecords(debtList) {
   const list = (debtList || []).filter((d) => d && d.id);
   if (!list.length || _debtShareBusy) return;
@@ -4947,6 +5018,9 @@ async function shareDebtRecords(debtList) {
     const defaultCurrency = (store.settings.defaultCurrency || "THB");
     const userName = (store.profile && store.profile.displayName) || "Me";
     const debtShareLanguage = store.settings.debtShareLanguage || "en";
+
+    const refusal = notCountedShareMsg(list, defaultCurrency);
+    if (refusal) { alert(refusal); return; }
 
     const ordered = list.slice().sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)
@@ -5019,20 +5093,8 @@ async function shareDebtStatement(debtList) {
     const userName = (store.profile && store.profile.displayName) || "Me";
     const debtShareLanguage = store.settings.debtShareLanguage || "en";
 
-    // A record with no rate to the default currency would draw its foreign
-    // amount labelled in the default currency — a silently wrong number on
-    // the image. Re-saving it online converts it (the debt editor re-runs
-    // attachConversion); until then it can't go on a statement.
-    const unrated = list.filter(
-      (d) => d.currency !== defaultCurrency && d.convertedCurrency !== defaultCurrency);
-    if (unrated.length) {
-      const n = unrated.length;
-      alert(n + " selected record" + (n > 1 ? "s have" : " has") +
-        " no exchange rate to " + defaultCurrency + " yet — open and save " +
-        (n > 1 ? "them" : "it") + " while online, or leave " + (n > 1 ? "them" : "it") +
-        " out, then share again.");
-      return;
-    }
+    const refusal = notCountedShareMsg(list, defaultCurrency);
+    if (refusal) { alert(refusal); return; }
 
     const ordered = list.slice().sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)
@@ -5142,6 +5204,7 @@ function renderPersonHistory(personId) {
   // Personal subset for both rendering AND settlement annotation.
   const personDebts = (store.debts || []).filter((d) => d.personId === personId);
   const settlementMap = annotateSettlements(personDebts, store.settings.defaultCurrency || "THB");
+  renderNcWarn("phNcWarn", countNotCounted(personDebts, cur));
 
   // Display order is newest-first (opposite of chronological).
   const rows = personDebts.slice().sort((a, b) =>
@@ -5173,16 +5236,11 @@ function renderPersonHistory(personId) {
     const card = document.createElement("div");
     card.className = "dbt-history-row " + dirClass(d.type)
       + (debtMultiSelect && debtSelected.has(d.id) ? " selected" : "");
-    const amtStr = fmt(d.convertedAmount != null ? d.convertedAmount : d.amount, cur);
-    // Show the original currency+amount only when the record was converted from
-    // a different currency than what's displayed.
-    const showOrig = d.convertedAmount != null
-      && d.convertedCurrency !== d.currency;
-    const origLine = showOrig
-      ? '<div class="dbt-orig">' + fmt(d.amount, d.currency) + '</div>'
-      : (d.rateUnavailable
-          ? '<div class="dbt-orig warn">' + fmt(d.amount, d.currency) + ' · rate n/a</div>'
-          : '');
+    // Counted: amount in the default currency (+ original when converted).
+    // Not counted: original amount + "not counted · not in <DEF>".
+    const amt = rowAmount(d, "dbt-orig");
+    const amtStr = amt.main;
+    const origLine = amt.sub;
     const settled = settlementMap.get(d.id);
     const settledBadge = (settled && settled.settled)
       ? '<span class="dbt-settled">Settled</span>'
@@ -5280,6 +5338,7 @@ function renderDebtRecords() {
     fitText(document.getElementById("dbtRecTotalLend"), 22, 11);
     fitText(document.getElementById("dbtRecTotalBorrow"), 22, 11);
   }
+  renderNcWarn("dbtRecNcWarn", countNotCounted(store.debts || [], cur));
 
   // Compute the visible list (filter by selected people if any)
   let rows = (store.debts || []).slice();
@@ -5327,13 +5386,9 @@ function renderDebtRecords() {
     const inner = document.createElement("div");
     inner.style.cssText = "display:flex;gap:12px;flex:1;min-width:0;align-items:flex-start";
     const sign = (d.type === "lend" || d.type === "pay-back") ? "+" : "-";
-    const amtStr = sign + fmt(d.convertedAmount != null ? d.convertedAmount : d.amount, cur);
-    const showOrig = d.convertedAmount != null && d.convertedCurrency !== d.currency;
-    const origLine = showOrig
-      ? '<div class="rec-orig">' + fmt(d.amount, d.currency) + '</div>'
-      : (d.rateUnavailable
-          ? '<div class="rec-orig warn">' + fmt(d.amount, d.currency) + ' · rate n/a</div>'
-          : '');
+    const amt = rowAmount(d, "rec-orig");
+    const amtStr = sign + amt.main;
+    const origLine = amt.sub;
     const settled = settlementMap.get(d.id);
     const settledBadge = (settled && settled.settled)
       ? ' <span class="dbt-settled">Settled</span>'
