@@ -289,6 +289,15 @@
 
     <div class="settings-block" id="currencyBlock" data-mode="any">
       <div class="block-title">Currencies</div>
+      <!-- Not-counted notice (§4): body hidden at count 0; the message line
+           stays visible on its own so a success/failure message still shows. -->
+      <div id="convertNotice" class="convert-notice hidden">
+        <div id="convertNoticeBody">
+          <div id="convertNoticeText" class="convert-notice-text"></div>
+          <button type="button" class="btn-primary" id="convertNowBtn">Convert now</button>
+        </div>
+        <div id="convertMsg" class="form-error"></div>
+      </div>
       <label>Default currency
         <div class="inline-edit">
           <select id="setDefCurrency"></select>
@@ -866,6 +875,22 @@
     <div class="modal-actions floodgate-actions">
       <button type="button" class="btn-secondary" id="floodgateStartToday">Start from today</button>
       <button type="button" class="btn-primary" id="floodgateGenerate">Generate all</button>
+    </div>
+  </div>
+</div>
+
+<!-- Default currency changed with items left not counted → offer to convert them -->
+<div id="convertModal" class="modal-overlay hidden">
+  <div class="modal modal-narrow">
+    <div class="modal-head">
+      <h3 id="convertTitle">Convert old records?</h3>
+      <button type="button" class="ghost-btn" id="convertClose" aria-label="Not now">✕</button>
+    </div>
+    <p id="convertBody" class="floodgate-body"></p>
+    <div id="convertModalMsg" class="form-error"></div>
+    <div class="modal-actions floodgate-actions">
+      <button type="button" class="btn-secondary" id="convertNotNow">Not now</button>
+      <button type="button" class="btn-primary" id="convertGo">Convert</button>
     </div>
   </div>
 </div>

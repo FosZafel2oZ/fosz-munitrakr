@@ -614,6 +614,16 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
 .add-cat input[type=color]{width:46px;height:46px;flex-shrink:0}
 .add-cat .btn-mini{flex-shrink:0;height:46px;padding:0 18px}
 .settings-block .btn-primary{margin-top:6px}
+/* Settings → Currencies: "N records aren't in USD…" + Convert now + message */
+.convert-notice{background:var(--bg-2);border:1px solid var(--line);
+  border-radius:16px;padding:14px;margin-bottom:16px}
+.convert-notice-text{color:var(--out);font-size:13px;font-weight:600;line-height:1.45;margin-bottom:10px}
+.convert-notice .form-error{margin:10px 0 0;min-height:0;line-height:1.4}
+.convert-notice .form-error:empty{display:none}
+#convertNoticeBody.hidden + .form-error{margin-top:0}
+#convertModalMsg{margin:-6px 0 14px}
+#convertModalMsg:empty{display:none}
+#convertNowBtn:disabled,#convertGo:disabled{opacity:.75;cursor:default;transform:none}
 
 /* ---------- NEW COLOR PANEL ---------- */
 .new-color-panel{background:var(--bg-2);border:1px solid var(--line);

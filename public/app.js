@@ -2361,6 +2361,8 @@ $("#addCurBtn").addEventListener("click", () => {
 });
 $("#saveCurrencies").addEventListener("click", async () => {
   $("#curMsg").textContent = "";
+  loadStore();
+  const prevDef = defCur(); // this Save also carries the default-currency select
   try {
     settings = await api("/settings", "PUT", buildSettingsPayload());
     syncDraftsFromSettings();
@@ -2370,6 +2372,7 @@ $("#saveCurrencies").addEventListener("click", async () => {
     refresh();
     $("#curMsg").style.color = "var(--in)";
     $("#curMsg").textContent = "Currencies saved.";
+    afterCurrencySave(prevDef);
   } catch (err) {
     $("#curMsg").style.color = "";
     $("#curMsg").textContent = err.message;
@@ -3177,6 +3180,8 @@ function openSettings() {
   $("#settingsMsg").textContent = "";
   $("#backupMsg") && ($("#backupMsg").textContent = "");
   $("#curMsg").textContent = "";
+  $("#convertMsg").textContent = "";
+  renderConvertNotice();
   fillCurrencySelects();
   $("#setDefCurrency").value = settings.defaultCurrency || "THB";
   if ($("#setUserName")) {
@@ -3516,6 +3521,8 @@ $("#saveFxMarkup")?.addEventListener("click", async () => {
 });
 $("#saveDefCurrency").addEventListener("click", async () => {
   $("#defCurrencyMsg").textContent = "";
+  loadStore();
+  const prevDef = defCur();
   try {
     settings = await api("/settings", "PUT", buildSettingsPayload());
     syncDraftsFromSettings();
@@ -3525,10 +3532,164 @@ $("#saveDefCurrency").addEventListener("click", async () => {
     $("#defCurrencyMsg").style.color = "var(--in)";
     $("#defCurrencyMsg").textContent =
       "Default currency set to " + settings.defaultCurrency + ".";
+    afterCurrencySave(prevDef);
   } catch (err) {
     $("#defCurrencyMsg").style.color = "";
     $("#defCurrencyMsg").textContent = err.message;
   }
+});
+
+/* ---- Default-currency change: convert old items (notice, prompt, run) ----
+   Items not in the default (amountInDefault → null) are left out of every
+   total. Settings → Currencies shows a notice with a Convert button while any
+   exist; changing the default offers to convert them straight away. */
+// "12 records and 3 debts" — singular/plural per part, a zero part omitted.
+function ncCountPhrase(nRec, nDebt) {
+  const parts = [];
+  if (nRec > 0) parts.push(nRec + (nRec === 1 ? " record" : " records"));
+  if (nDebt > 0) parts.push(nDebt + (nDebt === 1 ? " debt" : " debts"));
+  return parts.join(" and ");
+}
+function notCountedCounts() {
+  loadStore();
+  const def = defCur();
+  return {
+    records: countNotCounted(store.records, def),
+    debts: countNotCounted(store.debts, def),
+  };
+}
+function renderConvertNotice() {
+  const box = document.getElementById("convertNotice");
+  if (!box) return;
+  const c = notCountedCounts();
+  const n = c.records + c.debts;
+  $("#convertNoticeText").textContent = !(n > 0) ? "" : n === 1
+    ? ncCountPhrase(c.records, c.debts) + " isn't in " + defCur() +
+      ", so it's left out of totals."
+    : ncCountPhrase(c.records, c.debts) + " aren't in " + defCur() +
+      ", so they're left out of totals.";
+  $("#convertNoticeBody").classList.toggle("hidden", !(n > 0));
+  // The message line outlives the count: a success message shows at 0.
+  box.classList.toggle("hidden", !(n > 0) && !$("#convertMsg").textContent);
+}
+function setConvertMsg(text, ok) {
+  $("#convertMsg").style.color = ok ? "var(--in)" : "";
+  $("#convertMsg").textContent = text;
+  renderConvertNotice();
+}
+// DebtTrakr screen that is showing — or that Settings will return to.
+function rerenderDebtViews() {
+  if (currentMode !== "debt") return;
+  const v = currentView === "settings" ? prevView : currentView;
+  if (v === "dashboard") renderDebtDashboard();
+  else if (v === "person-history" && _currentHistoryPersonId)
+    renderPersonHistory(_currentHistoryPersonId);
+  else if (v === "debt-records") renderDebtRecords();
+}
+// Called after either Save that can change the default currency succeeds.
+function afterCurrencySave(prevDef) {
+  $("#convertMsg").textContent = "";
+  renderConvertNotice();
+  if (defCur() === prevDef) return;
+  rerenderDebtViews();
+  const c = notCountedCounts();
+  if (c.records + c.debts > 0) openConvertModal(c);
+}
+function openConvertModal(c) {
+  const def = defCur();
+  const phrase = ncCountPhrase(c.records, c.debts);
+  $("#convertTitle").textContent = "Convert old records to " + def + "?";
+  $("#convertBody").textContent = c.records + c.debts === 1
+    ? phrase + " is in another currency. Convert it using its own date's" +
+      " exchange rate? This needs internet. If you skip, it's left out of" +
+      " totals until you convert it in Settings → Currencies."
+    : phrase + " are in other currencies. Convert them using each record's" +
+      " own date's exchange rate? This needs internet. If you skip, they're" +
+      " left out of totals until you convert them in Settings → Currencies.";
+  $("#convertModalMsg").textContent = "";
+  $("#convertModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+function closeConvertModal() {
+  $("#convertModal").classList.add("hidden");
+  syncModalLock();
+}
+// Shared by the modal's Convert and the notice's Convert now. All or
+// nothing: every rate must arrive before anything is written.
+let _converting = false;
+async function runConversion(btn) {
+  if (_converting) return;
+  _converting = true;
+  const btns = [$("#convertNowBtn"), $("#convertGo")];
+  const label = btn.textContent;
+  btns.forEach((b) => { b.disabled = true; });
+  $("#convertModalMsg").textContent = "";
+  setConvertMsg("");
+  try {
+    loadStore();
+    const def = defCur();
+    const recs = store.records.filter((r) => amountInDefault(r, def) === null);
+    const debts = store.debts.filter((d) => amountInDefault(d, def) === null);
+    const list = recs.concat(debts);
+    if (!list.length) { closeConvertModal(); return; }
+    // Snapshot before the (slow) fetch: anything edited meanwhile is skipped.
+    const snap = new Map(list.map((it) => [it, JSON.stringify(it)]));
+    const isRec = new Set(recs);
+    btn.textContent = "Converting… 0 / " + list.length;
+    const plan = await planReconversion(list, def, {
+      getRate,
+      markupPct: store.settings.fxMarkupPct || 0,
+      today: todayStr(),
+      onProgress: (done, total) => {
+        btn.textContent = "Converting… " + done + " / " + total;
+      },
+    });
+    if (!plan.ok) {
+      const msg = "Couldn't get exchange rates for " + plan.failed +
+        (plan.failed === 1 ? " record" : " records") +
+        " — check your connection and try again.";
+      setConvertMsg(msg, false);
+      if (!$("#convertModal").classList.contains("hidden")) {
+        $("#convertModalMsg").style.color = "";
+        $("#convertModalMsg").textContent = msg;
+      }
+      return;
+    }
+    // Write into a freshly loaded store (the fetch took time), matching each
+    // planned item by id; one save for the whole run.
+    loadStore();
+    const freshRec = new Map(store.records.map((r) => [r.id, r]));
+    const freshDebt = new Map(store.debts.map((d) => [d.id, d]));
+    let nRec = 0, nDebt = 0;
+    for (const { item, fields } of plan.updates) {
+      const rec = isRec.has(item);
+      const target = (rec ? freshRec : freshDebt).get(item.id);
+      // Deleted or edited while the rates were fetched → left alone; it
+      // stays in the notice's count if it is still not counted.
+      if (!target || JSON.stringify(target) !== snap.get(item)) continue;
+      clearConversionFields(target);
+      Object.assign(target, fields);
+      if (rec) nRec++; else nDebt++;
+    }
+    if (nRec + nDebt > 0) saveStore();
+    closeConvertModal();
+    await loadRecords(); // MuniTrakr: fresh records + refresh()
+    rerenderDebtViews();
+    if (nRec + nDebt > 0)
+      setConvertMsg("Converted " + ncCountPhrase(nRec, nDebt) + " to " + def + ".", true);
+    else renderConvertNotice();
+  } finally {
+    btn.textContent = label;
+    btns.forEach((b) => { b.disabled = false; });
+    _converting = false;
+  }
+}
+$("#convertNowBtn").addEventListener("click", (e) => runConversion(e.currentTarget));
+$("#convertGo").addEventListener("click", (e) => runConversion(e.currentTarget));
+$("#convertNotNow").addEventListener("click", closeConvertModal);
+$("#convertClose").addEventListener("click", closeConvertModal);
+$("#convertModal").addEventListener("click", (e) => {
+  if (e.target.id === "convertModal") closeConvertModal();
 });
 $("#saveSettings").addEventListener("click", async () => {
   $("#settingsMsg").textContent = "";
