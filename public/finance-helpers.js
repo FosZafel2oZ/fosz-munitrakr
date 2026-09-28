@@ -46,6 +46,140 @@
     });
   }
 
+  /* ---------- amountInDefault ----------
+     The ONE definition of the counting rule (see design doc §1). Returns a
+     Number when `item` counts toward totals in currency `def`, else null
+     ("not counted" — never stored on the item, always derived here):
+       - item.currency === def          -> Number(item.amount)
+       - item.convertedCurrency === def && convertedAmount set -> Number(convertedAmount)
+       - otherwise (incl. stale conversion to a different currency,
+         rateUnavailable, or no conversion yet) -> null
+     null/non-object item -> null.
+  */
+  function amountInDefault(item, def) {
+    if (!item || typeof item !== "object") return null;
+    if (item.currency === def) return Number(item.amount);
+    if (item.convertedCurrency === def && item.convertedAmount != null) {
+      return Number(item.convertedAmount);
+    }
+    return null;
+  }
+
+  /* ---------- countNotCounted ----------
+     Number of items whose amountInDefault is null. Non-array -> 0.
+  */
+  function countNotCounted(items, def) {
+    if (!Array.isArray(items)) return 0;
+    return items.filter((it) => amountInDefault(it, def) === null).length;
+  }
+
+  /* ---------- applyMarkup ----------
+     Shared by attachConversion and planReconversion: applies a percentage
+     markup on top of a base FX rate, or returns the base unchanged when
+     pct <= 0. toPrecision strips binary-float noise
+     (0.027 * 1.025 -> 0.027674999... otherwise).
+  */
+  function applyMarkup(base, pct) {
+    return pct > 0 ? parseFloat((base * (1 + pct / 100)).toPrecision(10)) : base;
+  }
+
+  /* ---------- clearConversionFields ----------
+     Deletes every FX field from `item` in place so a fresh conversion (or a
+     planReconversion update) can be applied cleanly.
+  */
+  function clearConversionFields(item) {
+    delete item.convertedAmount;
+    delete item.convertedCurrency;
+    delete item.rate;
+    delete item.rateDate;
+    delete item.rateUnavailable;
+    delete item.manualRate;
+    delete item.fxMarkupPct;
+  }
+
+  function round2(x) {
+    return Math.round(x * 100) / 100;
+  }
+
+  /* ---------- planReconversion ----------
+     Pure planner for design doc §6 ("Convert old records to USD?"). Never
+     mutates `items`. Considers only items where amountInDefault(item, def)
+     is null; every other item is left out of the result entirely.
+     opts = { getRate, markupPct, today, concurrency = 6, onProgress }
+       - getRate(from, to, date) -> Promise<number|null>, may reject.
+       - today: "YYYY-MM-DD", used to clamp a missing/future item.date for
+         the resulting rateDate (not for the getRate call itself, which
+         always gets the item's own raw date per design doc §6).
+       - concurrency: max simultaneous getRate calls (simple worker pool).
+       - onProgress(done, total): called after each considered item settles.
+     Per considered item:
+       - Legacy manual item (manualRate truthy, has convertedAmount in some
+         other currency): chains convertedAmount * rate(convertedCurrency ->
+         def, item.date), keeping manualRate: true and no markup.
+       - Otherwise: rate(item.currency -> def, item.date) with markup =
+         the item's own stored fxMarkupPct if it was converted before, else
+         opts.markupPct (a never-converted item uses the current setting).
+     A null/non-finite rate or a thrown getRate fails that item. All items
+     must succeed for the run to succeed: { ok: true, updates: [{ item,
+     fields }] } (item = the original reference, considered order); any
+     failure -> { ok: false, failed, total } and nothing to apply.
+  */
+  async function planReconversion(items, def, opts) {
+    const { getRate, markupPct, today, concurrency = 6, onProgress } = opts || {};
+    const considered = Array.isArray(items)
+      ? items.filter((it) => amountInDefault(it, def) === null)
+      : [];
+    const total = considered.length;
+    const results = new Array(total);
+    let done = 0;
+    let nextIndex = 0;
+
+    async function settleOne(item) {
+      const rateDate = !item.date || item.date > today ? today : item.date;
+      try {
+        if (item.manualRate && item.convertedAmount != null && item.convertedCurrency) {
+          const r = await getRate(item.convertedCurrency, def, item.date);
+          if (r == null || !Number.isFinite(r)) return { ok: false };
+          const convertedAmount = round2(item.convertedAmount * r);
+          const rate = parseFloat((convertedAmount / item.amount).toPrecision(10));
+          return {
+            ok: true,
+            item,
+            fields: { convertedCurrency: def, convertedAmount, rate, rateDate, manualRate: true },
+          };
+        }
+        const pct = item.convertedAmount != null
+          ? (Number(item.fxMarkupPct) || 0)
+          : (Number(markupPct) || 0);
+        const base = await getRate(item.currency, def, item.date);
+        if (base == null || !Number.isFinite(base)) return { ok: false };
+        const eff = applyMarkup(base, pct);
+        const convertedAmount = round2(item.amount * eff);
+        const fields = { convertedCurrency: def, convertedAmount, rate: eff, rateDate };
+        if (pct > 0) fields.fxMarkupPct = pct;
+        return { ok: true, item, fields };
+      } catch {
+        return { ok: false };
+      }
+    }
+
+    async function worker() {
+      while (nextIndex < total) {
+        const i = nextIndex++;
+        results[i] = await settleOne(considered[i]);
+        done++;
+        if (typeof onProgress === "function") onProgress(done, total);
+      }
+    }
+
+    const workerCount = Math.max(1, Math.min(concurrency || 6, total || 1));
+    await Promise.all(Array.from({ length: workerCount }, worker));
+
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed > 0) return { ok: false, failed, total };
+    return { ok: true, updates: results.map((r) => ({ item: r.item, fields: r.fields })) };
+  }
+
   /* ---------- Rate service factory ----------
      deps:
        fetch        — fetch implementation
@@ -131,9 +265,7 @@
 
     async function attachConversion(r, manualRate, defaultCurrency, markupPct) {
       const def = defaultCurrency || "THB";
-      delete r.convertedAmount; delete r.convertedCurrency;
-      delete r.rate; delete r.rateDate; delete r.rateUnavailable;
-      delete r.manualRate; delete r.fxMarkupPct;
+      clearConversionFields(r);
       if (!r.currency || r.currency === def) return r;
 
       const today = todayStr();
@@ -154,8 +286,7 @@
       const base = await getRate(r.currency, def, r.date);
       if (base == null) { r.rateUnavailable = true; return r; }
       const pct = Number(markupPct) || 0;
-      // toPrecision strips binary-float noise (0.027 * 1.025 -> 0.027674999...).
-      const effective = pct > 0 ? parseFloat((base * (1 + pct / 100)).toPrecision(10)) : base;
+      const effective = applyMarkup(base, pct);
       r.convertedCurrency = def;
       r.convertedAmount = Math.round(r.amount * effective * 100) / 100;
       r.rate = effective;
@@ -270,5 +401,7 @@
     reconcileRenames, makeRateService, currencyChoices,
     iconHref, homeIconHref, effectiveIconChoice, headerIconHref,
     iconChoiceFromPicture, migrateIconChoices,
+    amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
+    planReconversion,
   };
 });

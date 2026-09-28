@@ -448,6 +448,314 @@ test("attachConversion: missing date falls back to 'today' from injected clock",
 
 
 /* ============================================================ */
+/* amountInDefault                                               */
+/* ============================================================ */
+
+test("amountInDefault: item's own currency matches default -> Number(amount)", () => {
+  assert.equal(H.amountInDefault({ amount: "100", currency: "USD" }, "USD"), 100);
+});
+test("amountInDefault: converted to default -> Number(convertedAmount)", () => {
+  const item = { amount: 1000, currency: "THB", convertedCurrency: "USD", convertedAmount: "27" };
+  assert.equal(H.amountInDefault(item, "USD"), 27);
+});
+test("amountInDefault: converted to a DIFFERENT (stale) currency -> null", () => {
+  const item = { amount: 1000, currency: "THB", convertedCurrency: "EUR", convertedAmount: 25 };
+  assert.equal(H.amountInDefault(item, "USD"), null);
+});
+test("amountInDefault: rateUnavailable (no convertedAmount at all) -> null", () => {
+  const item = { amount: 1000, currency: "THB", rateUnavailable: true };
+  assert.equal(H.amountInDefault(item, "USD"), null);
+});
+test("amountInDefault: convertedAmount is null even though convertedCurrency matches -> null", () => {
+  const item = { amount: 1000, currency: "THB", convertedCurrency: "USD", convertedAmount: null };
+  assert.equal(H.amountInDefault(item, "USD"), null);
+});
+test("amountInDefault: null/non-object item -> null", () => {
+  assert.equal(H.amountInDefault(null, "USD"), null);
+  assert.equal(H.amountInDefault(undefined, "USD"), null);
+  assert.equal(H.amountInDefault("x", "USD"), null);
+});
+
+
+/* ============================================================ */
+/* countNotCounted                                               */
+/* ============================================================ */
+
+test("countNotCounted: counts only the not-counted items", () => {
+  const items = [
+    { amount: 100, currency: "USD" },                                              // counted
+    { amount: 1000, currency: "THB", convertedCurrency: "USD", convertedAmount: 27 }, // counted
+    { amount: 1000, currency: "THB", convertedCurrency: "EUR", convertedAmount: 25 }, // not counted (stale)
+    { amount: 500, currency: "THB", rateUnavailable: true },                        // not counted
+  ];
+  assert.equal(H.countNotCounted(items, "USD"), 2);
+});
+test("countNotCounted: empty array -> 0", () => {
+  assert.equal(H.countNotCounted([], "USD"), 0);
+});
+test("countNotCounted: non-array -> 0", () => {
+  assert.equal(H.countNotCounted(null, "USD"), 0);
+  assert.equal(H.countNotCounted(undefined, "USD"), 0);
+});
+
+
+/* ============================================================ */
+/* applyMarkup                                                   */
+/* ============================================================ */
+
+test("applyMarkup: pct <= 0 returns base unchanged", () => {
+  assert.equal(H.applyMarkup(0.027, 0), 0.027);
+  assert.equal(H.applyMarkup(0.027, -5), 0.027);
+});
+test("applyMarkup: pct > 0 applies markup and strips binary-float noise", () => {
+  assert.equal(H.applyMarkup(0.027, 2.5), 0.027675);
+});
+
+
+/* ============================================================ */
+/* clearConversionFields                                         */
+/* ============================================================ */
+
+test("clearConversionFields: deletes all FX fields", () => {
+  const item = {
+    amount: 100, currency: "THB",
+    convertedAmount: 3, convertedCurrency: "USD", rate: 0.03,
+    rateDate: "2026-01-01", rateUnavailable: true, manualRate: true, fxMarkupPct: 5,
+  };
+  H.clearConversionFields(item);
+  assert.equal(item.convertedAmount, undefined);
+  assert.equal(item.convertedCurrency, undefined);
+  assert.equal(item.rate, undefined);
+  assert.equal(item.rateDate, undefined);
+  assert.equal(item.rateUnavailable, undefined);
+  assert.equal(item.manualRate, undefined);
+  assert.equal(item.fxMarkupPct, undefined);
+  // untouched fields survive
+  assert.equal(item.amount, 100);
+  assert.equal(item.currency, "THB");
+});
+test("clearConversionFields: no-op (no throw) when fields are already absent", () => {
+  const item = { amount: 1, currency: "USD" };
+  H.clearConversionFields(item);
+  assert.equal(item.amount, 1);
+});
+
+
+/* ============================================================ */
+/* planReconversion                                              */
+/* ============================================================ */
+
+function fakeGetRate(map, calls) {
+  return async (from, to, date) => {
+    if (calls) calls.push({ from, to, date });
+    const key = `${date}:${from}:${to}`;
+    if (map[key] === undefined) throw new Error("no rate configured for " + key);
+    return map[key];
+  };
+}
+
+test("planReconversion: ignores items already counted (in-default) and only touches not-counted", async () => {
+  const items = [
+    { id: 1, amount: 100, currency: "USD" }, // counted -> ignored
+    { id: 2, amount: 1000, currency: "THB", date: "2026-05-01" }, // not counted
+  ];
+  const getRate = fakeGetRate({ "2026-05-01:THB:USD": 0.03 });
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.equal(res.updates.length, 1);
+  assert.equal(res.updates[0].item, items[1]); // original reference
+  assert.equal(res.updates[0].fields.convertedAmount, 30);
+  assert.equal(res.updates[0].fields.convertedCurrency, "USD");
+  assert.equal(res.updates[0].fields.rate, 0.03);
+  assert.equal(res.updates[0].fields.rateDate, "2026-05-01");
+  assert.equal(res.updates[0].fields.fxMarkupPct, undefined);
+});
+
+test("planReconversion: never-converted item uses opts.markupPct", async () => {
+  const items = [{ id: 1, amount: 1000, currency: "THB", date: "2026-05-01" }];
+  const getRate = fakeGetRate({ "2026-05-01:THB:USD": 0.03 });
+  const res = await H.planReconversion(items, "USD", { getRate, markupPct: 2.5, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  // effective = 0.03 * 1.025 = 0.03075 -> 1000 * 0.03075 = 30.75
+  assert.equal(res.updates[0].fields.rate, 0.03075);
+  assert.equal(res.updates[0].fields.convertedAmount, 30.75);
+  assert.equal(res.updates[0].fields.fxMarkupPct, 2.5);
+});
+
+test("planReconversion: previously-converted (stale) item keeps its OWN stored fxMarkupPct, ignoring opts.markupPct", async () => {
+  const items = [{
+    id: 1, amount: 1000, currency: "THB", date: "2026-05-01",
+    convertedCurrency: "EUR", convertedAmount: 25, fxMarkupPct: 4,
+  }];
+  const getRate = fakeGetRate({ "2026-05-01:THB:USD": 0.03 });
+  const res = await H.planReconversion(items, "USD", { getRate, markupPct: 99, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  // effective = 0.03 * 1.04 = 0.0312 -> 1000 * 0.0312 = 31.2
+  assert.equal(res.updates[0].fields.rate, 0.0312);
+  assert.equal(res.updates[0].fields.convertedAmount, 31.2);
+  assert.equal(res.updates[0].fields.fxMarkupPct, 4);
+});
+
+test("planReconversion: previously-converted item with no markup on record -> pct 0, no fxMarkupPct field", async () => {
+  const items = [{
+    id: 1, amount: 1000, currency: "THB", date: "2026-05-01",
+    convertedCurrency: "EUR", convertedAmount: 25,
+  }];
+  const getRate = fakeGetRate({ "2026-05-01:THB:USD": 0.03 });
+  const res = await H.planReconversion(items, "USD", { getRate, markupPct: 99, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.equal(res.updates[0].fields.rate, 0.03);
+  assert.equal(res.updates[0].fields.fxMarkupPct, undefined);
+});
+
+test("planReconversion: legacy manual-rate chain converts convertedAmount via convertedCurrency->def rate", async () => {
+  const items = [{
+    id: 1, amount: 100, currency: "ABC", date: "2026-05-01",
+    manualRate: true, convertedCurrency: "EUR", convertedAmount: 50,
+  }];
+  const calls = [];
+  const getRate = fakeGetRate({ "2026-05-01:EUR:USD": 1.1 }, calls);
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  const f = res.updates[0].fields;
+  assert.equal(f.convertedCurrency, "USD");
+  assert.equal(f.convertedAmount, 55); // 50 * 1.1
+  assert.equal(f.rate, 0.55); // 55 / 100, to 10 sig figs
+  assert.equal(f.manualRate, true);
+  assert.equal(f.fxMarkupPct, undefined);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].from, "EUR");
+  assert.equal(calls[0].to, "USD");
+});
+
+test("planReconversion: rateDate clamps a future/missing item.date to today", async () => {
+  const items = [
+    { id: 1, amount: 100, currency: "THB", date: "2099-01-01" }, // future
+    { id: 2, amount: 100, currency: "THB" }, // missing
+  ];
+  const getRate = fakeGetRate({
+    "2099-01-01:THB:USD": 0.03, // service call itself uses raw item.date per spec
+    "undefined:THB:USD": 0.03,
+  });
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.equal(res.updates[0].fields.rateDate, "2026-05-21");
+  assert.equal(res.updates[1].fields.rateDate, "2026-05-21");
+});
+
+test("planReconversion: a null rate from getRate is a failure for that item", async () => {
+  const items = [
+    { id: 1, amount: 100, currency: "THB", date: "2026-05-01" },
+    { id: 2, amount: 100, currency: "VND", date: "2026-05-01" },
+  ];
+  const getRate = async (from, to, date) => (from === "THB" ? 0.03 : null);
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, false);
+  assert.equal(res.failed, 1);
+  assert.equal(res.total, 2);
+});
+
+test("planReconversion: a thrown getRate is a failure for that item", async () => {
+  const items = [{ id: 1, amount: 100, currency: "THB", date: "2026-05-01" }];
+  const getRate = async () => { throw new Error("network down"); };
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, false);
+  assert.equal(res.failed, 1);
+  assert.equal(res.total, 1);
+});
+
+test("planReconversion: any failure leaves the input items completely untouched", async () => {
+  const items = [
+    { id: 1, amount: 100, currency: "THB", date: "2026-05-01" },
+    { id: 2, amount: 100, currency: "VND", date: "2026-05-01" },
+  ];
+  const snapshot = JSON.parse(JSON.stringify(items));
+  const getRate = async (from) => (from === "THB" ? 0.03 : null);
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, false);
+  assert.deepEqual(items, snapshot);
+});
+
+test("planReconversion: a non-finite rate is also treated as a failure", async () => {
+  const items = [{ id: 1, amount: 100, currency: "THB", date: "2026-05-01" }];
+  const getRate = async () => Infinity;
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, false);
+  assert.equal(res.failed, 1);
+});
+
+test("planReconversion: honours the concurrency cap (default and explicit)", async () => {
+  let inFlight = 0, maxInFlight = 0;
+  const items = Array.from({ length: 10 }, (_, i) => ({
+    id: i, amount: 100, currency: "THB", date: "2026-05-01",
+  }));
+  const getRate = async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+    return 0.03;
+  };
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21", concurrency: 3 });
+  assert.equal(res.ok, true);
+  assert.ok(maxInFlight <= 3, "expected max 3 in flight, got " + maxInFlight);
+  assert.equal(res.updates.length, 10);
+});
+
+test("planReconversion: default concurrency is 6 when not specified", async () => {
+  let inFlight = 0, maxInFlight = 0;
+  const items = Array.from({ length: 20 }, (_, i) => ({
+    id: i, amount: 100, currency: "THB", date: "2026-05-01",
+  }));
+  const getRate = async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+    return 0.03;
+  };
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.ok(maxInFlight <= 6, "expected max 6 in flight, got " + maxInFlight);
+});
+
+test("planReconversion: calls onProgress(done, total) after each item", async () => {
+  const items = [
+    { id: 1, amount: 100, currency: "THB", date: "2026-05-01" },
+    { id: 2, amount: 100, currency: "VND", date: "2026-05-01" },
+    { id: 3, amount: 100, currency: "LAK", date: "2026-05-01" },
+  ];
+  const getRate = async () => 0.03;
+  const progress = [];
+  const res = await H.planReconversion(items, "USD", {
+    getRate, today: "2026-05-21",
+    onProgress: (done, total) => progress.push([done, total]),
+  });
+  assert.equal(res.ok, true);
+  assert.equal(progress.length, 3);
+  progress.forEach(([, total]) => assert.equal(total, 3));
+  assert.deepEqual(progress.map((p) => p[0]).sort((a, b) => a - b), [1, 2, 3]);
+});
+
+test("planReconversion: empty considered set -> ok:true, no updates, no calls", async () => {
+  const items = [{ id: 1, amount: 100, currency: "USD" }];
+  let called = false;
+  const getRate = async () => { called = true; return 1; };
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.updates, []);
+  assert.equal(called, false);
+});
+
+test("planReconversion: non-array items -> ok:true with no updates", async () => {
+  const getRate = async () => 1;
+  const res = await H.planReconversion(null, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.updates, []);
+});
+
+
+/* ============================================================ */
 /* currencyChoices                                               */
 /* ============================================================ */
 
