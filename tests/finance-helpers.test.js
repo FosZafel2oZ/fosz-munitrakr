@@ -982,3 +982,148 @@ test("migrateIconChoices: no-op for null/non-object input", () => {
   assert.equal(H.migrateIconChoices(undefined), undefined);
   assert.equal(H.migrateIconChoices("x"), "x");
 });
+
+/* ============================================================ */
+/* summarizeTotals / summaryAverage / yearsAverage               */
+/* ============================================================ */
+
+function rec(type, date, amount, extra) {
+  return Object.assign({ type, date, amount, currency: "USD" }, extra || {});
+}
+
+test("summarizeTotals: splits spent/invested per month and year", () => {
+  const t = H.summarizeTotals([
+    rec("expense", "2026-01-05", 10),
+    rec("expense", "2026-01-20", 5.5),
+    rec("investment", "2026-01-31", 100),
+    rec("expense", "2026-03-01", 7),
+    rec("investment", "2026-12-31", 20),
+  ], "USD", 2026);
+  assert.equal(t.firstYear, 2026);
+  assert.equal(t.lastYear, 2026);
+  const y = t.years[2026];
+  assert.equal(y.spent, 22.5);
+  assert.equal(y.invested, 120);
+  assert.equal(y.months.length, 12);
+  assert.deepEqual(y.months[0], { spent: 15.5, invested: 100 });
+  assert.deepEqual(y.months[1], { spent: 0, invested: 0 });
+  assert.deepEqual(y.months[2], { spent: 7, invested: 0 });
+  assert.deepEqual(y.months[11], { spent: 0, invested: 20 });
+});
+
+test("summarizeTotals: uses convertedAmount when converted to the default currency", () => {
+  const t = H.summarizeTotals([
+    rec("expense", "2026-02-10", 50, { currency: "EUR", convertedAmount: 55, convertedCurrency: "USD" }),
+  ], "USD", 2026);
+  assert.equal(t.years[2026].spent, 55);
+  assert.equal(t.years[2026].months[1].spent, 55);
+});
+
+test("summarizeTotals: not-counted records are skipped (and do not move the year range)", () => {
+  const t = H.summarizeTotals([
+    rec("expense", "2020-04-01", 40, { currency: "EUR" }), // no conversion -> not counted
+    rec("expense", "2021-04-01", 40, { currency: "EUR", convertedAmount: 44, convertedCurrency: "GBP" }), // stale
+    rec("expense", "2026-04-01", 9),
+  ], "USD", 2026);
+  assert.equal(t.firstYear, 2026);
+  assert.equal(t.years[2020], undefined);
+  assert.equal(t.years[2026].spent, 9);
+});
+
+test("summarizeTotals: bad dates, unknown types and non-numeric amounts are skipped", () => {
+  const t = H.summarizeTotals([
+    rec("expense", "", 1),
+    rec("expense", undefined, 2),
+    rec("expense", "2026-13-01", 3),
+    rec("expense", "2026-00-10", 4),
+    rec("expense", "26-01-01", 5),
+    rec("expense", "2026-1-1", 6),
+    rec("expense", "2026-01-01T10:00", 7),
+    rec("transfer", "2026-01-01", 8),
+    rec("expense", "2026-01-01", "abc"),
+    null,
+    "junk",
+    rec("expense", "2026-01-02", 1),
+  ], "USD", 2026);
+  assert.equal(t.years[2026].spent, 1);
+  assert.equal(t.years[2026].invested, 0);
+});
+
+test("summarizeTotals: empty / non-array input gives the current year with zeros", () => {
+  for (const input of [[], null, undefined]) {
+    const t = H.summarizeTotals(input, "USD", 2026);
+    assert.equal(t.firstYear, 2026);
+    assert.equal(t.lastYear, 2026);
+    assert.deepEqual(Object.keys(t.years), ["2026"]);
+    assert.equal(t.years[2026].spent, 0);
+    assert.equal(t.years[2026].invested, 0);
+    assert.equal(t.years[2026].months.length, 12);
+    assert.deepEqual(t.years[2026].months[5], { spent: 0, invested: 0 });
+  }
+});
+
+test("summarizeTotals: fills every year between first and last with zeros", () => {
+  const t = H.summarizeTotals([
+    rec("expense", "2023-06-01", 10),
+    rec("investment", "2025-06-01", 20),
+  ], "USD", 2026);
+  assert.equal(t.firstYear, 2023);
+  assert.equal(t.lastYear, 2026); // current year is the floor
+  assert.deepEqual(Object.keys(t.years), ["2023", "2024", "2025", "2026"]);
+  assert.equal(t.years[2024].spent, 0);
+  assert.equal(t.years[2024].months.length, 12);
+  assert.equal(t.years[2026].invested, 0);
+});
+
+test("summarizeTotals: lastYear extends past the current year for future-dated records", () => {
+  const t = H.summarizeTotals([
+    rec("expense", "2026-02-01", 5),
+    rec("expense", "2028-02-01", 10),
+  ], "USD", 2026);
+  assert.equal(t.firstYear, 2026);
+  assert.equal(t.lastYear, 2028);
+  assert.deepEqual(Object.keys(t.years), ["2026", "2027", "2028"]);
+  assert.equal(t.years[2028].months[1].spent, 10);
+});
+
+test("summarizeTotals: rounds sums to cents, avoiding float drift", () => {
+  const t = H.summarizeTotals([
+    rec("expense", "2026-05-01", 0.1),
+    rec("expense", "2026-05-02", 0.2),
+    rec("expense", "2026-06-01", 10.005),
+    rec("investment", "2026-05-03", 1.234),
+  ], "USD", 2026);
+  const y = t.years[2026];
+  assert.equal(y.months[4].spent, 0.3);
+  assert.equal(y.months[4].invested, 1.23);
+  assert.equal(y.spent, 10.31);
+});
+
+test("summaryAverage: current year divides by the current month number", () => {
+  assert.equal(H.summaryAverage(300, 2026, 2026, 3), 100);
+  assert.equal(H.summaryAverage(100, 2026, 2026, 1), 100);
+});
+
+test("summaryAverage: any other year divides by 12", () => {
+  assert.equal(H.summaryAverage(1200, 2025, 2026, 3), 100);
+  assert.equal(H.summaryAverage(1200, 2027, 2026, 3), 100);
+});
+
+test("summaryAverage: rounds to cents", () => {
+  assert.equal(H.summaryAverage(100, 2025, 2026, 3), 8.33);
+});
+
+test("yearsAverage: mean over the given totals, 0 for an empty list", () => {
+  assert.equal(H.yearsAverage([100, 200, 300]), 200);
+  assert.equal(H.yearsAverage([0, 50]), 25);
+  assert.equal(H.yearsAverage([]), 0);
+  assert.equal(H.yearsAverage(undefined), 0);
+  assert.equal(H.yearsAverage([10, 0, 0]), 3.33);
+});
+
+test("summarizeTotals: only future-dated records -> firstYear is that year (earliest counted)", () => {
+  const t = H.summarizeTotals([rec("expense", "2028-02-01", 10)], "USD", 2026);
+  assert.equal(t.firstYear, 2028);
+  assert.equal(t.lastYear, 2028);
+  assert.deepEqual(Object.keys(t.years), ["2028"]);
+});

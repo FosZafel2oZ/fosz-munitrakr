@@ -180,6 +180,77 @@
     return { ok: true, updates: results.map((r) => ({ item: r.item, fields: r.fields })) };
   }
 
+  /* ---------- summarizeTotals ----------
+     Sums for the Summary page. Counted amounts only (amountInDefault(r, def)
+     !== null); records with a date that is not YYYY-MM-DD (month 01-12), a type
+     other than "expense"/"investment", or a non-finite amount are skipped.
+     Returns { firstYear, lastYear, years }:
+       firstYear = earliest year with a counted record, else currentYear
+       lastYear  = max(currentYear, latest year with a counted record)
+       years     = plain object keyed by year; EVERY year in
+                   [firstYear, lastYear] is present (zeros when empty):
+         years[y] = { spent, invested, months: [12 x { spent, invested }] }
+                    (months[0] = January). "spent" = expenses, "invested" =
+                    investments. All sums are rounded to cents.
+  */
+  function summarizeTotals(records, def, currentYear) {
+    const cents = (x) => Math.round(x * 100) / 100;
+    const counted = [];
+    (Array.isArray(records) ? records : []).forEach((r) => {
+      if (!r || (r.type !== "expense" && r.type !== "investment")) return;
+      const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(r.date);
+      if (!m) return;
+      const month = Number(m[2]);
+      if (month < 1 || month > 12) return;
+      const amt = amountInDefault(r, def);
+      if (amt === null || !Number.isFinite(amt)) return;
+      counted.push({ year: Number(m[1]), month: month - 1, type: r.type, amt });
+    });
+    const countedYears = counted.map((c) => c.year);
+    const firstYear = countedYears.length ? Math.min(...countedYears) : currentYear;
+    const lastYear = Math.max(currentYear, ...countedYears);
+    const years = {};
+    for (let y = firstYear; y <= lastYear; y++) {
+      years[y] = {
+        spent: 0, invested: 0,
+        months: Array.from({ length: 12 }, () => ({ spent: 0, invested: 0 })),
+      };
+    }
+    counted.forEach((c) => {
+      const key = c.type === "expense" ? "spent" : "invested";
+      years[c.year][key] += c.amt;
+      years[c.year].months[c.month][key] += c.amt;
+    });
+    Object.keys(years).forEach((y) => {
+      const yr = years[y];
+      yr.spent = cents(yr.spent);
+      yr.invested = cents(yr.invested);
+      yr.months.forEach((mo) => {
+        mo.spent = cents(mo.spent);
+        mo.invested = cents(mo.invested);
+      });
+    });
+    return { firstYear, lastYear, years };
+  }
+
+  /* ---------- summaryAverage ----------
+     Per-month average for the Months view: total / currentMonth (1-12) for the
+     current year, total / 12 for any other year. Rounded to cents.
+  */
+  function summaryAverage(total, year, currentYear, currentMonth) {
+    const divisor = year === currentYear ? currentMonth : 12;
+    return Math.round((total / divisor) * 100) / 100;
+  }
+
+  /* ---------- yearsAverage ----------
+     Mean of the given yearly totals, rounded to cents; empty/non-array -> 0.
+  */
+  function yearsAverage(totals) {
+    if (!Array.isArray(totals) || !totals.length) return 0;
+    const sum = totals.reduce((a, b) => a + b, 0);
+    return Math.round((sum / totals.length) * 100) / 100;
+  }
+
   /* ---------- Rate service factory ----------
      deps:
        fetch        — fetch implementation
@@ -402,6 +473,6 @@
     iconHref, homeIconHref, effectiveIconChoice, headerIconHref,
     iconChoiceFromPicture, migrateIconChoices,
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
-    planReconversion,
+    planReconversion, summarizeTotals, summaryAverage, yearsAverage,
   };
 });
