@@ -294,8 +294,15 @@ function loadStore() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch {}
   }
 }
+// Returns true when the write landed, false when storage refused it (e.g.
+// full). Most callers ignore the result; runConversion reports it.
 function saveStore() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch {}
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function setMode(next) {
@@ -3617,6 +3624,30 @@ function closeConvertModal() {
 // Shared by the modal's Convert and the notice's Convert now. All or
 // nothing: every rate must arrive before anything is written.
 let _converting = false;
+// "Couldn't get exchange rates for 3 records (e.g. 5 Jan 2025 · 1,000 THB). …"
+// The example is the oldest failed item, in its own amount and currency.
+function convertFailedMsg(failedItems) {
+  const n = failedItems.length;
+  const oldest = failedItems.slice().sort((a, b) =>
+    (a.date || "") < (b.date || "") ? -1 : (a.date || "") > (b.date || "") ? 1
+      : (a.createdAt || 0) - (b.createdAt || 0))[0];
+  const eg = oldest
+    ? " (e.g. " + (oldest.date ? formatDate(oldest.date) + " · " : "") +
+      fmt(oldest.amount) + " " + (oldest.currency || "") + ")"
+    : "";
+  return "Couldn't get exchange rates for " + n + (n === 1 ? " record" : " records") +
+    eg + ". Check your connection, or edit those records and try again.";
+}
+// A failed run writes nothing: the message goes on the notice line, and on
+// the modal too while that prompt is still this run's (same default).
+function showConvertError(msg, def) {
+  setConvertMsg(msg, false);
+  loadStore();
+  if (defCur() === def && !$("#convertModal").classList.contains("hidden")) {
+    $("#convertModalMsg").style.color = "";
+    $("#convertModalMsg").textContent = msg;
+  }
+}
 async function runConversion(btn) {
   if (_converting) return;
   _converting = true;
@@ -3631,32 +3662,40 @@ async function runConversion(btn) {
     loadStore();
     const def = defCur();
     const recs = store.records.filter((r) => amountInDefault(r, def) === null);
-    const debts = store.debts.filter((d) => amountInDefault(d, def) === null);
+    const allDebts = store.debts; // this load's objects (store is reloaded below)
+    const debts = allDebts.filter((d) => amountInDefault(d, def) === null);
     const list = recs.concat(debts);
     if (!list.length) { closeConvertModal(); return; }
     // Snapshot before the (slow) fetch: anything edited meanwhile is skipped.
     const snap = new Map(list.map((it) => [it, JSON.stringify(it)]));
     const isRec = new Set(recs);
     btn.textContent = "Converting… 0 / " + list.length;
-    const plan = await planReconversion(list, def, {
-      getRate,
-      markupPct: store.settings.fxMarkupPct || 0,
-      today: todayStr(),
-      onProgress: (done, total) => {
-        btn.textContent = "Converting… " + done + " / " + total;
-      },
+    // Records convert at each one's own date's rate (planReconversion);
+    // debts at today's rate with exact cycle closure (planDebtReconversion,
+    // which reads the whole debt list to see each person's cycles). One
+    // de-duplicated getRate is shared, so each date:from:to is fetched once;
+    // the planners run one after the other (at most 6 requests in flight),
+    // and both always run so a failure names every blocked item.
+    const sharedGetRate = dedupeGetRate(getRate);
+    const markupPct = store.settings.fxMarkupPct || 0;
+    const today = todayStr();
+    let recDone = 0, debtDone = 0;
+    const showProgress = () => {
+      btn.textContent = "Converting… " + (recDone + debtDone) + " / " + list.length;
+    };
+    const recPlan = await planReconversion(recs, def, {
+      getRate: sharedGetRate, markupPct, today,
+      onProgress: (done) => { recDone = done; showProgress(); },
     });
-    if (!plan.ok) {
-      const msg = "Couldn't get exchange rates for " + plan.failed +
-        (plan.failed === 1 ? " record" : " records") +
-        " — check your connection and try again.";
-      setConvertMsg(msg, false);
-      loadStore();
-      // A prompt opened for another default is not this run's to touch.
-      if (defCur() === def && !$("#convertModal").classList.contains("hidden")) {
-        $("#convertModalMsg").style.color = "";
-        $("#convertModalMsg").textContent = msg;
-      }
+    const debtPlan = await planDebtReconversion(allDebts, def, {
+      getRate: sharedGetRate, markupPct, today,
+      onProgress: (done) => { debtDone = done; showProgress(); },
+    });
+    if (!recPlan.ok || !debtPlan.ok) {
+      const failedItems = (recPlan.ok ? [] : recPlan.failedItems)
+        .concat(debtPlan.ok ? [] : debtPlan.failedItems);
+      const msg = convertFailedMsg(failedItems);
+      showConvertError(msg, def);
       return;
     }
     // Write into a freshly loaded store (the fetch took time), matching each
@@ -3672,7 +3711,7 @@ async function runConversion(btn) {
     const freshRec = new Map(store.records.map((r) => [r.id, r]));
     const freshDebt = new Map(store.debts.map((d) => [d.id, d]));
     let nRec = 0, nDebt = 0;
-    for (const { item, fields } of plan.updates) {
+    for (const { item, fields } of recPlan.updates.concat(debtPlan.updates)) {
       const rec = isRec.has(item);
       const target = (rec ? freshRec : freshDebt).get(item.id);
       // Deleted or edited while the rates were fetched → left alone; it
@@ -3682,7 +3721,12 @@ async function runConversion(btn) {
       Object.assign(target, fields);
       if (rec) nRec++; else nDebt++;
     }
-    if (nRec + nDebt > 0) saveStore();
+    if (nRec + nDebt > 0 && !saveStore()) {
+      loadStore(); // drop the unsaved in-memory changes
+      showConvertError("Couldn't save — your phone's storage may be full." +
+        " Nothing was converted.", def);
+      return;
+    }
     closeConvertModal();
     await loadRecords(); // MuniTrakr: fresh records + refresh()
     rerenderDebtViews();

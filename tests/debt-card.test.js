@@ -383,3 +383,24 @@ test("statementModel: not-counted rows show their original amount and are left o
   assert.equal(m.mathText, "200 + 100");
   assert.equal(m.totalText, "300");
 });
+
+test("debtCardModel: settles in whole cents (float balanceBefore 0.1 + 0.2, paid back 0.3)", () => {
+  const m = model({
+    debt: { type: "paid-back", amount: 0.3, currency: "USD", date: "2026-07-21" },
+    defaultCurrency: "USD",
+    balanceBefore: 0.1 + 0.2,
+  });
+  assert.equal(m.isSettled, true);
+  assert.equal(m.totalText, "0");
+});
+
+test("debtCardModel: transition guard — no defaultCurrency counts the pre-v86 way", () => {
+  const m = model({
+    debt: { type: "lend", amount: 10, currency: "USD", date: "2026-07-21",
+            convertedAmount: 340, convertedCurrency: "THB" },
+    defaultCurrency: undefined,
+    balanceBefore: 100,
+  });
+  assert.equal(m.mathText, "100 + 340");
+  assert.equal(m.totalText, "440");
+});

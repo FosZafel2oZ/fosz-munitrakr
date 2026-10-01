@@ -844,3 +844,245 @@ test("planPaidBy: a not-counted entered item never splits; offline no-netting bo
   assert.equal(plain.records[0].amount, 900);
   assert.equal(plain.records[0].rateUnavailable, true);
 });
+
+/* ---- integer-cent cycle comparisons (v86 fix wave) ---- */
+
+test("cents: 14.6 + 0.15 lent, 14.75 paid back -> clear, settled, no overshoot", () => {
+  const ds = [
+    debt({ id: "a", type: "lend", amount: 14.6, currency: "USD", date: "2026-01-01" }),
+    debt({ id: "b", type: "lend", amount: 0.15, currency: "USD", date: "2026-01-02" }),
+    debt({ id: "c", type: "paid-back", amount: 14.75, currency: "USD", date: "2026-01-03" }),
+  ];
+  const row = D.personBalances(ds, undefined, "USD").get("p1");
+  assert.equal(row.direction, "clear");
+  assert.equal(row.outstanding, 0);
+  assert.equal(D.annotateSettlements(ds, "USD").get("c").settled, true);
+  assert.equal(D.balanceBefore(ds, "c", undefined, "USD"), 14.75);
+  assert.equal(D.balanceAfterRecord(ds, "c", "USD"), 0);
+  assert.equal(D.wouldOvershoot(ds, ds[2], "USD"), false);
+  const plan = D.planSplit({ type: "paid-back", personId: "p1", date: "2026-01-03", amount: 20, currency: "USD" }, 0.1 + 0.2, "USD");
+  assert.equal(plan.split, true);
+  assert.equal(plan.a.amount, 0.3);
+  assert.equal(plan.b.amount, 19.7);
+});
+
+test("cents: personBalances returns cent-exact lent/back/outstanding", () => {
+  const ds = [
+    debt({ type: "lend", amount: 0.1, currency: "USD", date: "2026-01-01" }),
+    debt({ type: "lend", amount: 0.2, currency: "USD", date: "2026-01-02" }),
+  ];
+  const row = D.personBalances(ds, undefined, "USD").get("p1");
+  assert.equal(row.lent, 0.3);
+  assert.equal(row.outstanding, 0.3);
+});
+
+/* ---- transition guard (older cached app.js passes no defaultCurrency) ---- */
+
+test("transition guard: no defaultCurrency -> pre-v86 counting (convertedAmount ?? amount)", () => {
+  const ds = [
+    debt({ type: "lend", amount: 100, currency: "THB", date: "2026-01-01" }),
+    debt({ type: "lend", amount: 10, currency: "USD", convertedCurrency: "THB", convertedAmount: 340, date: "2026-01-02" }),
+  ];
+  assert.equal(D.personBalances(ds).get("p1").outstanding, 440);
+  assert.equal(D.balanceAfterRecord(ds, ds[1].id), 440);
+});
+
+/* ---- planDebtReconversion: today's rate + exact cycle closure ---- */
+
+const TODAY = "2026-10-01";
+function rateFn(map, calls) {
+  return async (from, to, date) => {
+    if (calls) calls.push(date + ":" + from + ":" + to);
+    const r = map[date + ":" + from + ":" + to];
+    return r === undefined ? null : r;
+  };
+}
+// Applies a successful plan to deep copies (the app does the same to the fresh store).
+function applyPlan(debts, plan) {
+  const copies = debts.map((d) => JSON.parse(JSON.stringify(d)));
+  const byId = new Map(copies.map((d) => [d.id, d]));
+  for (const { item, fields } of plan.updates) {
+    const t = byId.get(item.id);
+    for (const k of ["convertedAmount", "convertedCurrency", "rate", "rateDate", "rateUnavailable", "manualRate", "fxMarkupPct"]) delete t[k];
+    Object.assign(t, fields);
+  }
+  return copies;
+}
+
+test("planDebtReconversion: reviewer example - settled cycle stays settled, outstanding = round2(500 x rate)", async () => {
+  const ds = [
+    debt({ id: "jan", type: "lend", amount: 1000, date: "2026-01-01" }),
+    debt({ id: "feb", type: "paid-back", amount: 1000, date: "2026-02-01" }),
+    debt({ id: "mar", type: "lend", amount: 500, date: "2026-03-01" }),
+  ];
+  const calls = [];
+  const plan = await D.planDebtReconversion(ds, "USD", {
+    getRate: rateFn({ [TODAY + ":THB:USD"]: 0.0295 }, calls), markupPct: 3, today: TODAY,
+  });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(calls, [TODAY + ":THB:USD"]); // ONE rate, today's
+  assert.deepEqual(plan.updates.map((u) => u.fields.convertedAmount), [29.5, 29.5, 14.75]);
+  plan.updates.forEach((u) => {
+    assert.equal(u.fields.convertedCurrency, "USD");
+    assert.equal(u.fields.rate, 0.0295);
+    assert.equal(u.fields.rateDate, TODAY);
+    assert.equal(u.fields.fxMarkupPct, undefined); // old-default debts: no card markup
+  });
+  const after = applyPlan(ds, plan);
+  const row = D.personBalances(after, undefined, "USD").get("p1");
+  assert.equal(row.outstanding, Math.round(500 * 0.0295 * 100) / 100);
+  assert.equal(row.outstanding, 14.75);
+  assert.equal(row.progress, 0); // fresh cycle after the settled one
+  assert.equal(D.annotateSettlements(after, "USD").get("feb").settled, true);
+  assert.equal(ds[0].convertedAmount, undefined); // input untouched
+});
+
+test("planDebtReconversion: a many-item cycle whose per-item rounding leaves a cent closes exactly", async () => {
+  const r = 0.0295;
+  // Per item: 15 x 0.0295 = 0.4425 -> 0.44 (x3 = 1.32) but 45 x 0.0295 = 1.3275 -> 1.33.
+  assert.notEqual(3 * Math.round(15 * r * 100), Math.round(45 * r * 100));
+  const ds = [
+    debt({ id: "l1", type: "lend", amount: 15, date: "2026-01-01" }),
+    debt({ id: "l2", type: "lend", amount: 15, date: "2026-01-02" }),
+    debt({ id: "l3", type: "lend", amount: 15, date: "2026-01-03" }),
+    debt({ id: "pb", type: "paid-back", amount: 45, date: "2026-01-04" }),
+    debt({ id: "b1", type: "borrow", amount: 15, date: "2026-02-01" }),
+  ];
+  const plan = await D.planDebtReconversion(ds, "USD", {
+    getRate: rateFn({ [TODAY + ":THB:USD"]: r }), today: TODAY,
+  });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plan.updates.map((u) => u.fields.convertedAmount), [0.44, 0.45, 0.44, 1.33, 0.44]);
+  const after = applyPlan(ds, plan);
+  assert.equal(D.annotateSettlements(after, "USD").get("pb").settled, true);
+  const row = D.personBalances(after, undefined, "USD").get("p1");
+  assert.equal(row.direction, "i-owe");
+  assert.equal(row.outstanding, -0.44); // symmetric with a "they owe" 15 THB
+});
+
+test("planDebtReconversion: a person with a debt already counted in the new default falls back to per-debt rounding", async () => {
+  const r = 0.0295;
+  const ds = [
+    debt({ id: "l1", type: "lend", amount: 15, date: "2026-01-01" }),
+    debt({ id: "l2", type: "lend", amount: 15, date: "2026-01-02" }),
+    debt({ id: "l3", type: "lend", amount: 15, date: "2026-01-03" }),
+    debt({ id: "usd", type: "lend", amount: 5, currency: "USD", convertedCurrency: "THB", convertedAmount: 170, date: "2026-01-05" }),
+  ];
+  const plan = await D.planDebtReconversion(ds, "USD", {
+    getRate: rateFn({ [TODAY + ":THB:USD"]: r }), today: TODAY,
+  });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.updates.length, 3); // the USD debt is counted -> never touched
+  assert.deepEqual(plan.updates.map((u) => u.fields.convertedAmount), [0.44, 0.44, 0.44]);
+});
+
+test("planDebtReconversion: mixed old currencies fall back; chained debt derives from its old value with no markup", async () => {
+  const ds = [
+    // EUR 100 converted to the old default THB with a 2% markup.
+    debt({ id: "eur", type: "lend", amount: 100, currency: "EUR", convertedCurrency: "THB", convertedAmount: 3876, fxMarkupPct: 2, rate: 38.76, date: "2026-01-01" }),
+    // A failed foreign conversion (offline save): its old currency is its own, JPY.
+    debt({ id: "jpy", type: "lend", amount: 1000, currency: "JPY", rateUnavailable: true, date: "2026-01-02" }),
+    // Another person: a legacy manual-rate chain.
+    debt({ id: "man", personId: "p2", type: "borrow", amount: 50, currency: "LAK", convertedCurrency: "THB", convertedAmount: 333, manualRate: true, date: "2026-01-03" }),
+  ];
+  const calls = [];
+  const plan = await D.planDebtReconversion(ds, "USD", {
+    getRate: rateFn({ [TODAY + ":THB:USD"]: 0.0295, [TODAY + ":JPY:USD"]: 0.0067 }, calls),
+    markupPct: 2.5, today: TODAY,
+  });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(calls.sort(), [TODAY + ":JPY:USD", TODAY + ":THB:USD"]);
+  const f = Object.fromEntries(plan.updates.map((u) => [u.item.id, u.fields]));
+  // Chained: 3876 x 0.0295 = 114.342 -> 114.34; rate = 0.0295 x 3876 / 100.
+  assert.equal(f.eur.convertedAmount, 114.34);
+  assert.equal(f.eur.rate, 1.14342);
+  assert.equal(f.eur.fxMarkupPct, undefined);
+  // rateUnavailable: today's JPY rate with the current markup, like its save would have.
+  // 0.0067 x 1.025 = 0.0068675 -> 1000 x = 6.8675 -> 6.87
+  assert.equal(f.jpy.convertedAmount, 6.87);
+  assert.equal(f.jpy.rate, 0.0068675);
+  assert.equal(f.jpy.fxMarkupPct, 2.5);
+  // Manual chain keeps manualRate, no markup: 333 x 0.0295 = 9.8235 -> 9.82
+  assert.equal(f.man.convertedAmount, 9.82);
+  assert.equal(f.man.manualRate, true);
+  assert.equal(f.man.fxMarkupPct, undefined);
+  assert.equal(f.man.rate, 0.19647);
+});
+
+test("planDebtReconversion: a debt that rounds to 0 is kept (convertedAmount 0, still counted)", async () => {
+  const ds = [debt({ id: "tiny", type: "lend", amount: 0.1, date: "2026-01-01" })];
+  const plan = await D.planDebtReconversion(ds, "USD", {
+    getRate: rateFn({ [TODAY + ":THB:USD"]: 0.0295 }), today: TODAY,
+  });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.updates.length, 1);
+  assert.equal(plan.updates[0].fields.convertedAmount, 0);
+  const after = applyPlan(ds, plan);
+  const H = require("../public/finance-helpers");
+  assert.equal(H.amountInDefault(after[0], "USD"), 0); // counted (not null)
+  assert.equal(D.personBalances(after, undefined, "USD").get("p1").direction, "clear");
+});
+
+test("planDebtReconversion: any missing rate -> ok:false with the failed debts, input untouched", async () => {
+  const ds = [
+    debt({ id: "a", type: "lend", amount: 100, date: "2026-01-01" }),
+    debt({ id: "b", type: "lend", amount: 100, currency: "VND", date: "2026-01-02" }),
+    debt({ id: "c", type: "lend", amount: 5, currency: "USD", date: "2026-01-03" }),
+  ];
+  const snap = JSON.parse(JSON.stringify(ds));
+  const plan = await D.planDebtReconversion(ds, "USD", {
+    getRate: rateFn({ [TODAY + ":THB:USD"]: 0.0295 }), today: TODAY,
+  });
+  assert.equal(plan.ok, false);
+  assert.equal(plan.failed, 1);
+  assert.equal(plan.total, 2);
+  assert.equal(plan.failedItems[0], ds[1]);
+  assert.deepEqual(ds, snap);
+  const thrown = await D.planDebtReconversion(ds, "USD", {
+    getRate: async () => { throw new Error("offline"); }, today: TODAY,
+  });
+  assert.equal(thrown.ok, false);
+  assert.equal(thrown.failed, 2);
+});
+
+test("planDebtReconversion: onProgress reaches total; empty input -> ok with no updates", async () => {
+  const ds = [
+    debt({ type: "lend", amount: 100, date: "2026-01-01" }),
+    debt({ type: "lend", amount: 100, date: "2026-01-02" }),
+    debt({ type: "lend", amount: 100, currency: "EUR", date: "2026-01-03" }),
+  ];
+  const progress = [];
+  const plan = await D.planDebtReconversion(ds, "USD", {
+    getRate: async () => 0.5, today: TODAY, onProgress: (d, t) => progress.push([d, t]),
+  });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(progress[progress.length - 1], [3, 3]);
+  // Back to THB: only the EUR debt is not counted; the THB ones are never touched.
+  const back = await D.planDebtReconversion(ds, "THB", { getRate: async () => 38, today: TODAY });
+  assert.equal(back.updates.length, 1);
+  assert.equal(back.updates[0].item, ds[2]);
+  const empty = await D.planDebtReconversion([], "USD", { getRate: async () => { throw 1; }, today: TODAY });
+  assert.deepEqual(empty, { ok: true, updates: [] });
+});
+
+test("records keep per-date rates while debts use today's; a shared deduped getRate asks each key once", async () => {
+  const H = require("../public/finance-helpers");
+  const recs = [
+    { id: "r1", amount: 1000, currency: "THB", date: "2026-01-01" },
+    { id: "r2", amount: 1000, currency: "THB", date: "2026-02-01" },
+    { id: "r3", amount: 500, currency: "THB", date: TODAY },
+  ];
+  const ds = [debt({ id: "d1", amount: 1000, date: "2026-01-01" })];
+  const calls = [];
+  const getRate = H.dedupeGetRate(rateFn({
+    ["2026-01-01:THB:USD"]: 0.03, ["2026-02-01:THB:USD"]: 0.031, [TODAY + ":THB:USD"]: 0.0295,
+  }, calls));
+  const [rp, dp] = await Promise.all([
+    H.planReconversion(recs, "USD", { getRate, today: TODAY }),
+    D.planDebtReconversion(ds, "USD", { getRate, today: TODAY }),
+  ]);
+  assert.deepEqual(rp.updates.map((u) => u.fields.convertedAmount), [30, 31, 14.75]);
+  assert.deepEqual(rp.updates.map((u) => u.fields.rateDate), ["2026-01-01", "2026-02-01", TODAY]);
+  assert.equal(dp.updates[0].fields.convertedAmount, 29.5); // today's rate, not January's 0.03
+  assert.equal(calls.length, 3); // today's THB:USD shared by r3 and the debt
+});

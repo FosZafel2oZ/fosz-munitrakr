@@ -8,7 +8,20 @@
     // finance-helpers.js loads first in index.html and exports the global.
     Object.assign(root, factory(root.amountInDefault));
   }
-})(typeof window !== "undefined" ? window : globalThis, function (amountInDefault) {
+})(typeof window !== "undefined" ? window : globalThis, function (sharedAmountInDefault) {
+
+  // Transition guard (v86, mixed service-worker cache): with an older cached
+  // finance-helpers.js (no amountInDefault global) or an older cached app.js
+  // (no defaultCurrency passed), count every debt the pre-v86 way
+  // (convertedAmount ?? amount) instead of throwing. That is the OLD
+  // behaviour, not a second copy of the v86 rule.
+  function amountInDefault(item, defaultCurrency) {
+    if (typeof sharedAmountInDefault !== "function" || !defaultCurrency) {
+      if (!item || typeof item !== "object") return null;
+      return Number(item.convertedAmount != null ? item.convertedAmount : item.amount);
+    }
+    return sharedAmountInDefault(item, defaultCurrency);
+  }
 
   // Money: whole amounts stay clean ("450"), fractional ones always show both
   // cents ("4,162.37", "11,111,111.10" — never a lone "….1").
@@ -71,7 +84,8 @@
     const counted = recordAmtInDefault !== null;
 
     const delta = counted ? (direction === "out" ? 1 : -1) * recordAmtInDefault : 0;
-    const newBalance = balanceBefore + delta;
+    // In whole cents, like debts.js, so 14.6 + 0.15 − 14.75 settles exactly.
+    const newBalance = Math.round((balanceBefore + delta) * 100) / 100;
     // Magnitudes only — the operator carries direction, so the equation reads
     // the same whether the cycle is "they owe me" or "I owe them". No math
     // line for a not-counted record (it would read "X − 0").

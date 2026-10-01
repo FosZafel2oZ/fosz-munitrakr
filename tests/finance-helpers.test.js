@@ -571,8 +571,8 @@ test("planReconversion: ignores items already counted (in-default) and only touc
   assert.equal(res.updates[0].fields.fxMarkupPct, undefined);
 });
 
-test("planReconversion: never-converted item uses opts.markupPct", async () => {
-  const items = [{ id: 1, amount: 1000, currency: "THB", date: "2026-05-01" }];
+test("planReconversion: a rateUnavailable (failed foreign) item uses opts.markupPct", async () => {
+  const items = [{ id: 1, amount: 1000, currency: "THB", date: "2026-05-01", rateUnavailable: true }];
   const getRate = fakeGetRate({ "2026-05-01:THB:USD": 0.03 });
   const res = await H.planReconversion(items, "USD", { getRate, markupPct: 2.5, today: "2026-05-21" });
   assert.equal(res.ok, true);
@@ -580,6 +580,26 @@ test("planReconversion: never-converted item uses opts.markupPct", async () => {
   assert.equal(res.updates[0].fields.rate, 0.03075);
   assert.equal(res.updates[0].fields.convertedAmount, 30.75);
   assert.equal(res.updates[0].fields.fxMarkupPct, 2.5);
+  assert.equal(res.updates[0].fields.rateUnavailable, undefined);
+});
+
+test("planReconversion: an item that was in the old default (never converted) gets NO markup", async () => {
+  const items = [{ id: 1, amount: 1000, currency: "THB", date: "2026-05-01" }];
+  const getRate = fakeGetRate({ "2026-05-01:THB:USD": 0.03 });
+  const res = await H.planReconversion(items, "USD", { getRate, markupPct: 2.5, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.equal(res.updates[0].fields.rate, 0.03);
+  assert.equal(res.updates[0].fields.convertedAmount, 30);
+  assert.equal(res.updates[0].fields.fxMarkupPct, undefined);
+});
+
+test("reconversionMarkupPct: own pct if converted before, setting only for rateUnavailable, else 0", () => {
+  assert.equal(H.reconversionMarkupPct({ convertedAmount: 5, fxMarkupPct: 4 }, 9), 4);
+  assert.equal(H.reconversionMarkupPct({ convertedAmount: 5 }, 9), 0);
+  assert.equal(H.reconversionMarkupPct({ rateUnavailable: true }, 9), 9);
+  assert.equal(H.reconversionMarkupPct({ rateUnavailable: true }, undefined), 0);
+  assert.equal(H.reconversionMarkupPct({ amount: 1, currency: "THB" }, 9), 0);
+  assert.equal(H.reconversionMarkupPct(null, 9), 0);
 });
 
 test("planReconversion: previously-converted (stale) item keeps its OWN stored fxMarkupPct, ignoring opts.markupPct", async () => {
@@ -653,6 +673,8 @@ test("planReconversion: a null rate from getRate is a failure for that item", as
   assert.equal(res.ok, false);
   assert.equal(res.failed, 1);
   assert.equal(res.total, 2);
+  assert.deepEqual(res.failedItems, [items[1]]);
+  assert.equal(res.failedItems[0], items[1]); // original reference
 });
 
 test("planReconversion: a thrown getRate is a failure for that item", async () => {
@@ -686,8 +708,9 @@ test("planReconversion: a non-finite rate is also treated as a failure", async (
 
 test("planReconversion: honours the concurrency cap (default and explicit)", async () => {
   let inFlight = 0, maxInFlight = 0;
+  // Distinct dates, so de-duplication does not collapse the calls.
   const items = Array.from({ length: 10 }, (_, i) => ({
-    id: i, amount: 100, currency: "THB", date: "2026-05-01",
+    id: i, amount: 100, currency: "THB", date: "2026-05-" + String(i + 1).padStart(2, "0"),
   }));
   const getRate = async () => {
     inFlight++;
@@ -705,7 +728,7 @@ test("planReconversion: honours the concurrency cap (default and explicit)", asy
 test("planReconversion: default concurrency is 6 when not specified", async () => {
   let inFlight = 0, maxInFlight = 0;
   const items = Array.from({ length: 20 }, (_, i) => ({
-    id: i, amount: 100, currency: "THB", date: "2026-05-01",
+    id: i, amount: 100, currency: "THB", date: "2026-05-" + String(i + 1).padStart(2, "0"),
   }));
   const getRate = async () => {
     inFlight++;
@@ -752,6 +775,53 @@ test("planReconversion: non-array items -> ok:true with no updates", async () =>
   const res = await H.planReconversion(null, "USD", { getRate, today: "2026-05-21" });
   assert.equal(res.ok, true);
   assert.deepEqual(res.updates, []);
+});
+
+test("planReconversion: requests each distinct date:from:to once (shared in-flight promise)", async () => {
+  const items = [
+    { id: 1, amount: 100, currency: "THB", date: "2026-05-01" },
+    { id: 2, amount: 200, currency: "THB", date: "2026-05-01" },
+    { id: 3, amount: 300, currency: "THB", date: "2026-05-01" },
+    { id: 4, amount: 400, currency: "THB", date: "2026-05-02" },
+  ];
+  const calls = [];
+  const getRate = async (from, to, date) => {
+    calls.push(date + ":" + from + ":" + to);
+    await new Promise((r) => setTimeout(r, 5));
+    return 0.03;
+  };
+  const res = await H.planReconversion(items, "USD", { getRate, today: "2026-05-21" });
+  assert.equal(res.ok, true);
+  assert.deepEqual(calls.sort(), ["2026-05-01:THB:USD", "2026-05-02:THB:USD"]);
+  assert.deepEqual(res.updates.map((u) => u.fields.convertedAmount), [3, 6, 9, 12]);
+});
+
+test("dedupeGetRate: one call per key, shared failures, idempotent wrapping", async () => {
+  let n = 0;
+  const base = async (from) => { n++; if (from === "BAD") throw new Error("x"); return 2; };
+  const g = H.dedupeGetRate(base);
+  assert.equal(H.dedupeGetRate(g), g);
+  const [a, b] = await Promise.all([g("THB", "USD", "d"), g("THB", "USD", "d")]);
+  assert.equal(a, 2);
+  assert.equal(b, 2);
+  assert.equal(n, 1);
+  await assert.rejects(g("BAD", "USD", "d"));
+  await assert.rejects(g("BAD", "USD", "d"));
+  assert.equal(n, 2);
+});
+
+test("mapLimit: input-order results, concurrency honoured, empty list ok", async () => {
+  let inFlight = 0, maxInFlight = 0;
+  const out = await H.mapLimit([5, 1, 3, 2], 2, async (x, i) => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, x));
+    inFlight--;
+    return x * 10 + i;
+  });
+  assert.deepEqual(out, [50, 11, 32, 23]);
+  assert.ok(maxInFlight <= 2);
+  assert.deepEqual(await H.mapLimit([], 6, async () => 1), []);
 });
 
 

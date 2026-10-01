@@ -101,45 +101,103 @@
     return Math.round(x * 100) / 100;
   }
 
+  /* ---------- reconversionMarkupPct ----------
+     The card markup a conversion run applies to a NON-manual item (Bill,
+     2026-10-01): the item's own stored fxMarkupPct if it was converted
+     before (convertedAmount set); else the current setting `markupPct` ONLY
+     for a failed foreign conversion (rateUnavailable — its save would have
+     applied it); else 0, so an item that was simply in the old default
+     currency never gets a card markup.
+  */
+  function reconversionMarkupPct(item, markupPct) {
+    if (!item) return 0;
+    if (item.convertedAmount != null) return Number(item.fxMarkupPct) || 0;
+    return item.rateUnavailable ? (Number(markupPct) || 0) : 0;
+  }
+
+  /* ---------- dedupeGetRate ----------
+     Wraps getRate(from, to, date) so each distinct `date:from:to` is
+     requested once per wrapper: later callers share the first call's
+     (in-flight or settled) promise, failures included. A sync throw
+     becomes a rejection. Wrapping an already-wrapped function returns it
+     unchanged, so the app can share one wrapper across both planners.
+  */
+  function dedupeGetRate(getRate) {
+    if (typeof getRate === "function" && getRate._deduped) return getRate;
+    const calls = new Map();
+    const wrapped = (from, to, date) => {
+      const key = `${date}:${from}:${to}`;
+      if (!calls.has(key)) {
+        calls.set(key, Promise.resolve().then(() => getRate(from, to, date)));
+      }
+      return calls.get(key);
+    };
+    wrapped._deduped = true;
+    return wrapped;
+  }
+
+  /* ---------- mapLimit ----------
+     Runs async fn(entry, index) over `list` with at most `concurrency`
+     calls in flight (simple worker pool); resolves to the results in input
+     order. fn is expected to catch its own failures.
+  */
+  async function mapLimit(list, concurrency, fn) {
+    const total = Array.isArray(list) ? list.length : 0;
+    const results = new Array(total);
+    let nextIndex = 0;
+    async function worker() {
+      while (nextIndex < total) {
+        const i = nextIndex++;
+        results[i] = await fn(list[i], i);
+      }
+    }
+    const workerCount = Math.max(1, Math.min(concurrency || 6, total || 1));
+    await Promise.all(Array.from({ length: workerCount }, worker));
+    return results;
+  }
+
   /* ---------- planReconversion ----------
-     Pure planner for design doc §6 ("Convert old records to USD?"). Never
-     mutates `items`. Considers only items where amountInDefault(item, def)
-     is null; every other item is left out of the result entirely.
+     Pure planner for design doc §6 ("Convert old records to USD?") — used
+     for RECORDS (debts use debts.js planDebtReconversion: today's rate with
+     exact cycle closure). Never mutates `items`. Considers only items where
+     amountInDefault(item, def) is null; every other item is left out of the
+     result entirely.
      opts = { getRate, markupPct, today, concurrency = 6, onProgress }
-       - getRate(from, to, date) -> Promise<number|null>, may reject.
+       - getRate(from, to, date) -> Promise<number|null>, may reject. Each
+         distinct date:from:to is requested once (dedupeGetRate).
        - today: "YYYY-MM-DD", used to clamp a missing/future item.date for
          the resulting rateDate (not for the getRate call itself, which
          always gets the item's own raw date per design doc §6).
-       - concurrency: max simultaneous getRate calls (simple worker pool).
+       - concurrency: max items converting at once (simple worker pool).
        - onProgress(done, total): called after each considered item settles.
      Per considered item:
        - Legacy manual item (manualRate truthy, has convertedAmount in some
          other currency): chains convertedAmount * rate(convertedCurrency ->
          def, item.date), keeping manualRate: true and no markup.
-       - Otherwise: rate(item.currency -> def, item.date) with markup =
-         the item's own stored fxMarkupPct if it was converted before, else
-         opts.markupPct (a never-converted item uses the current setting).
+       - Otherwise: rate(item.currency -> def, item.date) with markup per
+         reconversionMarkupPct (own stored pct if converted before; the
+         current setting only for a rateUnavailable item; else 0).
      A null/non-finite rate or a thrown getRate fails that item. All items
      must succeed for the run to succeed: { ok: true, updates: [{ item,
      fields }] } (item = the original reference, considered order); any
-     failure -> { ok: false, failed, total } and nothing to apply.
+     failure -> { ok: false, failed, total, failedItems } (failedItems = the
+     original references, considered order) and nothing to apply.
   */
   async function planReconversion(items, def, opts) {
-    const { getRate, markupPct, today, concurrency = 6, onProgress } = opts || {};
+    const { markupPct, today, concurrency = 6, onProgress } = opts || {};
+    const getRate = dedupeGetRate((opts || {}).getRate);
     const considered = Array.isArray(items)
       ? items.filter((it) => amountInDefault(it, def) === null)
       : [];
     const total = considered.length;
-    const results = new Array(total);
     let done = 0;
-    let nextIndex = 0;
 
     async function settleOne(item) {
       const rateDate = !item.date || item.date > today ? today : item.date;
       try {
         if (item.manualRate && item.convertedAmount != null && item.convertedCurrency) {
           const r = await getRate(item.convertedCurrency, def, item.date);
-          if (r == null || !Number.isFinite(r)) return { ok: false };
+          if (r == null || !Number.isFinite(r)) return { ok: false, item };
           const convertedAmount = round2(item.convertedAmount * r);
           const rate = parseFloat((convertedAmount / item.amount).toPrecision(10));
           return {
@@ -148,35 +206,30 @@
             fields: { convertedCurrency: def, convertedAmount, rate, rateDate, manualRate: true },
           };
         }
-        const pct = item.convertedAmount != null
-          ? (Number(item.fxMarkupPct) || 0)
-          : (Number(markupPct) || 0);
+        const pct = reconversionMarkupPct(item, markupPct);
         const base = await getRate(item.currency, def, item.date);
-        if (base == null || !Number.isFinite(base)) return { ok: false };
+        if (base == null || !Number.isFinite(base)) return { ok: false, item };
         const eff = applyMarkup(base, pct);
         const convertedAmount = round2(item.amount * eff);
         const fields = { convertedCurrency: def, convertedAmount, rate: eff, rateDate };
         if (pct > 0) fields.fxMarkupPct = pct;
         return { ok: true, item, fields };
       } catch {
-        return { ok: false };
+        return { ok: false, item };
       }
     }
 
-    async function worker() {
-      while (nextIndex < total) {
-        const i = nextIndex++;
-        results[i] = await settleOne(considered[i]);
-        done++;
-        if (typeof onProgress === "function") onProgress(done, total);
-      }
+    const results = await mapLimit(considered, concurrency, async (item) => {
+      const res = await settleOne(item);
+      done++;
+      if (typeof onProgress === "function") onProgress(done, total);
+      return res;
+    });
+
+    const failedItems = results.filter((r) => !r.ok).map((r) => r.item);
+    if (failedItems.length > 0) {
+      return { ok: false, failed: failedItems.length, total, failedItems };
     }
-
-    const workerCount = Math.max(1, Math.min(concurrency || 6, total || 1));
-    await Promise.all(Array.from({ length: workerCount }, worker));
-
-    const failed = results.filter((r) => !r.ok).length;
-    if (failed > 0) return { ok: false, failed, total };
     return { ok: true, updates: results.map((r) => ({ item: r.item, fields: r.fields })) };
   }
 
@@ -474,5 +527,6 @@
     iconChoiceFromPicture, migrateIconChoices,
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
     planReconversion, summarizeTotals, summaryAverage, yearsAverage,
+    reconversionMarkupPct, dedupeGetRate, mapLimit,
   };
 });
