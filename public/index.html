@@ -42,7 +42,7 @@
     <span id="settingsIco"></span>
   </button>
   <!-- Summary page (MuniTrakr only) — sits just left of the settings button -->
-  <button id="summaryBtn" class="float-btn hidden" aria-label="Summary">
+  <button id="summaryBtn" class="float-btn hidden" aria-label="Summary" aria-pressed="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/></svg>
   </button>
 
@@ -204,12 +204,12 @@
   <main id="view-summary" class="view hidden">
     <div class="records-head"><h2>Summary</h2></div>
     <div class="sum-seg" id="sumSeg">
-      <button type="button" data-sum-mode="months">Months</button>
-      <button type="button" data-sum-mode="years">Years</button>
+      <button type="button" data-sum-mode="months" aria-pressed="false">Months</button>
+      <button type="button" data-sum-mode="years" aria-pressed="false">Years</button>
     </div>
     <div class="sum-ysel" id="sumYearSel">
       <button type="button" id="sumYearPrev" aria-label="Previous year">&lsaquo;</button>
-      <b id="sumYear"></b>
+      <b id="sumYear" aria-live="polite"></b>
       <button type="button" id="sumYearNext" aria-label="Next year">&rsaquo;</button>
     </div>
     <div class="summary-row sum-totals">

@@ -539,7 +539,7 @@ function applyNewToSettings(items, colors) {
 async function enterApp() {
   $("#app").classList.remove("hidden");
   $("#todayDate").textContent = new Date().toLocaleDateString(undefined, {
-    weekday: "long",
+    weekday: "short",
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -969,8 +969,11 @@ function renderSummary() {
   const year = Math.min(Math.max(summaryYear == null ? curYear : summaryYear, t.firstYear), t.lastYear);
   summaryShownYear = year;
 
-  $$("#sumSeg button").forEach((b) =>
-    b.classList.toggle("active", b.dataset.sumMode === (months ? "months" : "years")));
+  $$("#sumSeg button").forEach((b) => {
+    const on = b.dataset.sumMode === (months ? "months" : "years");
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
   $("#sumYearSel").classList.toggle("hidden", !months);
   $("#sumYear").textContent = year;
   $("#sumYearPrev").disabled = year <= t.firstYear;
@@ -1740,8 +1743,11 @@ function updateSettingsBtn() {
   );
   // Summary (chart) button: MuniTrakr only, never on Settings; lit on its page.
   const sb = $("#summaryBtn");
-  sb.classList.toggle("hidden", currentMode !== "finance" || inSettings);
-  sb.classList.toggle("is-on", inSummary);
+  if (sb) {
+    sb.classList.toggle("hidden", currentMode !== "finance" || inSettings);
+    sb.classList.toggle("is-on", inSummary);
+    sb.setAttribute("aria-pressed", String(inSummary));
+  }
 }
 function updateDockTheme() {
   // accent (purple = Expenses, blue = Investments) applies app-wide
@@ -2143,7 +2149,9 @@ function enterSummary() {
 function leaveSummary() {
   showView(summaryPrev === "summary" || summaryPrev === "settings" ? "dashboard" : summaryPrev);
 }
-$("#summaryBtn").addEventListener("click", () => {
+// New in v87: guarded so a newer app.js on an older cached index.html still boots.
+const summaryBtnEl = $("#summaryBtn");
+if (summaryBtnEl) summaryBtnEl.addEventListener("click", () => {
   if (currentView === "summary") leaveSummary();
   else enterSummary();
 });
@@ -2154,11 +2162,13 @@ $$("#sumSeg button").forEach((b) =>
     renderSummary();
   })
 );
-$("#sumYearPrev").addEventListener("click", () => {
+const sumYearPrevEl = $("#sumYearPrev");
+if (sumYearPrevEl) sumYearPrevEl.addEventListener("click", () => {
   summaryYear = summaryShownYear - 1;
   renderSummary();
 });
-$("#sumYearNext").addEventListener("click", () => {
+const sumYearNextEl = $("#sumYearNext");
+if (sumYearNextEl) sumYearNextEl.addEventListener("click", () => {
   summaryYear = summaryShownYear + 1;
   renderSummary();
 });
@@ -3891,11 +3901,17 @@ async function runConversion(btn) {
     _converting = false;
   }
 }
-$("#convertNowBtn").addEventListener("click", (e) => runConversion(e.currentTarget));
-$("#convertGo").addEventListener("click", (e) => runConversion(e.currentTarget));
-$("#convertNotNow").addEventListener("click", closeConvertModal);
-$("#convertClose").addEventListener("click", closeConvertModal);
-$("#convertModal").addEventListener("click", (e) => {
+// New in v86: guarded so a newer app.js on an older cached index.html still boots.
+const convertNowBtnEl = $("#convertNowBtn");
+if (convertNowBtnEl) convertNowBtnEl.addEventListener("click", (e) => runConversion(e.currentTarget));
+const convertGoEl = $("#convertGo");
+if (convertGoEl) convertGoEl.addEventListener("click", (e) => runConversion(e.currentTarget));
+const convertNotNowEl = $("#convertNotNow");
+if (convertNotNowEl) convertNotNowEl.addEventListener("click", closeConvertModal);
+const convertCloseEl = $("#convertClose");
+if (convertCloseEl) convertCloseEl.addEventListener("click", closeConvertModal);
+const convertModalEl = $("#convertModal");
+if (convertModalEl) convertModalEl.addEventListener("click", (e) => {
   if (e.target.id === "convertModal") closeConvertModal();
 });
 $("#saveSettings").addEventListener("click", async () => {
