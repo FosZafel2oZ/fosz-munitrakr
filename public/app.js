@@ -3618,13 +3618,17 @@ function openConvertModal(c) {
   const def = defCur();
   const phrase = ncCountPhrase(c.records, c.debts);
   $("#convertTitle").textContent = "Convert old records to " + def + "?";
+  // Records convert at their own dates' rates, debts at today's (so settled
+  // debt cycles stay settled) — the prompt says so.
+  const rule = " Records use each record's own date's exchange rate; debts" +
+    " use today's rate. This needs internet.";
   $("#convertBody").textContent = c.records + c.debts === 1
-    ? phrase + " is in another currency. Convert it using its own date's" +
-      " exchange rate? This needs internet. If you skip, it's left out of" +
-      " totals until you convert it in Settings → Currencies."
-    : phrase + " are in other currencies. Convert them using each record's" +
-      " own date's exchange rate? This needs internet. If you skip, they're" +
-      " left out of totals until you convert them in Settings → Currencies.";
+    ? phrase + " is in another currency. Convert it?" + rule +
+      " If you skip, it's left out of totals until you convert it in" +
+      " Settings → Currencies."
+    : phrase + " are in other currencies. Convert them?" + rule +
+      " If you skip, they're left out of totals until you convert them in" +
+      " Settings → Currencies.";
   $("#convertModalMsg").textContent = "";
   $("#convertModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
