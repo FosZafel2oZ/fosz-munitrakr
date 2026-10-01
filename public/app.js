@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v86"; // keep in step with sw.js CACHE
+const APP_VERSION = "v87"; // keep in step with sw.js CACHE
 // Label used as both the donut slice AND the list-filter key for records
 // without a subcategory — single constant so the two can't drift apart.
 const NO_SUB_LABEL = "No Sub-category";
@@ -2162,7 +2162,7 @@ $("#sumYearNext").addEventListener("click", () => {
   summaryYear = summaryShownYear + 1;
   renderSummary();
 });
-// Not-counted warning (all five screens) → Settings, Currencies block
+// Not-counted warning (all six screens) → Settings, Currencies block
 // expanded and scrolled into view. The back button returns to the screen.
 $$(".nc-warn").forEach((w) =>
   w.addEventListener("click", () => {
