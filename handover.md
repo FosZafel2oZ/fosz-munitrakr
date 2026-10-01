@@ -379,7 +379,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 |------|---------|
 | `currentMode` | `"finance" \| "debt"` — drives mode-specific UI |
 | `currentView` | last-active view (persisted in `fin_prefs`; `settings` is saved as `dashboard`, `summary` is saved as is) |
-| `summaryMode` | `"months" | "years"` — the Summary toggle; persisted in `fin_prefs` (key `summaryMode`, next to `view`, `activeType`, `range`) and restored by `loadPrefs` only when it is one of the two values |
+| `summaryMode` | `"months" \| "years"` — the Summary toggle; persisted in `fin_prefs` (key `summaryMode`, next to `view`, `activeType`, `range`) and restored by `loadPrefs` only when it is one of the two values |
 | `summaryYear` / `summaryShownYear` / `summaryPrev` | Summary state, not persisted: the year picked in Months view (`null` = current year), the year actually on screen after clamping, and the view the Summary page returns to |
 | `renderSummary()` / `enterSummary()` / `leaveSummary()` / `fitInside(el, maxPx, minPx)` | `app.js` — draws the Summary page (also called from `refresh()` while it is on screen); opens it remembering `summaryPrev`; returns to it; shrinks an element's font until its text fits its own clipped box |
 | `store` | the persisted `fin_store` object |
