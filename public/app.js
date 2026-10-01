@@ -29,6 +29,12 @@ const openCats = new Set(); // category ids whose sub-list is expanded
    Not persisted. Every fresh boot starts in MuniTrakr. */
 let currentMode = "finance"; // "finance" | "debt"
 
+/* ---- Summary page state (MuniTrakr) ---- */
+let summaryMode = "months"; // "months" | "years" — remembered in fin_prefs
+let summaryYear = null; // year picked in Months view; null = the current year
+let summaryShownYear = null; // year actually on screen (after clamping)
+let summaryPrev = "dashboard"; // view the Summary page returns to
+
 /* ---- Recurring rules runtime state ---- */
 let pendingConfirmations = []; // [{ ruleId, dueDate, rule }] — derived, not persisted
 let recurringProcessedThisBoot = false;
@@ -140,6 +146,7 @@ function savePrefs() {
       JSON.stringify({
         view: currentView === "settings" ? "dashboard" : currentView,
         activeType,
+        summaryMode,
         range: {
           type: range.type,
           offset: range.offset,
@@ -161,6 +168,7 @@ function loadPrefs() {
       range.end = p.range.end || null;
     }
     if (p.activeType) activeType = p.activeType;
+    if (p.summaryMode === "months" || p.summaryMode === "years") summaryMode = p.summaryMode;
     if (p.view) currentView = p.view;
   } catch {}
 }
@@ -929,10 +937,98 @@ function refresh() {
   const visible = records.filter(inRange);
   renderDashboard(visible);
   renderBulk(visible);
+  if (currentView === "summary") renderSummary();
+}
+
+/* ---------------- Summary page (MuniTrakr) ----------------
+   Spent (expenses) vs invested (investments) per month of one year, or per
+   year. summarizeTotals (finance-helpers.js) counts each record through
+   amountInDefault, so not-counted records are left out (and flagged). */
+const SUM_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// Shrink an element's font until its text fits its OWN box (the element
+// must clip: overflow hidden + nowrap). Resets to maxPx first.
+function fitInside(el, maxPx, minPx) {
+  let size = maxPx;
+  el.style.fontSize = size + "px";
+  if (!el.clientWidth) return; // not laid out yet
+  while (el.scrollWidth > el.clientWidth && size > minPx) {
+    size -= 1;
+    el.style.fontSize = size + "px";
+  }
+}
+function renderSummary() {
+  if (typeof summarizeTotals !== "function") return; // older cached helpers
+  const def = defCur();
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const t = summarizeTotals(records, def, curYear);
+  const months = summaryMode !== "years";
+  // firstYear can be later than this year (every counted record future-dated),
+  // so the shown year is clamped into the range — years[curYear] may not exist.
+  const year = Math.min(Math.max(summaryYear == null ? curYear : summaryYear, t.firstYear), t.lastYear);
+  summaryShownYear = year;
+
+  $$("#sumSeg button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.sumMode === (months ? "months" : "years")));
+  $("#sumYearSel").classList.toggle("hidden", !months);
+  $("#sumYear").textContent = year;
+  $("#sumYearPrev").disabled = year <= t.firstYear;
+  $("#sumYearNext").disabled = year >= t.lastYear;
+
+  let rows, spentTot, investTot, avg;
+  if (months) {
+    const y = t.years[year];
+    rows = y.months.map((m, i) => ({
+      label: SUM_MONTHS[i], spent: m.spent, invested: m.invested,
+      cur: year === curYear && i === curMonth - 1,
+    }));
+    spentTot = y.spent;
+    investTot = y.invested;
+    avg = "Average per month: " +
+      fmt(summaryAverage(y.spent, year, curYear, curMonth), def) + " spent";
+  } else {
+    rows = [];
+    for (let y = t.firstYear; y <= t.lastYear; y++)
+      rows.push({ label: String(y), spent: t.years[y].spent,
+        invested: t.years[y].invested, cur: y === curYear });
+    const cents = (x) => Math.round(x * 100) / 100;
+    spentTot = cents(rows.reduce((s, r) => s + r.spent, 0));
+    investTot = cents(rows.reduce((s, r) => s + r.invested, 0));
+    avg = "Average per year: " + fmt(yearsAverage(rows.map((r) => r.spent)), def) + " spent";
+  }
+
+  const lbl = months ? String(year) : "All years";
+  $("#sumTotSpentLbl").textContent = lbl + " spent";
+  $("#sumTotInvestLbl").textContent = lbl + " invested";
+  $("#sumTotSpent").textContent = fmt(spentTot, def);
+  $("#sumTotInvest").textContent = fmt(investTot, def);
+  renderNcWarn("sumNcWarn", countNotCounted(records, def));
+  $("#sumHdLabel").textContent = months ? "Month" : "Year";
+
+  // Bars: value / the largest single spent-or-invested value in the table.
+  const max = Math.max(0, ...rows.map((r) => Math.max(r.spent, r.invested)));
+  const width = (v) => (max > 0 && v > 0 ? (100 * v) / max : 0);
+  const cell = (v, side) =>
+    `<div class="sum-c sum-${side}"><i style="width:${width(v)}%"></i>` +
+    `<span class="${v ? (side === "sp" ? "amt-out" : "amt-in") : "sum-zero"}">${
+      v ? fmt(v) : "–"}</span></div>`;
+  $("#sumRows").innerHTML = rows.map((r) =>
+    `<div class="sum-r${r.cur ? " cur" : ""}${!r.spent && !r.invested ? " zero" : ""}">` +
+    `<span>${r.label}</span>${cell(r.spent, "sp")}${cell(r.invested, "iv")}</div>`).join("");
+
+  const avgEl = $("#sumAvg");
+  avgEl.textContent = avg;
+  avgEl.classList.toggle("hidden", !records.length);
+
+  fitInside($("#sumTotSpent"), 19, 11);
+  fitInside($("#sumTotInvest"), 19, 11);
+  $$("#sumRows .sum-c span").forEach((s) => fitInside(s, 14, 9));
 }
 
 /* ---------------- Dashboard ---------------- */
-$$(".summary-card").forEach((card) =>
+// (the Summary page's total cards are read-only — not type switches)
+$$(".summary-card:not(.sum-card)").forEach((card) =>
   card.addEventListener("click", () => {
     activeType = card.dataset.type;
     drillCategory = null;
@@ -1570,7 +1666,7 @@ function showView(v) {
   // since mode is intentionally not persisted) must auto-redirect to the
   // dashboard, otherwise the wrong-mode view renders empty.
   const DEBT_ONLY = new Set(["person-history", "debt-records"]);
-  const FINANCE_ONLY = new Set(["records"]);
+  const FINANCE_ONLY = new Set(["records", "summary"]);
   if (DEBT_ONLY.has(v) && currentMode !== "debt") v = "dashboard";
   else if (FINANCE_ONLY.has(v) && currentMode !== "finance") v = "dashboard";
 
@@ -1589,6 +1685,7 @@ function showView(v) {
   document.getElementById("view-debt-dashboard").classList.toggle("hidden", !(v === "dashboard" && onDebtMode));
   document.getElementById("view-records").classList.toggle("hidden", v !== "records");
   document.getElementById("view-settings").classList.toggle("hidden", v !== "settings");
+  document.getElementById("view-summary").classList.toggle("hidden", v !== "summary");
   const phView = document.getElementById("view-person-history");
   if (phView) phView.classList.toggle("hidden", v !== "person-history");
   const dbtRecView = document.getElementById("view-debt-records");
@@ -1598,7 +1695,8 @@ function showView(v) {
       b.classList.add("collapsed")
     );
   const dockHidden =
-    v === "settings" || v === "person-history" || v === "debt-records" || onDebtMode;
+    v === "settings" || v === "summary" || v === "person-history" || v === "debt-records" ||
+    onDebtMode;
   document.getElementById("rangeDock").classList.toggle("hidden", dockHidden);
   // No dock → nothing to clear; let the floating buttons sit lower.
   document.body.classList.toggle("no-dock", dockHidden);
@@ -1619,6 +1717,7 @@ function showView(v) {
   }
   if (v === "person-history") renderPersonHistory(_currentHistoryPersonId);
   if (v === "debt-records") renderDebtRecords();
+  if (v === "summary") renderSummary();
   updateFabs();
   updateSettingsBtn();
   updateDockTheme();
@@ -1630,13 +1729,19 @@ const BACK_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 function updateSettingsBtn() {
   const inSettings = currentView === "settings";
+  const inSummary = currentView === "summary";
+  const back = inSettings || inSummary;
   const btn = $("#settingsBtn");
-  $("#settingsIco").innerHTML = inSettings ? BACK_SVG : GEAR_SVG;
-  btn.classList.toggle("is-back", inSettings);
+  $("#settingsIco").innerHTML = back ? BACK_SVG : GEAR_SVG;
+  btn.classList.toggle("is-back", back);
   btn.setAttribute(
     "aria-label",
-    inSettings ? "Back" : "Settings"
+    back ? "Back" : "Settings"
   );
+  // Summary (chart) button: MuniTrakr only, never on Settings; lit on its page.
+  const sb = $("#summaryBtn");
+  sb.classList.toggle("hidden", currentMode !== "finance" || inSettings);
+  sb.classList.toggle("is-on", inSummary);
 }
 function updateDockTheme() {
   // accent (purple = Expenses, blue = Investments) applies app-wide
@@ -2022,9 +2127,40 @@ function enterSettings() {
 $("#settingsBtn").addEventListener("click", () => {
   if (currentView === "settings") {
     showView(prevView === "settings" ? "dashboard" : prevView);
+  } else if (currentView === "summary") {
+    leaveSummary();
   } else {
     enterSettings();
   }
+});
+// Summary page: the chart button opens it (remembering where from); on the
+// page the chart button and the back arrow both return there.
+function enterSummary() {
+  summaryPrev = currentView;
+  summaryYear = null; // open on the current year
+  showView("summary");
+}
+function leaveSummary() {
+  showView(summaryPrev === "summary" || summaryPrev === "settings" ? "dashboard" : summaryPrev);
+}
+$("#summaryBtn").addEventListener("click", () => {
+  if (currentView === "summary") leaveSummary();
+  else enterSummary();
+});
+$$("#sumSeg button").forEach((b) =>
+  b.addEventListener("click", () => {
+    summaryMode = b.dataset.sumMode;
+    savePrefs();
+    renderSummary();
+  })
+);
+$("#sumYearPrev").addEventListener("click", () => {
+  summaryYear = summaryShownYear - 1;
+  renderSummary();
+});
+$("#sumYearNext").addEventListener("click", () => {
+  summaryYear = summaryShownYear + 1;
+  renderSummary();
 });
 // Not-counted warning (all five screens) → Settings, Currencies block
 // expanded and scrolled into view. The back button returns to the screen.

@@ -41,6 +41,10 @@
   <button id="settingsBtn" class="float-btn" aria-label="Settings">
     <span id="settingsIco"></span>
   </button>
+  <!-- Summary page (MuniTrakr only) — sits just left of the settings button -->
+  <button id="summaryBtn" class="float-btn hidden" aria-label="Summary">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/></svg>
+  </button>
 
   <!-- DASHBOARD VIEW (per active type) -->
   <main id="view-dashboard" class="view">
@@ -194,6 +198,36 @@
 
     <div id="bulkList" class="records-list"></div>
     <div id="bulkEmpty" class="empty hidden">No records in this range.</div>
+  </main>
+
+  <!-- SUMMARY VIEW (MuniTrakr: spent vs invested per month / per year) -->
+  <main id="view-summary" class="view hidden">
+    <div class="records-head"><h2>Summary</h2></div>
+    <div class="sum-seg" id="sumSeg">
+      <button type="button" data-sum-mode="months">Months</button>
+      <button type="button" data-sum-mode="years">Years</button>
+    </div>
+    <div class="sum-ysel" id="sumYearSel">
+      <button type="button" id="sumYearPrev" aria-label="Previous year">&lsaquo;</button>
+      <b id="sumYear"></b>
+      <button type="button" id="sumYearNext" aria-label="Next year">&rsaquo;</button>
+    </div>
+    <div class="summary-row sum-totals">
+      <div class="summary-card sum-card">
+        <span class="muted" id="sumTotSpentLbl">spent</span>
+        <strong id="sumTotSpent" class="amt-out">0</strong>
+      </div>
+      <div class="summary-card sum-card">
+        <span class="muted" id="sumTotInvestLbl">invested</span>
+        <strong id="sumTotInvest" class="amt-in">0</strong>
+      </div>
+    </div>
+    <button type="button" class="nc-warn hidden" id="sumNcWarn"></button>
+    <div class="chart-card sum-table">
+      <div class="sum-hd"><span id="sumHdLabel">Month</span><span>Spent</span><span>Invested</span></div>
+      <div id="sumRows"></div>
+    </div>
+    <div class="sum-avg hidden" id="sumAvg"></div>
   </main>
 
   <!-- SETTINGS VIEW -->

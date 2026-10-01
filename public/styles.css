@@ -13,6 +13,8 @@
   --accent-2:#00d2b4;
   --out:#ff6b81;
   --in:#3ddc97;
+  --out-bar:rgba(255,107,129,.24); /* translucent --out / --in: Summary bars */
+  --in-bar:rgba(61,220,151,.22);
   --ring-empty:#3a4258;
   --radius:18px;
   --safe-b:env(safe-area-inset-bottom,0px);
@@ -277,7 +279,14 @@ body.no-dock .multi-bar{bottom:calc(28px + var(--safe-b))}
   box-shadow:0 8px 22px rgba(0,0,0,.4);
   transition:transform .12s ease,background .15s ease}
 .float-btn svg{width:20px;height:20px}
-.float-btn.is-back{color:var(--accent);border-color:var(--accent)}
+.float-btn.is-back,
+.float-btn.is-on{color:var(--accent);border-color:var(--accent)}
+/* Summary (chart) button — 50px left of the settings button */
+#summaryBtn{right:calc(max(16px,calc((100vw - 560px)/2 + 16px)) + 50px)}
+/* keep a long date clear of the two floating buttons (ellipsis, never under them) */
+.topbar{padding-right:118px}
+.topbar > div{min-width:0}
+.topbar-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .float-btn:active{transform:scale(.9);background:var(--card-2)}
 
 .view{padding:0 18px}
@@ -318,6 +327,49 @@ body.no-dock .multi-bar{bottom:calc(28px + var(--safe-b))}
   display:block;white-space:nowrap;overflow:hidden;max-width:100%}
 .chart-pct{font-size:12px;font-weight:700;color:var(--accent-2);margin-top:3px;min-height:14px}
 .empty{text-align:center;color:var(--muted);padding:50px 20px;font-size:14px;line-height:1.6}
+
+/* ---------- SUMMARY (spent vs invested per month / year) ---------- */
+#view-summary .records-head{margin-bottom:12px}
+#view-summary .records-head h2{font-size:22px;letter-spacing:-.4px}
+.sum-seg{display:grid;grid-template-columns:1fr 1fr;background:var(--card);
+  border:1px solid var(--line);border-radius:13px;padding:4px;margin-bottom:12px}
+.sum-seg button{padding:8px;border-radius:10px;font-weight:700;font-size:14px;color:var(--muted)}
+.sum-seg button.active{background:var(--accent);color:#fff}
+.sum-ysel{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sum-ysel b{font-size:17px;font-variant-numeric:tabular-nums}
+.sum-ysel button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);
+  font-size:20px;line-height:1;padding-bottom:2px}
+.sum-ysel button:active{background:var(--card-2)}
+.sum-ysel button:disabled{opacity:.35;cursor:default;background:none}
+.sum-totals{gap:10px;margin-bottom:12px}
+.sum-totals .summary-card{padding:12px 14px;gap:2px;border-radius:16px;cursor:default}
+.sum-totals .summary-card:active{transform:none}
+.sum-totals .summary-card .muted{font-size:12px}
+.sum-totals .summary-card strong{font-size:19px;letter-spacing:-.3px}
+.sum-totals + .nc-warn{margin:-4px 0 12px}
+.chart-card.sum-table{padding:6px 12px;border-radius:20px}
+.sum-hd,.sum-r{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(0,1fr);
+  align-items:center;column-gap:4px}
+.sum-hd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;
+  padding:9px 2px 7px;border-bottom:1px solid var(--line)}
+.sum-hd span:nth-child(2){text-align:right;padding-right:7px}
+.sum-hd span:nth-child(3){padding-left:7px}
+.sum-r{padding:6px 2px;border-bottom:1px solid var(--line);font-size:14px;
+  font-variant-numeric:tabular-nums}
+.sum-r:last-child{border-bottom:0}
+.sum-r.cur{background:var(--accent-soft);border-radius:10px;border-bottom-color:transparent}
+.sum-r.zero{opacity:.45}
+/* numbers meet in the middle; the spent bar grows left, the invested bar right */
+.sum-c{position:relative;font-weight:600;padding:5px 7px;overflow:hidden;min-width:0}
+.sum-c i{position:absolute;top:0;bottom:0}
+.sum-c span{position:relative;display:block;white-space:nowrap;overflow:hidden}
+.sum-sp{text-align:right;border-radius:7px 2px 2px 7px}
+.sum-sp i{right:0;border-radius:7px 2px 2px 7px;background:var(--out-bar)}
+.sum-iv{text-align:left;border-radius:2px 7px 7px 2px}
+.sum-iv i{left:0;border-radius:2px 7px 7px 2px;background:var(--in-bar)}
+.sum-zero{color:var(--muted);opacity:.6}
+.sum-avg{font-size:12px;color:var(--muted);margin-top:10px;text-align:center}
 
 /* ---------- RECORDS ---------- */
 .records-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
@@ -656,6 +708,8 @@ body.theme-aero{
   --accent-2:#00b89c;
   --out:#ff5a6a;
   --in:#0fae5e;
+  --out-bar:rgba(255,90,106,.24);
+  --in-bar:rgba(15,174,94,.22);
   --ring-empty:rgba(120,170,200,.35);
   color:var(--text);
 }
@@ -872,11 +926,13 @@ body.theme-aero .rn-arrow{color:#fff}
 
 /* type toggle / segmented */
 body.theme-aero .type-toggle,
-body.theme-aero .seg{background:rgba(255,255,255,.5);
+body.theme-aero .seg,
+body.theme-aero .sum-seg{background:rgba(255,255,255,.5);
   border:1px solid rgba(255,255,255,.7);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.85),inset 0 -1px 2px rgba(20,80,140,.08)}
 body.theme-aero .type-toggle button.active,
-body.theme-aero .seg button.active{
+body.theme-aero .seg button.active,
+body.theme-aero .sum-seg button.active{
   background:
     linear-gradient(180deg,rgba(255,255,255,.6) 0%,rgba(255,255,255,0) 48%,rgba(0,0,0,.06) 100%),
     linear-gradient(180deg,var(--accent),var(--accent-b));
@@ -991,6 +1047,8 @@ body.theme-yoimiya{
   --accent-2:#ffd166;
   --out:#ff5a6a;
   --in:#ffb24d;
+  --out-bar:rgba(255,90,106,.24);
+  --in-bar:rgba(255,178,77,.24);
   --ring-empty:#5a3a26;
   color:var(--text);
 }
@@ -1055,6 +1113,7 @@ body.theme-yoimiya .btn-primary{color:#fff;text-shadow:0 1px 2px rgba(120,30,0,.
 body.theme-yoimiya .fab{border-radius:50%;color:#fff}
 body.theme-yoimiya .type-toggle button.active,
 body.theme-yoimiya .seg button.active,
+body.theme-yoimiya .sum-seg button.active,
 body.theme-yoimiya .top-tabs button.active{
   background:linear-gradient(135deg,#ffae3b,#ff7a18 55%,#e8482b);
   color:#fff;box-shadow:0 6px 16px var(--accent-glow)}
