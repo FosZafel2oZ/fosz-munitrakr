@@ -623,7 +623,8 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
 #convertNoticeBody.hidden + .form-error{margin-top:0}
 #convertModalMsg{margin:-6px 0 14px}
 #convertModalMsg:empty{display:none}
-#convertNowBtn:disabled,#convertGo:disabled{opacity:.75;cursor:default;transform:none}
+#convertNowBtn:disabled,#convertGo:disabled,
+#saveDefCurrency:disabled,#saveCurrencies:disabled{opacity:.75;cursor:default;transform:none}
 
 /* ---------- NEW COLOR PANEL ---------- */
 .new-color-panel{background:var(--bg-2);border:1px solid var(--line);

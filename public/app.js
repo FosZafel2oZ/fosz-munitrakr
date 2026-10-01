@@ -3620,7 +3620,9 @@ let _converting = false;
 async function runConversion(btn) {
   if (_converting) return;
   _converting = true;
-  const btns = [$("#convertNowBtn"), $("#convertGo")];
+  // The two currency Saves are locked too: a default change mid-run would
+  // make this run write conversions into the wrong currency.
+  const btns = [$("#convertNowBtn"), $("#convertGo"), $("#saveDefCurrency"), $("#saveCurrencies")];
   const label = btn.textContent;
   btns.forEach((b) => { b.disabled = true; });
   $("#convertModalMsg").textContent = "";
@@ -3649,7 +3651,9 @@ async function runConversion(btn) {
         (plan.failed === 1 ? " record" : " records") +
         " — check your connection and try again.";
       setConvertMsg(msg, false);
-      if (!$("#convertModal").classList.contains("hidden")) {
+      loadStore();
+      // A prompt opened for another default is not this run's to touch.
+      if (defCur() === def && !$("#convertModal").classList.contains("hidden")) {
         $("#convertModalMsg").style.color = "";
         $("#convertModalMsg").textContent = msg;
       }
@@ -3658,6 +3662,13 @@ async function runConversion(btn) {
     // Write into a freshly loaded store (the fetch took time), matching each
     // planned item by id; one save for the whole run.
     loadStore();
+    if (defCur() !== def) {
+      // Backstop (the Saves are locked during a run): never write
+      // conversions into a default that is no longer current.
+      setConvertMsg("Your default currency changed while converting, so" +
+        " nothing was converted. Tap Convert now to try again.", false);
+      return;
+    }
     const freshRec = new Map(store.records.map((r) => [r.id, r]));
     const freshDebt = new Map(store.debts.map((d) => [d.id, d]));
     let nRec = 0, nDebt = 0;
