@@ -1008,11 +1008,12 @@ function renderDashboard(list) {
   const typed = activeType === "expense" ? expenses : invest;
   const label = activeType === "expense" ? "Expense" : "Investment";
 
-  if (drillCategory && !typed.some((r) => r.category === drillCategory))
-    drillCategory = null;
-
   // Chart groups skip not-counted records (amountInDefault null).
   const def = defCur();
+  // Leave the drill when its category has no COUNTED record left (else an
+  // empty sub-category chart).
+  if (drillCategory && !typed.some((r) => r.category === drillCategory && amountInDefault(r, def) !== null))
+    drillCategory = null;
   let groups = {};
   if (!drillCategory) {
     typed.forEach((r) => {
@@ -2231,14 +2232,18 @@ function updateManualRateField() {
 }
 $("#fCurrency").addEventListener("change", updateManualRateField);
 
-/* one payload from all settings edits, so saving any section keeps the rest */
-function buildSettingsPayload() {
+/* one payload from all settings edits, so saving any section keeps the rest.
+   Only the two currency Saves (#saveDefCurrency, #saveCurrencies) pass
+   withDefCurrency = true to send the default-currency select's value; every
+   other save keeps the saved default, so an unsaved pick in that select can
+   never change the default behind the user's back. */
+function buildSettingsPayload(withDefCurrency) {
   const p = JSON.parse(JSON.stringify(settingsDraft || settings));
   p.currencies = (
     curDraft && curDraft.length ? curDraft : settings.currencies || []
   ).slice();
   p.defaultCurrency =
-    ($("#setDefCurrency") && $("#setDefCurrency").value) ||
+    (withDefCurrency && $("#setDefCurrency") && $("#setDefCurrency").value) ||
     settings.defaultCurrency ||
     "THB";
   p.theme = settings.theme || "default";
@@ -2270,6 +2275,13 @@ function buildSettingsPayload() {
 function syncDraftsFromSettings() {
   settingsDraft = JSON.parse(JSON.stringify(settings));
   curDraft = (settings.currencies || []).slice();
+  // The default-currency select is a draft too: after any save it shows the
+  // saved default (a non-currency save never sends an unsaved pick).
+  const sel = $("#setDefCurrency");
+  if (sel) {
+    withCurrencyOption(sel, settings.defaultCurrency || "THB");
+    sel.value = settings.defaultCurrency || "THB";
+  }
 }
 
 /* ---- Generic touch-friendly drag reorder ----
@@ -2371,7 +2383,7 @@ $("#saveCurrencies").addEventListener("click", async () => {
   loadStore();
   const prevDef = defCur(); // this Save also carries the default-currency select
   try {
-    settings = await api("/settings", "PUT", buildSettingsPayload());
+    settings = await api("/settings", "PUT", buildSettingsPayload(true));
     syncDraftsFromSettings();
     fillCurrencySelects();
     renderCurManager();
@@ -3531,7 +3543,7 @@ $("#saveDefCurrency").addEventListener("click", async () => {
   loadStore();
   const prevDef = defCur();
   try {
-    settings = await api("/settings", "PUT", buildSettingsPayload());
+    settings = await api("/settings", "PUT", buildSettingsPayload(true));
     syncDraftsFromSettings();
     fillCurrencySelects();
     renderCurManager();
@@ -4604,7 +4616,8 @@ function renderDebtDashboard() {
     fitText(document.getElementById("dbtTotalLend"), 22, 11);
     fitText(document.getElementById("dbtTotalBorrow"), 22, 11);
   }
-  renderNcWarn("dbtNcWarn", countNotCounted(store.debts || [], cur));
+  // Same scope as the totals above: debts of deleted people are left out.
+  renderNcWarn("dbtNcWarn", countNotCounted((store.debts || []).filter((d) => d && peopleById[d.personId]), cur));
 
   const list = document.getElementById("dbtPersonList");
   const empty = document.getElementById("dbtEmpty");
@@ -5554,7 +5567,8 @@ function renderDebtRecords() {
     fitText(document.getElementById("dbtRecTotalLend"), 22, 11);
     fitText(document.getElementById("dbtRecTotalBorrow"), 22, 11);
   }
-  renderNcWarn("dbtRecNcWarn", countNotCounted(store.debts || [], cur));
+  // Same scope as the totals above: debts of deleted people are left out.
+  renderNcWarn("dbtRecNcWarn", countNotCounted((store.debts || []).filter((d) => d && peopleById[d.personId]), cur));
 
   // Compute the visible list (filter by selected people if any)
   let rows = (store.debts || []).slice();
