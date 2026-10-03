@@ -3295,7 +3295,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
       savedRecord &&
       (!savedRecord.ruleId || isRecreate)
     ) {
-      await createRuleFromAddRecord(savedRecord);
+      await createRuleFromAddRecord(savedRecord, isRecreate);
     }
     // Pending-confirmation callback (Edit flow from dashboard banner)
     const onSaved = window.__pendingOnSaved;
@@ -4711,7 +4711,7 @@ function setRecRecurringSection(record) {
 // but we keep the call site clean).
 function escapeHtmlText(s) { return String(s == null ? "" : s); }
 
-async function createRuleFromAddRecord(savedRecord) {
+async function createRuleFromAddRecord(savedRecord, isRecreate) {
   const cadenceBtn = document.querySelector("#recCadence button.seg-on");
   const cadenceKind = (cadenceBtn && cadenceBtn.dataset.v) || "daily";
   const cadence = { kind: cadenceKind };
@@ -4746,10 +4746,12 @@ async function createRuleFromAddRecord(savedRecord) {
   loadStore();
   const recIdx = store.records.findIndex((r) => r.id === savedRecord.id);
   // `manual: true` — the user typed this record, so it still counts as
-  // "recently added" (recentPicks skips rule-linked records without it).
+  // "recently added" (recentPicks skips rule-linked records without it). Not
+  // on an orphan recreate: that record may have been auto-generated, and a
+  // genuinely hand-entered one already carries the flag (PUT merges it back).
   if (recIdx >= 0) {
     store.records[recIdx].ruleId = rule.id;
-    store.records[recIdx].manual = true;
+    if (!isRecreate) store.records[recIdx].manual = true;
   }
   store.settings.recurring.push(rule);
   saveStore();
