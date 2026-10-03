@@ -705,8 +705,8 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
 .cl-edit svg,.cl-toggle svg{width:17px;height:17px}
 .cl-edit:active,.cl-toggle:active{background:var(--accent-soft);color:var(--accent)}
 .cl-toggle{margin-right:-5px}
-.cl-toggle svg{transition:transform .15s}
-.cl-toggle[aria-expanded="true"] svg{transform:rotate(180deg)}
+.cl-toggle[aria-expanded="true"]{color:var(--accent);border-color:var(--accent);
+  background:var(--accent-soft)}
 .cl-sublist{padding:0 0 10px 39px}
 .cl-subrow{display:flex;align-items:center;gap:10px;padding:4px 0;min-width:0}
 .cl-subname{font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;
