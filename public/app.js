@@ -3612,9 +3612,11 @@ function renderCatList() {
         ? `<div class="cl-subs">${subs
             .map(
               (s) =>
-                `<span class="cl-mini" style="background:${escapeHtml(
-                  s.color
-                )}" title="${escapeHtml(s.name)}">${iconSvg(subIconOf(cat, s))}</span>`
+                `<span class="cl-mini" role="img" aria-label="${escapeHtml(
+                  s.name
+                )}" style="background:${escapeHtml(s.color)}" title="${escapeHtml(
+                  s.name
+                )}">${iconSvg(subIconOf(cat, s))}</span>`
             )
             .join("")}</div>`
         : `<div class="cl-none">No sub-categories</div>`;
@@ -3735,30 +3737,41 @@ function catEditIconCats() {
   const list = settings[catEdit.type] || [];
   return list.filter((_, i) => i !== catEdit.idx).concat([catEdit.draft]);
 }
+// The per-sub controls' accessible names include the sub's name.
+function catEditSubLabels(s) {
+  const n = String(s.name || "").trim() || "sub-category";
+  return {
+    icon: "Choose icon for " + n,
+    color: "Choose colour for " + n,
+    del: "Remove " + n,
+  };
+}
 function renderCatEditSubs() {
   const d = catEdit.draft;
   const box = $("#ceSubs");
   box.innerHTML = d.subs
-    .map(
-      (s, i) => `<div class="ce-sub" data-idx="${i}">
+    .map((s, i) => {
+      const lb = catEditSubLabels(s);
+      return `<div class="ce-sub" data-idx="${i}">
         <button type="button" class="drag-handle ce-sub-drag" aria-label="Reorder">⠿</button>
-        <button type="button" class="ce-tile sm ce-sub-icon" aria-label="Choose icon" style="background:${escapeHtml(
-          s.color
-        )}">${iconSvg(subIconOf(d, s))}</button>
-        <button type="button" class="color-swatch sm ce-sub-color" aria-label="Choose colour" style="background:${escapeHtml(
-          s.color
-        )}"></button>
+        <button type="button" class="ce-tile sm ce-sub-icon" aria-label="${escapeHtml(
+          lb.icon
+        )}" style="background:${escapeHtml(s.color)}">${iconSvg(subIconOf(d, s))}</button>
+        <button type="button" class="color-swatch sm ce-sub-color" aria-label="${escapeHtml(
+          lb.color
+        )}" style="background:${escapeHtml(s.color)}"></button>
         <input type="text" class="ce-sub-name" value="${escapeHtml(
           s.name
         )}" placeholder="Sub-category name" aria-label="Sub-category name" autocomplete="off" />
-        <button type="button" class="ce-sub-del" aria-label="Remove sub-category">✕</button>
-      </div>`
-    )
+        <button type="button" class="ce-sub-del" aria-label="${escapeHtml(lb.del)}">✕</button>
+      </div>`;
+    })
     .join("");
   box.querySelectorAll(".ce-sub").forEach((row) => {
     const s = d.subs[+row.dataset.idx];
     const tile = row.querySelector(".ce-sub-icon");
     const sw = row.querySelector(".ce-sub-color");
+    const del = row.querySelector(".ce-sub-del");
     tile.addEventListener("click", () =>
       openCatIconPicker(subIconOf(d, s), (next) => {
         s.icon = next; // an explicit pick is stored, even the main icon
@@ -3777,8 +3790,12 @@ function renderCatEditSubs() {
     row.querySelector(".ce-sub-name").addEventListener("input", (e) => {
       s.name = e.target.value;
       setCatEditMsg("");
+      const lb = catEditSubLabels(s);
+      tile.setAttribute("aria-label", lb.icon);
+      sw.setAttribute("aria-label", lb.color);
+      del.setAttribute("aria-label", lb.del);
     });
-    row.querySelector(".ce-sub-del").addEventListener("click", () => {
+    del.addEventListener("click", () => {
       d.subs.splice(d.subs.indexOf(s), 1);
       setCatEditMsg("");
       renderCatEditSubs();
@@ -3898,6 +3915,12 @@ if (ceAddSubEl) ceAddSubEl.addEventListener("click", () => {
   subs.push({ id: "s" + uid(), name: "New sub", color: FALLBACK[subs.length % FALLBACK.length] });
   setCatEditMsg("");
   renderCatEditSubs();
+  // Ready to type the real name over the placeholder one.
+  const inp = $("#ceSubs .ce-sub:last-child .ce-sub-name");
+  if (inp) {
+    inp.focus();
+    inp.select();
+  }
 });
 const ceSaveEl = $("#ceSave");
 if (ceSaveEl) ceSaveEl.addEventListener("click", saveCatEdit);
@@ -3979,6 +4002,7 @@ function openColorSheet(currentColor, onPick) {
     b.className = "color-dot" + (c === cur ? " sel" : "");
     b.style.background = c;
     b.setAttribute("aria-label", c);
+    b.setAttribute("aria-pressed", c === cur ? "true" : "false");
     b.addEventListener("click", () => pick(c));
     grid.appendChild(b);
   });
