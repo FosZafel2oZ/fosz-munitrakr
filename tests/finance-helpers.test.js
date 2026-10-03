@@ -1881,3 +1881,35 @@ test("COLOR_PRESETS: the 18 approved colours in the approved order", () => {
     "#5cd0ff", "#2f93ff", "#3b7dd8", "#2b2f45", "#5a6072", "#8b93a7",
   ]);
 });
+
+/* ============================================================ */
+/* labelSqueeze                                                  */
+/* ============================================================ */
+
+test("labelSqueeze: a word that fits (or exactly fits) is not squeezed", () => {
+  assert.equal(H.labelSqueeze(40, 62, 0.84), 1);
+  assert.equal(H.labelSqueeze(62, 62, 0.84), 1);
+});
+
+test("labelSqueeze: a slightly too-wide word gets the floored ratio", () => {
+  // 62 / 70 = 0.8857... -> 0.88
+  assert.equal(H.labelSqueeze(70, 62, 0.84), 0.88);
+  // 62 / 65 = 0.9538... -> 0.95
+  assert.equal(H.labelSqueeze(65, 62, 0.84), 0.95);
+});
+
+test("labelSqueeze: a far-too-wide word is held at minScale", () => {
+  assert.equal(H.labelSqueeze(100, 62, 0.84), 0.84);
+  assert.equal(H.labelSqueeze(73.8, 62, 0.84), 0.84); // 62/73.8 = 0.84.. floors to 0.84
+});
+
+test("labelSqueeze: bad inputs give 1 (no squeeze)", () => {
+  assert.equal(H.labelSqueeze(0, 62, 0.84), 1);
+  assert.equal(H.labelSqueeze(-5, 62, 0.84), 1);
+  assert.equal(H.labelSqueeze(NaN, 62, 0.84), 1);
+  assert.equal(H.labelSqueeze(Infinity, 62, 0.84), 1);
+  assert.equal(H.labelSqueeze(70, 0, 0.84), 1);
+  assert.equal(H.labelSqueeze(70, NaN, 0.84), 1);
+  assert.equal(H.labelSqueeze("70", 62, 0.84), 1);
+  assert.equal(H.labelSqueeze(undefined, undefined, undefined), 1);
+});

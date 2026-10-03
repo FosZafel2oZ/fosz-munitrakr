@@ -394,6 +394,24 @@
     return categoryBreakdown(inPeriod, def);
   }
 
+  /* ---------- labelSqueeze ----------
+     The horizontal scale for a "Recently added" chip label (scaleX; the text
+     height never changes). `widestWordPx` is the label's widest single word,
+     `maxPx` the label's width, `minScale` the narrowest allowed (0.84).
+       - the word fits (widestWordPx <= maxPx) -> 1, no squeeze
+       - otherwise the ratio maxPx / widestWordPx, floored to 2 decimals so the
+         word is never a hair too wide, but never below `minScale` (a word
+         that still does not fit then breaks across lines as before)
+       - any input that is not a positive finite number -> 1
+     Pure.
+  */
+  function labelSqueeze(widestWordPx, maxPx, minScale) {
+    const ok = (n) => typeof n === "number" && Number.isFinite(n) && n > 0;
+    if (!ok(widestWordPx) || !ok(maxPx) || !ok(minScale)) return 1;
+    if (widestWordPx <= maxPx) return 1;
+    return Math.max(minScale, Math.floor((maxPx / widestWordPx) * 100) / 100);
+  }
+
   /* ---------- recentPicks ----------
      The Add-Record quick-pick row: the most recently added (category,
      subcategory) picks of one type. `cats` is that type's settings category
@@ -721,7 +739,7 @@
     iconChoiceFromPicture, migrateIconChoices,
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
     planReconversion, summarizeTotals, summaryAverage, yearsAverage, categoryBreakdown, summaryBreakdown,
-    reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks,
+    reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks, labelSqueeze,
     iconsInUse, categoryDraftError, COLOR_PRESETS,
   };
 });
