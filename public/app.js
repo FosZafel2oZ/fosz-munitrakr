@@ -2486,6 +2486,13 @@ $("#fCurrency").addEventListener("change", updateManualRateField);
    never change the default behind the user's back. */
 function buildSettingsPayload(withDefCurrency) {
   const p = JSON.parse(JSON.stringify(settingsDraft || settings));
+  // Category lists are no longer drafted in Settings (they're saved by
+  // persistCategories and by the Add Record new-category flow, which writes
+  // `settings` directly), so always send the saved lists — a stale draft
+  // would drop a category added since Settings opened.
+  ["expense", "investment"].forEach((t) => {
+    if (Array.isArray(settings[t])) p[t] = JSON.parse(JSON.stringify(settings[t]));
+  });
   p.currencies = (
     curDraft && curDraft.length ? curDraft : settings.currencies || []
   ).slice();
