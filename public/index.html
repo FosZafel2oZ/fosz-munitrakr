@@ -195,11 +195,11 @@
       <h2 id="bulkListTitle">Expense Records</h2>
       <span class="muted" id="bulkRecordCount">0</span>
     </div>
-    <label class="rec-search" id="recSearchBar">
+    <label class="rec-search" id="recSearchBar" for="recSearch">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 16l4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
       <input type="search" id="recSearch" placeholder="Search notes" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-label="Search notes" />
       <button type="button" class="rec-search-clear hidden" id="recSearchClear" aria-label="Clear search">
-        <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        <span class="rec-search-x"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></span>
       </button>
     </label>
     <div class="muted hidden" id="selCount" style="margin-bottom:10px">0 selected</div>

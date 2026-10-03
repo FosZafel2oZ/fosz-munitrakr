@@ -2095,9 +2095,11 @@ function buildFilterMenu(opening) {
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       const n = rows[+b.dataset.ci].name;
-      if (recFilterOpen.has(n)) recFilterOpen.delete(n);
-      else recFilterOpen.add(n);
+      const expanding = !recFilterOpen.has(n);
+      if (expanding) recFilterOpen.add(n);
+      else recFilterOpen.delete(n);
       buildFilterMenu();
+      if (expanding) revealFilterSubs(menu, b.dataset.ci);
     })
   );
   menu.querySelector("#recFilterClear").addEventListener("click", (e) => {
@@ -2106,6 +2108,21 @@ function buildFilterMenu(opening) {
     retick();
   });
   menu.scrollTop = keepScroll;
+}
+// After an expand tap: scroll the MENU (never the page) just enough to show
+// the category's new sub rows — as many as fit without pushing the category
+// row itself out of the top.
+function revealFilterSubs(menu, ci) {
+  const exp = menu.querySelector(`.filter-exp[data-ci="${ci}"]`);
+  const row = exp && exp.closest(".filter-row");
+  const block = row && row.nextElementSibling;
+  if (!block || !block.classList.contains("filter-subs")) return;
+  const top = menu.getBoundingClientRect().top + menu.clientTop;
+  const bottom = top + menu.clientHeight;
+  const over = block.getBoundingClientRect().bottom + 6 - bottom; // 6 = menu padding
+  if (over <= 0) return;
+  const room = row.getBoundingClientRect().top - top;
+  menu.scrollTop += Math.max(0, Math.min(over, room));
 }
 $("#recFilterBtn").addEventListener("click", (e) => {
   e.stopPropagation();
@@ -2127,6 +2144,7 @@ if (recSearchInput) {
     renderBulk(records.filter(inRange));
   });
   recSearchInput.addEventListener("keydown", (e) => {
+    if (e.isComposing) return; // Enter is confirming an IME word, not submitting
     if (e.key === "Enter") {
       e.preventDefault();
       recSearchInput.blur(); // dismiss the keyboard
@@ -2134,14 +2152,17 @@ if (recSearchInput) {
   });
 }
 if (recSearchClearBtn) {
-  // Keep the keyboard up: don't let the tap move focus off the input.
+  // The tap must not move focus: then the input still has it only when the
+  // keyboard was up, and only then is it refocused (a dismissed keyboard
+  // stays down).
   recSearchClearBtn.addEventListener("mousedown", (e) => e.preventDefault());
   recSearchClearBtn.addEventListener("click", (e) => {
     e.preventDefault();
     recQuery = "";
     if (recSearchInput) {
+      const hadFocus = document.activeElement === recSearchInput;
       recSearchInput.value = "";
-      recSearchInput.focus();
+      if (hadFocus) recSearchInput.focus();
     }
     renderBulk(records.filter(inRange));
   });
@@ -4344,6 +4365,13 @@ async function persistCategories(type, list) {
     return false;
   }
   if (settingsDraft) settingsDraft[type] = JSON.parse(JSON.stringify(settings[type]));
+  // A rename / delete can leave the Records filter holding keys that no
+  // longer exist (hiding records), so a save of the shown type clears its
+  // ticks. The notes search stays.
+  if (type === activeType) {
+    recFilter = new Set();
+    recFilterOpen.clear();
+  }
   populateDatalists();
   await loadRecords(); // pull renamed records so cards update immediately
   return true;
