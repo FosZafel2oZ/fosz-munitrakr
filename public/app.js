@@ -3660,12 +3660,8 @@ function openCatIconPicker(currentIconId, onPick, cats) {
 function closeCatIconPicker() {
   const m = document.getElementById("catIconModal");
   if (m) m.classList.add("hidden");
-  const otherModalIds = ["modal", "ruleModal", "personIconModal"];
-  const anyOpen = otherModalIds.some((id) => {
-    const el = document.getElementById(id);
-    return el && !el.classList.contains("hidden");
-  });
-  if (!anyOpen) document.body.classList.remove("modal-open");
+  if (!document.querySelector(".modal-overlay:not(.hidden)"))
+    document.body.classList.remove("modal-open");
 }
 document.getElementById("catIconClose")?.addEventListener("click", closeCatIconPicker);
 document.getElementById("catIconModal")?.addEventListener("click", (e) => {
@@ -3673,10 +3669,13 @@ document.getElementById("catIconModal")?.addEventListener("click", (e) => {
 });
 
 // Colour sheet — reusable. `currentColor` is ringed (on its preset, or on the
-// "+" circle when it isn't one); picking a preset — or any colour from the
-// system picker behind the "+" — calls onPick(hex) and closes the sheet. The
-// "+" is a <label> around a visually-hidden colour input so iOS opens the
-// system picker from a real tap.
+// "+" circle when it isn't one); picking a preset calls onPick(hex) and closes
+// the sheet. The system picker behind the "+" applies live: every `input`
+// calls onPick(hex) (sheet stays open, "+" shows the colour) and `change`
+// (picker dismissed) calls it once more and closes. The "+" is a <label>
+// around a visually-hidden colour input so iOS opens the system picker from a
+// real tap.
+let _colorSheetToken = 0; // each open owns its own handlers; reopening voids the old ones
 function openColorSheet(currentColor, onPick) {
   const m = document.getElementById("colorSheetModal");
   const grid = document.getElementById("colorSheetGrid");
@@ -3685,6 +3684,7 @@ function openColorSheet(currentColor, onPick) {
   const cur = String(currentColor || "").toLowerCase();
   const isPreset = presets.includes(cur);
   const hex6 = /^#[0-9a-f]{6}$/.test(cur);
+  const token = ++_colorSheetToken;
   const pick = (hex) => {
     closeColorSheet();
     onPick(hex);
@@ -3707,14 +3707,16 @@ function openColorSheet(currentColor, onPick) {
     '<span aria-hidden="true">+</span>' +
     '<input type="color" class="visually-hidden" value="' + (hex6 ? cur : "#7c5cff") + '" />';
   const inp = plus.querySelector("input");
-  let done = false;
-  const take = () => {
-    if (done) return;
-    done = true;
+  inp.addEventListener("input", () => {
+    if (token !== _colorSheetToken) return;
+    plus.classList.add("sel", "custom");
+    plus.style.background = inp.value;
+    onPick(inp.value);
+  });
+  inp.addEventListener("change", () => {
+    if (token !== _colorSheetToken) return;
     pick(inp.value);
-  };
-  inp.addEventListener("input", take);
-  inp.addEventListener("change", take);
+  });
   grid.appendChild(plus);
   m.classList.remove("hidden");
   document.body.classList.add("modal-open");
