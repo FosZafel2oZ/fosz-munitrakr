@@ -1410,6 +1410,8 @@ function refresh() {
    year. summarizeTotals (finance-helpers.js) counts each record through
    amountInDefault, so not-counted records are left out (and flagged). */
 const SUM_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const SUM_MONTHS_FULL = ["January","February","March","April","May","June","July",
+  "August","September","October","November","December"];
 // Shrink an element's font until its text fits its OWN box (the element
 // must clip: overflow hidden + nowrap). Resets to maxPx first.
 function fitInside(el, maxPx, minPx) {
@@ -1450,6 +1452,7 @@ function renderSummary() {
     rows = y.months.map((m, i) => ({
       label: SUM_MONTHS[i], spent: m.spent, invested: m.invested,
       cur: year === curYear && i === curMonth - 1,
+      name: SUM_MONTHS_FULL[i], y: year, m: i,
     }));
     spentTot = y.spent;
     investTot = y.invested;
@@ -1459,7 +1462,8 @@ function renderSummary() {
     rows = [];
     for (let y = t.firstYear; y <= t.lastYear; y++)
       rows.push({ label: String(y), spent: t.years[y].spent,
-        invested: t.years[y].invested, cur: y === curYear });
+        invested: t.years[y].invested, cur: y === curYear,
+        name: String(y), y, m: null });
     const cents = (x) => Math.round(x * 100) / 100;
     spentTot = cents(rows.reduce((s, r) => s + r.spent, 0));
     investTot = cents(rows.reduce((s, r) => s + r.invested, 0));
@@ -1477,13 +1481,21 @@ function renderSummary() {
   // Bars: value / the largest single spent-or-invested value in the table.
   const max = Math.max(0, ...rows.map((r) => Math.max(r.spent, r.invested)));
   const width = (v) => (max > 0 && v > 0 ? (100 * v) / max : 0);
-  const cell = (v, side) =>
-    `<div class="sum-c sum-${side}"><i style="width:${width(v)}%"></i>` +
-    `<span class="${v ? (side === "sp" ? "amt-out" : "amt-in") : "sum-zero"}">${
-      v ? fmt(v) : "–"}</span></div>`;
+  // A non-zero number is a button that opens that period's breakdown
+  // (openSumDetail, via the delegated #sumRows listener); a "–" cell is inert.
+  const cell = (v, side, r) => {
+    const inner = `<i style="width:${width(v)}%"></i>` +
+      `<span class="${v ? (side === "sp" ? "amt-out" : "amt-in") : "sum-zero"}">${
+        v ? fmt(v) : "–"}</span>`;
+    if (!v) return `<div class="sum-c sum-${side}">${inner}</div>`;
+    const label = `${r.name} ${side === "sp" ? "spent" : "invested"} ${fmt(v, def)}, show categories`;
+    return `<button type="button" class="sum-c sum-${side} sum-tap" ` +
+      `data-type="${side === "sp" ? "expense" : "investment"}" data-y="${r.y}" ` +
+      `data-m="${r.m == null ? "" : r.m}" aria-label="${escapeHtml(label)}">${inner}</button>`;
+  };
   $("#sumRows").innerHTML = rows.map((r) =>
     `<div class="sum-r${r.cur ? " cur" : ""}${!r.spent && !r.invested ? " zero" : ""}">` +
-    `<span>${r.label}</span>${cell(r.spent, "sp")}${cell(r.invested, "iv")}</div>`).join("");
+    `<span>${r.label}</span>${cell(r.spent, "sp", r)}${cell(r.invested, "iv", r)}</div>`).join("");
 
   const avgEl = $("#sumAvg");
   avgEl.textContent = avg;
@@ -2216,13 +2228,9 @@ function updateSettingsBtn() {
     back ? "Back" : "Settings"
   );
   // Summary (chart) button: MuniTrakr only, never on Settings (or its category
-  // Edit page); lit on its page.
+  // Edit page) nor on the Summary page itself (only the back arrow there).
   const sb = $("#summaryBtn");
-  if (sb) {
-    sb.classList.toggle("hidden", currentMode !== "finance" || inSettings || inCatEdit);
-    sb.classList.toggle("is-on", inSummary);
-    sb.setAttribute("aria-pressed", String(inSummary));
-  }
+  if (sb) sb.classList.toggle("hidden", currentMode !== "finance" || inSettings || inCatEdit || inSummary);
 }
 function updateDockTheme() {
   // accent (purple = Expenses, blue = Investments) applies app-wide
@@ -2616,8 +2624,8 @@ $("#settingsBtn").addEventListener("click", () => {
     enterSettings();
   }
 });
-// Summary page: the chart button opens it (remembering where from); on the
-// page the chart button and the back arrow both return there.
+// Summary page: the chart button opens it (remembering where from); the chart
+// button is hidden on the page, and the back arrow returns there.
 function enterSummary() {
   summaryPrev = currentView;
   summaryYear = null; // open on the current year
@@ -2629,8 +2637,7 @@ function leaveSummary() {
 // New in v87: guarded so a newer app.js on an older cached index.html still boots.
 const summaryBtnEl = $("#summaryBtn");
 if (summaryBtnEl) summaryBtnEl.addEventListener("click", () => {
-  if (currentView === "summary") leaveSummary();
-  else enterSummary();
+  if (currentView !== "summary") enterSummary();
 });
 $$("#sumSeg button").forEach((b) =>
   b.addEventListener("click", () => {
@@ -2648,6 +2655,57 @@ const sumYearNextEl = $("#sumYearNext");
 if (sumYearNextEl) sumYearNextEl.addEventListener("click", () => {
   summaryYear = summaryShownYear + 1;
   renderSummary();
+});
+// Summary breakdown pop-up (new in v89): a tapped spent / invested number →
+// that period's categories (largest first, with their share of the total) and,
+// under each, its sub-categories. summaryBreakdown (finance-helpers.js) counts
+// through amountInDefault like summarizeTotals, so the pop-up total equals the
+// tapped number. month = 0-11, or null for a whole year (Years view).
+function openSumDetail(type, year, month) {
+  const m = document.getElementById("sumDetailModal");
+  const list = document.getElementById("sumDetailList");
+  if (!m || !list || typeof summaryBreakdown !== "function") return;
+  const def = defCur();
+  const b = summaryBreakdown(records, def, { type, year, month });
+  const spent = type === "expense";
+  $("#sumDetailTitle").textContent = month == null ? String(year) : SUM_MONTHS_FULL[month] + " " + year;
+  const tot = $("#sumDetailTotal");
+  tot.className = "sd-total " + (spent ? "amt-out" : "amt-in");
+  tot.innerHTML = `<span>${spent ? "Spent" : "Invested"}</span><strong>${escapeHtml(fmt(b.total, def))}</strong>`;
+  const tile = (icon, color, small) =>
+    `<span class="pick-ico${small ? " sd-ico-s" : " sd-ico"}" style="background:${escapeHtml(color)}">${
+      iconSvg(icon)}</span>`;
+  list.innerHTML = b.categories.map((c) =>
+    `<div class="sd-cat"><div class="sd-row">${tile(catIcon(type, c.name), catColor(type, c.name))}` +
+    `<div class="sd-name"><b>${escapeHtml(c.name)}</b><small>${c.pct}%</small></div>` +
+    `<span class="sd-amt">${escapeHtml(fmt(c.amount))}</span></div>` +
+    c.subs.map((s) => {
+      // "" = this category's records with no sub-category (category's icon + colour)
+      const ico = s.name ? subIcon(type, c.name, s.name) : catIcon(type, c.name);
+      const col = s.name ? subColor(type, c.name, s.name) : catColor(type, c.name);
+      return `<div class="sd-sub">${tile(ico, col, true)}` +
+        `<span class="sd-name">${s.name ? escapeHtml(s.name) : "No sub-category"}</span>` +
+        `<span class="sd-amt">${escapeHtml(fmt(s.amount))}</span></div>`;
+    }).join("") + `</div>`).join("");
+  m.classList.remove("hidden");
+  list.scrollTop = 0; // after un-hiding: a hidden list ignores (and keeps) its scroll position
+  document.body.classList.add("modal-open");
+}
+function closeSumDetail() {
+  const m = document.getElementById("sumDetailModal");
+  if (m) m.classList.add("hidden");
+  if (!document.querySelector(".modal-overlay:not(.hidden)"))
+    document.body.classList.remove("modal-open");
+}
+const sumRowsEl = $("#sumRows");
+if (sumRowsEl) sumRowsEl.addEventListener("click", (e) => {
+  const b = e.target.closest("button.sum-tap");
+  if (!b) return;
+  openSumDetail(b.dataset.type, Number(b.dataset.y), b.dataset.m === "" ? null : Number(b.dataset.m));
+});
+document.getElementById("sumDetailClose")?.addEventListener("click", closeSumDetail);
+document.getElementById("sumDetailModal")?.addEventListener("click", (e) => {
+  if (e.target.id === "sumDetailModal") closeSumDetail();
 });
 // Not-counted warning (all six screens) → Settings, Currencies block
 // expanded and scrolled into view. The back button returns to the screen.

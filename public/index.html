@@ -42,7 +42,7 @@
     <span id="settingsIco"></span>
   </button>
   <!-- Summary page (MuniTrakr only) — sits just left of the settings button -->
-  <button id="summaryBtn" class="float-btn hidden" aria-label="Summary" aria-pressed="false">
+  <button id="summaryBtn" class="float-btn hidden" aria-label="Summary">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/></svg>
   </button>
 
@@ -977,6 +977,18 @@
       <button type="button" class="ghost-btn" id="colorSheetClose">✕</button>
     </div>
     <div id="colorSheetGrid" class="color-grid"></div>
+  </div>
+</div>
+
+<!-- Summary breakdown pop-up (openSumDetail): a tapped period's spent / invested by category -->
+<div id="sumDetailModal" class="modal-overlay hidden">
+  <div class="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="sumDetailTitle">
+    <div class="modal-head">
+      <h3 id="sumDetailTitle"></h3>
+      <button type="button" class="ghost-btn" id="sumDetailClose" aria-label="Close">✕</button>
+    </div>
+    <div id="sumDetailTotal" class="sd-total"></div>
+    <div id="sumDetailList" class="sd-list"></div>
   </div>
 </div>
 

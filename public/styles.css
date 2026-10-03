@@ -279,8 +279,7 @@ body.no-dock .multi-bar{bottom:calc(28px + var(--safe-b))}
   box-shadow:0 8px 22px rgba(0,0,0,.4);
   transition:transform .12s ease,background .15s ease}
 .float-btn svg{width:20px;height:20px}
-.float-btn.is-back,
-.float-btn.is-on{color:var(--accent);border-color:var(--accent)}
+.float-btn.is-back{color:var(--accent);border-color:var(--accent)}
 /* Summary (chart) button — 50px left of the settings button */
 #summaryBtn{right:calc(max(16px,calc((100vw - 560px)/2 + 16px)) + 50px)}
 /* keep a long date clear of the two floating buttons (ellipsis, never under them) */
@@ -370,6 +369,34 @@ body.no-dock .multi-bar{bottom:calc(28px + var(--safe-b))}
 .sum-iv i{left:0;border-radius:2px 7px 7px 2px;background:var(--in-bar)}
 .sum-zero{color:var(--muted);opacity:.6}
 .sum-avg{font-size:12px;color:var(--muted);margin-top:10px;text-align:center}
+/* a non-zero number is a button (opens the breakdown pop-up) */
+button.sum-c{font:inherit;font-weight:600;width:100%}
+button.sum-c:active{filter:brightness(1.25)}
+button.sum-c:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* breakdown pop-up (#sumDetailModal): title + total stay put, the list scrolls */
+#sumDetailModal .modal{display:flex;flex-direction:column;overflow:hidden;max-height:82dvh}
+#sumDetailModal .modal-head{flex-shrink:0;margin-bottom:10px}
+.sd-total{flex-shrink:0;display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding-bottom:10px;border-bottom:1px solid var(--line);font-weight:700}
+.sd-total span{font-size:14px}
+.sd-total strong{font-size:20px;letter-spacing:-.3px;font-variant-numeric:tabular-nums;
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-list{flex:1 1 auto;min-height:0;max-height:70dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;touch-action:pan-y;margin-right:-8px;padding-right:8px}
+.sd-cat{padding:8px 0}
+.sd-cat + .sd-cat{border-top:1px solid var(--line)}
+.sd-row,.sd-sub{display:flex;align-items:center;gap:10px}
+.sd-list .sd-ico{width:30px;height:30px;border-radius:9px}
+.sd-list .sd-ico svg{width:17px;height:17px}
+.sd-list .sd-ico-s{width:22px;height:22px;border-radius:7px}
+.sd-list .sd-ico-s svg{width:13px;height:13px}
+.sd-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-name b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis}
+.sd-name small{display:block;font-size:12px;color:var(--muted)}
+.sd-amt{flex-shrink:0;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
+.sd-sub{gap:8px;padding:3px 0 3px 40px;font-size:13px;color:var(--muted)}
+.sd-row + .sd-sub{margin-top:4px}
+.sd-sub .sd-amt{font-weight:600;font-size:13px;color:var(--text)}
 
 /* ---------- RECORDS ---------- */
 .records-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}

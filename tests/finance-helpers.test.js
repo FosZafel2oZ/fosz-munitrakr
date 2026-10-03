@@ -1323,6 +1323,173 @@ test("summarizeTotals: only future-dated records -> firstYear is that year (earl
 });
 
 /* ============================================================ */
+/* summaryBreakdown                                              */
+/* ============================================================ */
+
+function brk(type, date, amount, category, subcategory, extra) {
+  return rec(type, date, amount, Object.assign({ category, subcategory }, extra || {}));
+}
+
+test("summaryBreakdown: one month vs the whole year", () => {
+  const list = [
+    brk("expense", "2026-06-01", 10, "Food"),
+    brk("expense", "2026-06-30", 5, "Food"),
+    brk("expense", "2026-07-01", 20, "Food"),
+    brk("expense", "2025-06-10", 99, "Food"),
+  ];
+  const jun = H.summaryBreakdown(list, "USD", { type: "expense", year: 2026, month: 5 });
+  assert.equal(jun.total, 15);
+  assert.deepEqual(jun.categories, [{ name: "Food", amount: 15, pct: 100, subs: [] }]);
+  const yr = H.summaryBreakdown(list, "USD", { type: "expense", year: 2026, month: null });
+  assert.equal(yr.total, 35);
+  assert.equal(yr.categories[0].amount, 35);
+  const yr2 = H.summaryBreakdown(list, "USD", { type: "expense", year: 2026 });
+  assert.equal(yr2.total, 35);
+});
+
+test("summaryBreakdown: only the asked type is counted", () => {
+  const list = [
+    brk("expense", "2026-06-01", 10, "Food"),
+    brk("investment", "2026-06-02", 100, "Stocks"),
+    brk("transfer", "2026-06-03", 7, "Food"),
+  ];
+  const sp = H.summaryBreakdown(list, "USD", { type: "expense", year: 2026, month: 5 });
+  assert.equal(sp.total, 10);
+  assert.deepEqual(sp.categories.map((c) => c.name), ["Food"]);
+  const iv = H.summaryBreakdown(list, "USD", { type: "investment", year: 2026, month: 5 });
+  assert.equal(iv.total, 100);
+  assert.deepEqual(iv.categories.map((c) => c.name), ["Stocks"]);
+});
+
+test("summaryBreakdown: not-counted, bad-date and non-numeric records are skipped", () => {
+  const list = [
+    brk("expense", "2026-06-01", 40, "Food", "", { currency: "EUR" }), // not counted
+    brk("expense", "2026-06-01", 40, "Food", "", { currency: "EUR", convertedAmount: 44, convertedCurrency: "GBP" }), // stale
+    brk("expense", "2026-06-01", 50, "Fun", "", { currency: "EUR", convertedAmount: 55, convertedCurrency: "USD" }), // converted -> counted
+    brk("expense", "2026-6-01", 1, "Food"),
+    brk("expense", "2026-13-01", 2, "Food"),
+    brk("expense", "", 3, "Food"),
+    brk("expense", "2026-06-01T10:00", 4, "Food"),
+    brk("expense", "2026-06-02", "abc", "Food"),
+    null,
+    "junk",
+    brk("expense", "2026-06-03", 6, "Food"),
+  ];
+  const b = H.summaryBreakdown(list, "USD", { type: "expense", year: 2026, month: 5 });
+  assert.equal(b.total, 61);
+  assert.deepEqual(b.categories.map((c) => [c.name, c.amount]), [["Fun", 55], ["Food", 6]]);
+});
+
+test("summaryBreakdown: subs empty when no record of the category has a sub-category", () => {
+  const b = H.summaryBreakdown([
+    brk("expense", "2026-06-01", 10, "Rent"),
+    brk("expense", "2026-06-02", 5, "Rent", ""),
+    brk("expense", "2026-06-03", 1, "Rent", undefined),
+  ], "USD", { type: "expense", year: 2026, month: 5 });
+  assert.deepEqual(b.categories, [{ name: "Rent", amount: 16, pct: 100, subs: [] }]);
+});
+
+test("summaryBreakdown: a category with subs lists its no-sub records as a \"\" sub", () => {
+  const b = H.summaryBreakdown([
+    brk("expense", "2026-06-01", 30, "Games", "Genshin"),
+    brk("expense", "2026-06-02", 12, "Games"),
+    brk("expense", "2026-06-03", 8, "Games", ""),
+    brk("expense", "2026-06-04", 5, "Games", "Steam"),
+  ], "USD", { type: "expense", year: 2026, month: 5 });
+  assert.deepEqual(b.categories, [{
+    name: "Games", amount: 55, pct: 100,
+    subs: [{ name: "Genshin", amount: 30 }, { name: "", amount: 20 }, { name: "Steam", amount: 5 }],
+  }]);
+});
+
+test("summaryBreakdown: no \"\" sub when every record of the category has a sub-category", () => {
+  const b = H.summaryBreakdown([
+    brk("expense", "2026-06-01", 3, "Food", "Coffee"),
+    brk("expense", "2026-06-02", 9, "Food", "Lunch"),
+  ], "USD", { type: "expense", year: 2026, month: 5 });
+  assert.deepEqual(b.categories[0].subs, [{ name: "Lunch", amount: 9 }, { name: "Coffee", amount: 3 }]);
+});
+
+test("summaryBreakdown: \"\" sub left out when its amount is 0", () => {
+  const b = H.summaryBreakdown([
+    brk("expense", "2026-06-01", 3, "Food", "Coffee"),
+    brk("expense", "2026-06-02", 0, "Food"),
+  ], "USD", { type: "expense", year: 2026, month: 5 });
+  assert.deepEqual(b.categories[0].subs, [{ name: "Coffee", amount: 3 }]);
+});
+
+test("summaryBreakdown: subs of a month only count that month's records", () => {
+  const b = H.summaryBreakdown([
+    brk("expense", "2026-05-01", 3, "Food", "Coffee"), // other month
+    brk("expense", "2026-06-02", 9, "Food"),
+  ], "USD", { type: "expense", year: 2026, month: 5 });
+  assert.deepEqual(b.categories, [{ name: "Food", amount: 9, pct: 100, subs: [] }]);
+});
+
+test("summaryBreakdown: categories and subs sort by amount desc, ties by name", () => {
+  const b = H.summaryBreakdown([
+    brk("expense", "2026-06-01", 10, "Bills"),
+    brk("expense", "2026-06-01", 25, "Travel"),
+    brk("expense", "2026-06-01", 10, "Alpha"),
+    brk("expense", "2026-06-01", 4, "Food", "Lunch"),
+    brk("expense", "2026-06-01", 4, "Food", "Coffee"),
+    brk("expense", "2026-06-01", 7, "Food", "Snacks"),
+  ], "USD", { type: "expense", year: 2026, month: 5 });
+  assert.deepEqual(b.categories.map((c) => c.name), ["Travel", "Food", "Alpha", "Bills"]);
+  assert.deepEqual(b.categories[1].subs.map((s) => s.name), ["Snacks", "Coffee", "Lunch"]);
+});
+
+test("summaryBreakdown: rounds to cents at the end; pct is a whole number of the total", () => {
+  const b = H.summaryBreakdown([
+    brk("expense", "2026-06-01", 0.1, "A", "x"),
+    brk("expense", "2026-06-02", 0.2, "A", "x"),
+    brk("expense", "2026-06-03", 1.005, "B"),
+    brk("expense", "2026-06-04", 1.234, "C"),
+  ], "USD", { type: "expense", year: 2026, month: 5 });
+  // raw total 2.539 -> 2.54
+  assert.equal(b.total, 2.54);
+  const byName = Object.fromEntries(b.categories.map((c) => [c.name, c]));
+  assert.equal(byName.A.amount, 0.3);
+  assert.deepEqual(byName.A.subs, [{ name: "x", amount: 0.3 }]);
+  assert.equal(byName.C.amount, 1.23);
+  // pct = Math.round(amount / total * 100)
+  assert.equal(byName.A.pct, Math.round(0.3 / 2.54 * 100)); // 12
+  assert.equal(byName.C.pct, Math.round(1.23 / 2.54 * 100)); // 48
+  assert.equal(byName.A.pct, 12);
+  assert.equal(byName.C.pct, 48);
+});
+
+test("summaryBreakdown: total equals the summarizeTotals cell for the same period", () => {
+  const list = [
+    brk("expense", "2026-03-01", 0.1, "A"),
+    brk("expense", "2026-03-02", 0.2, "B", "y"),
+    brk("expense", "2026-03-09", 10.005, "B"),
+    brk("expense", "2026-08-09", 3.333, "A"),
+    brk("investment", "2026-03-04", 1.234, "S"),
+  ];
+  const t = H.summarizeTotals(list, "USD", 2026);
+  assert.equal(H.summaryBreakdown(list, "USD", { type: "expense", year: 2026, month: 2 }).total, t.years[2026].months[2].spent);
+  assert.equal(H.summaryBreakdown(list, "USD", { type: "expense", year: 2026 }).total, t.years[2026].spent);
+  assert.equal(H.summaryBreakdown(list, "USD", { type: "investment", year: 2026, month: 2 }).total, t.years[2026].months[2].invested);
+});
+
+test("summaryBreakdown: empty result (no records, nothing in the period, bad input)", () => {
+  for (const input of [[], null, undefined]) {
+    assert.deepEqual(H.summaryBreakdown(input, "USD", { type: "expense", year: 2026, month: 5 }),
+      { total: 0, categories: [] });
+  }
+  assert.deepEqual(H.summaryBreakdown([brk("expense", "2026-01-01", 5, "A")], "USD",
+    { type: "expense", year: 2026, month: 5 }), { total: 0, categories: [] });
+});
+
+test("summaryBreakdown: pct is 0 when the total is 0", () => {
+  const b = H.summaryBreakdown([brk("expense", "2026-06-01", 0, "A")], "USD",
+    { type: "expense", year: 2026, month: 5 });
+  assert.equal(b.total, 0);
+  assert.deepEqual(b.categories, [{ name: "A", amount: 0, pct: 0, subs: [] }]);
+});
+
+/* ============================================================ */
 /* recentPicks                                                   */
 /* ============================================================ */
 

@@ -327,6 +327,59 @@
     return Math.round((sum / totals.length) * 100) / 100;
   }
 
+  /* ---------- summaryBreakdown ----------
+     The Summary page's pop-up: one period's spending (or investments) by
+     category and sub-category. opts = { type: "expense" | "investment", year,
+     month } — month 0-11, or null/undefined for the whole year. Same record
+     filter as summarizeTotals (YYYY-MM-DD date with month 01-12, matching type,
+     amountInDefault(r, def) a finite Number), so `total` equals that period's
+     summarizeTotals cell. Grouped by r.category, then r.subcategory (blank or
+     missing = ""). Returns { total, categories: [{ name, amount, pct, subs:
+     [{ name, amount }] }] }:
+       - amounts (and total) are rounded to cents at the end
+       - categories: amount desc, then name; pct = Math.round(amount / total
+         * 100), 0 when total is 0
+       - subs: amount desc, then name; [] when none of the category's records
+         has a sub-category, otherwise the no-sub records appear as
+         { name: "" } (only when their amount > 0)
+  */
+  function summaryBreakdown(records, def, opts) {
+    const { type, year, month } = opts || {};
+    const wholeYear = month === null || month === undefined;
+    const cents = (x) => Math.round(x * 100) / 100;
+    const byName = (a, b) => b.amount - a.amount || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    const cats = new Map(); // category name -> { amount, subs: Map(sub name -> amount), hasSub }
+    let total = 0;
+    (Array.isArray(records) ? records : []).forEach((r) => {
+      if (!r || (r.type !== "expense" && r.type !== "investment") || r.type !== type) return;
+      const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(r.date);
+      if (!m) return;
+      const mo = Number(m[2]);
+      if (mo < 1 || mo > 12) return;
+      if (Number(m[1]) !== year || (!wholeYear && mo - 1 !== month)) return;
+      const amt = amountInDefault(r, def);
+      if (amt === null || !Number.isFinite(amt)) return;
+      const catName = r.category || "";
+      const subName = r.subcategory || "";
+      if (!cats.has(catName)) cats.set(catName, { amount: 0, subs: new Map(), hasSub: false });
+      const c = cats.get(catName);
+      c.amount += amt;
+      c.subs.set(subName, (c.subs.get(subName) || 0) + amt);
+      if (subName) c.hasSub = true;
+      total += amt;
+    });
+    total = cents(total);
+    const categories = Array.from(cats, ([name, c]) => {
+      const amount = cents(c.amount);
+      const subs = !c.hasSub ? [] : Array.from(c.subs, ([sub, a]) => ({ name: sub, amount: cents(a) }))
+        .filter((s) => s.name || s.amount > 0)
+        .sort(byName);
+      return { name, amount, pct: total ? Math.round((amount / total) * 100) : 0, subs };
+    });
+    categories.sort(byName);
+    return { total, categories };
+  }
+
   /* ---------- recentPicks ----------
      The Add-Record quick-pick row: the most recently added (category,
      subcategory) picks of one type. `cats` is that type's settings category
@@ -653,7 +706,7 @@
     iconHref, homeIconHref, effectiveIconChoice, headerIconHref,
     iconChoiceFromPicture, migrateIconChoices,
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
-    planReconversion, summarizeTotals, summaryAverage, yearsAverage,
+    planReconversion, summarizeTotals, summaryAverage, yearsAverage, summaryBreakdown,
     reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks,
     iconsInUse, categoryDraftError, COLOR_PRESETS,
   };
