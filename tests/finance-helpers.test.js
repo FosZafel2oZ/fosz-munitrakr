@@ -1936,3 +1936,360 @@ test("labelWords: empty, blank or missing text gives no words", () => {
   assert.deepEqual(H.labelWords(null), []);
   assert.deepEqual(H.labelWords(undefined), []);
 });
+
+/* ============================================================ */
+/* Records filter: recFilterKey / recFilterRows / recFilterToggle / recFilterMatch */
+/* ============================================================ */
+
+const RF_CATS = [
+  { name: "Food", subs: [{ name: "Coffee" }, { name: "Lunch" }] },
+  { name: "Rent", subs: [] },
+  { name: "Travel" },
+  { name: "Food Court", subs: [{ name: "Noodles" }] },
+];
+const rfRec = (category, subcategory, notes) => ({ category, subcategory, notes });
+const rfRow = (cats, records, filter, name) => H.recFilterRows(cats, records, filter).find((r) => r.name === name);
+
+test("recFilterKey: category, NUL, then the sub trimmed and lower-cased", () => {
+  assert.equal(H.recFilterKey("Food", "Coffee"), "Food\u0000coffee");
+  assert.equal(H.recFilterKey("Food", "  CoFFee "), "Food\u0000coffee");
+});
+
+test("recFilterKey: an empty, blank or missing sub is the no-sub key", () => {
+  assert.equal(H.recFilterKey("Food", ""), "Food\u0000");
+  assert.equal(H.recFilterKey("Food", "   "), "Food\u0000");
+  assert.equal(H.recFilterKey("Food", undefined), "Food\u0000");
+  assert.equal(H.recFilterKey("Food", null), "Food\u0000");
+});
+
+test("recFilterKey: the category name is kept as is (no trim, no case change)", () => {
+  assert.equal(H.recFilterKey("Eating Out", "x"), "Eating Out\u0000x");
+});
+
+test("recFilterRows: one row per category, in settings order", () => {
+  const rows = H.recFilterRows(RF_CATS, [], new Set());
+  assert.deepEqual(rows.map((r) => r.name), ["Food", "Rent", "Travel", "Food Court"]);
+});
+
+test("recFilterRows: settings subs come in settings order as kind sub, with keys", () => {
+  const food = rfRow(RF_CATS, [], new Set(), "Food");
+  assert.deepEqual(food.subs, [
+    { name: "Coffee", key: "Food\u0000coffee", on: false, kind: "sub" },
+    { name: "Lunch", key: "Food\u0000lunch", on: false, kind: "sub" },
+  ]);
+});
+
+test("recFilterRows: a category with subs missing or not an array has no sub rows", () => {
+  assert.deepEqual(rfRow(RF_CATS, [rfRec("Rent", "")], new Set(), "Rent").subs, []);
+  assert.deepEqual(rfRow(RF_CATS, [rfRec("Travel", "")], new Set(), "Travel").subs, []);
+  const odd = [{ name: "A", subs: "nope" }, { name: "B", subs: null }];
+  assert.deepEqual(H.recFilterRows(odd, [rfRec("A", "")], new Set()).map((r) => r.subs), [[], []]);
+});
+
+test("recFilterRows: orphan subs follow the settings subs, de-duped case-insensitively, first-seen spelling", () => {
+  const recs = [
+    rfRec("Food", "Snacks"), rfRec("Food", " snacks "), rfRec("Food", "SNACKS"),
+    rfRec("Food", "Bakery"),
+  ];
+  const food = rfRow(RF_CATS, recs, new Set(), "Food");
+  assert.deepEqual(food.subs.map((s) => [s.name, s.kind]), [
+    ["Coffee", "sub"], ["Lunch", "sub"], ["Snacks", "orphan"], ["Bakery", "orphan"],
+  ]);
+  assert.equal(food.subs[2].key, "Food\u0000snacks");
+});
+
+test("recFilterRows: a record sub matching a settings sub case-insensitively and trimmed is not an orphan", () => {
+  const food = rfRow(RF_CATS, [rfRec("Food", "COFFEE"), rfRec("Food", "  lunch  ")], new Set(), "Food");
+  assert.deepEqual(food.subs.map((s) => [s.name, s.kind]), [["Coffee", "sub"], ["Lunch", "sub"]]);
+});
+
+test("recFilterRows: orphans take only the records of their own category; blank subs are not orphans", () => {
+  const recs = [rfRec("Rent", "Deposit"), rfRec("Food", "   "), rfRec("Food", ""), rfRec("Food")];
+  const food = rfRow(RF_CATS, recs, new Set(), "Food");
+  assert.deepEqual(food.subs.map((s) => s.kind), ["sub", "sub", "none"]);
+  const rent = rfRow(RF_CATS, recs, new Set(), "Rent");
+  assert.deepEqual(rent.subs.map((s) => [s.name, s.kind]), [["Deposit", "orphan"]]);
+});
+
+test("recFilterRows: the no-sub row comes last, with name empty and key category + NUL", () => {
+  const recs = [rfRec("Food", "Snacks"), rfRec("Food", "")];
+  const food = rfRow(RF_CATS, recs, new Set(), "Food");
+  assert.deepEqual(food.subs.map((s) => s.kind), ["sub", "sub", "orphan", "none"]);
+  assert.deepEqual(food.subs[3], { name: "", key: "Food\u0000", on: false, kind: "none" });
+});
+
+test("recFilterRows: a missing subcategory field also makes the no-sub row", () => {
+  const food = rfRow(RF_CATS, [{ category: "Food" }], new Set(), "Food");
+  assert.equal(food.subs[food.subs.length - 1].kind, "none");
+});
+
+test("recFilterRows: no no-sub row when no record of that category has an empty sub", () => {
+  const food = rfRow(RF_CATS, [rfRec("Food", "Coffee"), rfRec("Rent", "")], new Set(), "Food");
+  assert.deepEqual(food.subs.map((s) => s.kind), ["sub", "sub"]);
+});
+
+test("recFilterRows: no no-sub row when the category has no real sub rows, even with no-sub records", () => {
+  const recs = [rfRec("Rent", ""), rfRec("Travel", "")];
+  assert.deepEqual(rfRow(RF_CATS, recs, new Set(), "Rent").subs, []);
+  assert.deepEqual(rfRow(RF_CATS, recs, new Set(), "Travel").subs, []);
+});
+
+test("recFilterRows: a no-sub record of another category does not make the no-sub row", () => {
+  const food = rfRow(RF_CATS, [rfRec("Rent", "")], new Set(), "Food");
+  assert.deepEqual(food.subs.map((s) => s.kind), ["sub", "sub"]);
+});
+
+test("recFilterRows: an empty filter gives state off and every row off", () => {
+  const food = rfRow(RF_CATS, [], new Set(), "Food");
+  assert.equal(food.state, "off");
+  assert.ok(food.subs.every((s) => s.on === false));
+});
+
+test("recFilterRows: a whole-category tick gives state on and every sub row on", () => {
+  const rows = H.recFilterRows(RF_CATS, [rfRec("Food", "Snacks"), rfRec("Food", "")], new Set(["Food"]));
+  const food = rows.find((r) => r.name === "Food");
+  assert.equal(food.state, "on");
+  assert.ok(food.subs.length === 4 && food.subs.every((s) => s.on === true));
+  assert.equal(rows.find((r) => r.name === "Rent").state, "off");
+});
+
+test("recFilterRows: a sub tick gives state part and only that sub on", () => {
+  const food = rfRow(RF_CATS, [], new Set(["Food\u0000lunch"]), "Food");
+  assert.equal(food.state, "part");
+  assert.deepEqual(food.subs.map((s) => s.on), [false, true]);
+});
+
+test("recFilterRows: state part also when the ticked key has no visible row", () => {
+  const food = rfRow(RF_CATS, [], new Set(["Food\u0000gone", "Food\u0000"]), "Food");
+  assert.equal(food.state, "part");
+  assert.ok(food.subs.every((s) => s.on === false));
+});
+
+test("recFilterRows: a prefix-named category does not take another's keys", () => {
+  const filter = new Set(["Food Court\u0000noodles"]);
+  assert.equal(rfRow(RF_CATS, [], filter, "Food").state, "off");
+  assert.equal(rfRow(RF_CATS, [], filter, "Food Court").state, "part");
+  const whole = new Set(["Food"]);
+  assert.equal(rfRow(RF_CATS, [], whole, "Food Court").state, "off");
+});
+
+test("recFilterRows: non-array cats or records are treated as empty", () => {
+  assert.deepEqual(H.recFilterRows(null, [], new Set()), []);
+  assert.deepEqual(H.recFilterRows(undefined, undefined, new Set()), []);
+  assert.deepEqual(H.recFilterRows("x", {}, new Set()), []);
+  const food = rfRow(RF_CATS, null, new Set(), "Food");
+  assert.deepEqual(food.subs.map((s) => s.kind), ["sub", "sub"]);
+});
+
+test("recFilterRows: a filter that is not a Set counts as empty", () => {
+  for (const f of [null, undefined, ["Food"], { Food: 1 }, "Food"]) {
+    const food = rfRow(RF_CATS, [], f, "Food");
+    assert.equal(food.state, "off");
+    assert.ok(food.subs.every((s) => s.on === false));
+  }
+});
+
+test("recFilterRows: does not mutate its inputs", () => {
+  const cats = JSON.parse(JSON.stringify(RF_CATS));
+  const recs = [rfRec("Food", "Snacks"), rfRec("Food", "")];
+  const recsCopy = structuredClone(recs);
+  const filter = new Set(["Food\u0000lunch"]);
+  H.recFilterRows(cats, recs, filter);
+  assert.deepEqual(cats, RF_CATS);
+  assert.deepEqual(recs, recsCopy);
+  assert.deepEqual([...filter], ["Food\u0000lunch"]);
+});
+
+// A Food row with Coffee, Lunch and an orphan Snacks, as the toggle tests see it.
+const RF_RECS = [rfRec("Food", "Snacks")];
+const toggleFrom = (filterKeys, name, key) => {
+  const filter = new Set(filterKeys);
+  const row = rfRow(RF_CATS, RF_RECS, filter, name);
+  return H.recFilterToggle(filter, row, key);
+};
+const sorted = (set) => [...set].sort();
+
+test("recFilterToggle: category tap from off ticks the whole category", () => {
+  assert.deepEqual(sorted(toggleFrom([], "Food")), ["Food"]);
+});
+
+test("recFilterToggle: category tap from partial ticks the whole category and drops its sub keys", () => {
+  const out = toggleFrom(["Food\u0000coffee", "Food\u0000stale"], "Food");
+  assert.deepEqual(sorted(out), ["Food"]);
+});
+
+test("recFilterToggle: category tap from on unticks everything of that category", () => {
+  assert.deepEqual(sorted(toggleFrom(["Food"], "Food")), []);
+});
+
+test("recFilterToggle: category tap leaves other categories' keys alone", () => {
+  const others = ["Rent", "Food Court\u0000noodles"];
+  assert.deepEqual(sorted(toggleFrom([...others], "Food")), sorted([...others, "Food"]));
+  assert.deepEqual(sorted(toggleFrom([...others, "Food"], "Food")), sorted(others));
+  assert.deepEqual(sorted(toggleFrom([...others, "Food\u0000coffee"], "Food")), sorted([...others, "Food"]));
+});
+
+test("recFilterToggle: category prefix names do not interfere (Food vs Food Court)", () => {
+  const out = toggleFrom(["Food Court", "Food Court\u0000noodles", "Food\u0000lunch"], "Food");
+  assert.deepEqual(sorted(out), ["Food", "Food Court", "Food Court\u0000noodles"]);
+  const cleared = toggleFrom(["Food Court", "Food Court\u0000noodles", "Food"], "Food");
+  assert.deepEqual(sorted(cleared), ["Food Court", "Food Court\u0000noodles"]);
+  // and the other way round: tapping Food Court never touches Food's keys
+  const row = rfRow(RF_CATS, [], new Set(["Food", "Food\u0000lunch"]), "Food Court");
+  const out2 = H.recFilterToggle(new Set(["Food", "Food\u0000lunch"]), row);
+  assert.deepEqual(sorted(out2), ["Food", "Food Court", "Food\u0000lunch"].sort());
+});
+
+test("recFilterToggle: sub tap while the whole category is ticked leaves the others ticked, the tapped one off", () => {
+  const out = toggleFrom(["Food"], "Food", "Food\u0000coffee");
+  assert.deepEqual(sorted(out), ["Food\u0000lunch", "Food\u0000snacks"]);
+});
+
+test("recFilterToggle: the whole-to-partial tap also keeps the no-sub row ticked", () => {
+  const filter = new Set(["Food"]);
+  const row = rfRow(RF_CATS, [rfRec("Food", "")], filter, "Food");
+  const out = H.recFilterToggle(filter, row, "Food\u0000lunch");
+  assert.deepEqual(sorted(out), ["Food\u0000", "Food\u0000coffee"]);
+});
+
+test("recFilterToggle: sub tap while whole, in a one-sub category, ends empty", () => {
+  const filter = new Set(["Food Court"]);
+  const row = rfRow(RF_CATS, [], filter, "Food Court");
+  const out = H.recFilterToggle(filter, row, "Food Court\u0000noodles");
+  assert.deepEqual(sorted(out), []);
+});
+
+test("recFilterToggle: sub tap from off ticks just that sub (category becomes partial)", () => {
+  const out = toggleFrom([], "Food", "Food\u0000coffee");
+  assert.deepEqual(sorted(out), ["Food\u0000coffee"]);
+});
+
+test("recFilterToggle: sub tap on a ticked sub unticks it", () => {
+  const out = toggleFrom(["Food\u0000coffee", "Food\u0000lunch"], "Food", "Food\u0000coffee");
+  assert.deepEqual(sorted(out), ["Food\u0000lunch"]);
+});
+
+test("recFilterToggle: ticking the last unticked visible sub collapses to the whole category", () => {
+  const out = toggleFrom(["Food\u0000coffee", "Food\u0000snacks", "Food\u0000stale"], "Food", "Food\u0000lunch");
+  assert.deepEqual(sorted(out), ["Food"]);
+});
+
+test("recFilterToggle: collapsing to whole leaves other categories' keys alone", () => {
+  const out = toggleFrom(["Rent", "Food Court\u0000noodles", "Food\u0000coffee", "Food\u0000snacks"], "Food", "Food\u0000lunch");
+  assert.deepEqual(sorted(out), sorted(["Rent", "Food Court\u0000noodles", "Food"]));
+});
+
+test("recFilterToggle: a one-sub category ticked via its sub collapses to the whole category", () => {
+  const filter = new Set();
+  const row = rfRow(RF_CATS, [], filter, "Food Court");
+  assert.deepEqual(sorted(H.recFilterToggle(filter, row, "Food Court\u0000noodles")), ["Food Court"]);
+});
+
+test("recFilterToggle: a sub tap on a category with no sub rows toggles just that key", () => {
+  const filter = new Set();
+  const row = rfRow(RF_CATS, [], filter, "Rent");
+  assert.deepEqual(sorted(H.recFilterToggle(filter, row, "Rent\u0000x")), ["Rent\u0000x"]);
+});
+
+test("recFilterToggle: key null behaves like a category tap", () => {
+  assert.deepEqual(sorted(toggleFrom([], "Food", null)), ["Food"]);
+  assert.deepEqual(sorted(toggleFrom(["Food"], "Food", undefined)), []);
+});
+
+test("recFilterToggle: returns a new Set and never mutates the input", () => {
+  for (const [keys, key] of [[[], undefined], [["Food"], undefined], [["Food"], "Food\u0000coffee"], [["Food\u0000coffee"], "Food\u0000lunch"]]) {
+    const filter = new Set(keys);
+    const row = rfRow(RF_CATS, RF_RECS, filter, "Food");
+    const rowCopy = JSON.parse(JSON.stringify(row));
+    const out = H.recFilterToggle(filter, row, key);
+    assert.ok(out instanceof Set);
+    assert.notEqual(out, filter);
+    assert.deepEqual([...filter], keys);
+    assert.deepEqual(row, rowCopy);
+  }
+});
+
+test("recFilterMatch: an empty filter and empty query pass every record", () => {
+  assert.equal(H.recFilterMatch(rfRec("Food", "Coffee", "x"), new Set(), ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", "Coffee", "x"), new Set()), true);
+});
+
+test("recFilterMatch: a filter that is not a Set passes the category part", () => {
+  assert.equal(H.recFilterMatch(rfRec("Food", ""), null, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", ""), undefined, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", ""), ["Rent"], ""), true);
+});
+
+test("recFilterMatch: a whole-category tick passes every sub of that category", () => {
+  const f = new Set(["Food"]);
+  assert.equal(H.recFilterMatch(rfRec("Food", "Coffee"), f, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", ""), f, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", "Anything"), f, ""), true);
+});
+
+test("recFilterMatch: a sub key passes only that sub, case-insensitive and trimmed", () => {
+  const f = new Set(["Food\u0000coffee"]);
+  assert.equal(H.recFilterMatch(rfRec("Food", "Coffee"), f, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", "  COFFEE "), f, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", "Lunch"), f, ""), false);
+  assert.equal(H.recFilterMatch(rfRec("Food", ""), f, ""), false);
+});
+
+test("recFilterMatch: the no-sub key passes empty, blank and missing subs only", () => {
+  const f = new Set(["Food\u0000"]);
+  assert.equal(H.recFilterMatch(rfRec("Food", ""), f, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", "  "), f, ""), true);
+  assert.equal(H.recFilterMatch({ category: "Food" }, f, ""), true);
+  assert.equal(H.recFilterMatch(rfRec("Food", "Coffee"), f, ""), false);
+});
+
+test("recFilterMatch: a record of another category is rejected", () => {
+  const f = new Set(["Food", "Food\u0000coffee"]);
+  assert.equal(H.recFilterMatch(rfRec("Rent", "Coffee"), f, ""), false);
+  assert.equal(H.recFilterMatch(rfRec("Food Court", "Coffee"), f, ""), false);
+});
+
+test("recFilterMatch: notes are a case-insensitive substring, at any position", () => {
+  const r = rfRec("Food", "", "Lunch with ALICE at the mall");
+  assert.equal(H.recFilterMatch(r, new Set(), "alice"), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "LUNCH"), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "mall"), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "h with a"), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "bob"), false);
+});
+
+test("recFilterMatch: Thai text is a plain substring", () => {
+  const r = rfRec("Salary", "", "เงินเดือนพี่สม · Split bill");
+  assert.equal(H.recFilterMatch(r, new Set(), "พี่สม"), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "split"), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "พี่สมชาย"), false);
+});
+
+test("recFilterMatch: the query is trimmed; a blank query matches everything", () => {
+  const r = rfRec("Food", "", "taxi home");
+  assert.equal(H.recFilterMatch(r, new Set(), "  taxi  "), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "   "), true);
+  assert.equal(H.recFilterMatch(r, new Set(), null), true);
+  assert.equal(H.recFilterMatch(r, new Set(), "  bus "), false);
+});
+
+test("recFilterMatch: a record without notes fails any non-empty query but passes a blank one", () => {
+  assert.equal(H.recFilterMatch({ category: "Food" }, new Set(), "x"), false);
+  assert.equal(H.recFilterMatch({ category: "Food", notes: null }, new Set(), "x"), false);
+  assert.equal(H.recFilterMatch({ category: "Food" }, new Set(), ""), true);
+});
+
+test("recFilterMatch: the query searches notes only, not category, sub or amount", () => {
+  const r = { category: "Food", subcategory: "Coffee", amount: 123, notes: "morning" };
+  assert.equal(H.recFilterMatch(r, new Set(), "food"), false);
+  assert.equal(H.recFilterMatch(r, new Set(), "coffee"), false);
+  assert.equal(H.recFilterMatch(r, new Set(), "123"), false);
+});
+
+test("recFilterMatch: category filter and notes query must both pass", () => {
+  const f = new Set(["Food\u0000coffee"]);
+  const r = rfRec("Food", "Coffee", "with Sam");
+  assert.equal(H.recFilterMatch(r, f, "sam"), true);
+  assert.equal(H.recFilterMatch(r, f, "alex"), false);
+  assert.equal(H.recFilterMatch(rfRec("Food", "Lunch", "with Sam"), f, "sam"), false);
+});

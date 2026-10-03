@@ -470,6 +470,123 @@
     return picks;
   }
 
+  /* ---------- Records filter (categories, sub-categories, notes search) ----------
+     The Records page filter is a Set of keys. A whole category is its bare
+     name; a single sub-category is recFilterKey(category, sub). All four
+     helpers are pure and never mutate their inputs.
+
+     recFilterKey(category, sub): category + NUL + the sub trimmed and
+     lower-cased. "No sub-category" (empty / blank / missing sub) is therefore
+     category + NUL.
+  */
+  function recFilterKey(category, sub) {
+    return category + "\u0000" + String(sub || "").trim().toLowerCase();
+  }
+
+  /* recFilterRows(cats, records, filter): the filter menu's rows, one per
+     category of `cats` (one type's settings list, [{ name, subs: [{ name }] }]),
+     in order: { name, state, subs }. `records` are the ones the filter runs
+     over (active type, selected period); only category / subcategory are
+     read. `filter` is the Set of keys (anything else counts as empty).
+       - subs, in this order, each { name, key, on, kind }:
+           "sub"    every settings sub, settings order
+           "orphan" sub names found on this category's records that match no
+                    settings sub (trimmed, case-insensitive); distinct
+                    case-insensitively, first-seen order and spelling (trimmed)
+           "none"   the no-sub row (name ""), only when there is at least one
+                    row above AND a record of this category has an empty
+                    (after trim) / missing subcategory
+         No rows above -> subs is [].
+         key = recFilterKey(category, row name); on = the whole category or
+         that key is in the filter
+       - state: "on" when the whole category is in the filter; else "part" when
+         any key of the category is (even one whose row is not shown); else "off"
+     Non-array cats / records count as empty.
+  */
+  function recFilterRows(cats, records, filter) {
+    const list = Array.isArray(cats) ? cats : [];
+    const recs = Array.isArray(records) ? records : [];
+    const set = filter instanceof Set ? filter : new Set();
+    const lc = (x) => String(x == null ? "" : x).trim().toLowerCase();
+    return list.map((cat) => {
+      const name = cat.name;
+      const rows = [];
+      const seen = new Set();
+      (Array.isArray(cat.subs) ? cat.subs : []).forEach((s) => {
+        rows.push({ name: s.name, kind: "sub" });
+        seen.add(lc(s.name));
+      });
+      let hasNone = false;
+      recs.forEach((r) => {
+        if (!r || r.category !== name) return;
+        const sub = String(r.subcategory == null ? "" : r.subcategory).trim();
+        if (!sub) { hasNone = true; return; }
+        if (seen.has(sub.toLowerCase())) return;
+        seen.add(sub.toLowerCase());
+        rows.push({ name: sub, kind: "orphan" });
+      });
+      if (rows.length && hasNone) rows.push({ name: "", kind: "none" });
+      const subs = rows.map((row) => {
+        const key = recFilterKey(name, row.name);
+        return { name: row.name, key, on: set.has(name) || set.has(key), kind: row.kind };
+      });
+      let state = "off";
+      if (set.has(name)) state = "on";
+      else if ([...set].some((k) => typeof k === "string" && k.startsWith(name + "\u0000"))) state = "part";
+      return { name, state, subs };
+    });
+  }
+
+  /* recFilterToggle(filter, row, key): the filter after a tap, as a NEW Set.
+     `row` is one element of recFilterRows for the current state; `key`
+     undefined / null = a tap on the category row, else the tapped sub row's key.
+       - category tap: drop the category and all its sub keys; then, unless it
+         was fully ticked ("on"), tick the whole category
+       - sub tap while the whole category is ticked: the category becomes
+         partial - every other sub row stays ticked, the tapped one is off
+       - sub tap otherwise: toggle that key; if that leaves every sub row of the
+         category ticked, collapse back to the whole category
+  */
+  function recFilterToggle(filter, row, key) {
+    const out = new Set(filter instanceof Set ? filter : []);
+    const prefix = row.name + "\u0000";
+    const dropSubKeys = () => [...out].forEach((k) => { if (typeof k === "string" && k.startsWith(prefix)) out.delete(k); });
+    if (key == null) {
+      out.delete(row.name);
+      dropSubKeys();
+      if (row.state !== "on") out.add(row.name);
+      return out;
+    }
+    if (out.has(row.name)) {
+      out.delete(row.name);
+      row.subs.forEach((s) => { if (s.key !== key) out.add(s.key); });
+      return out;
+    }
+    if (out.has(key)) out.delete(key);
+    else out.add(key);
+    if (row.subs.length > 0 && row.subs.every((s) => out.has(s.key))) {
+      dropSubKeys();
+      out.add(row.name);
+    }
+    return out;
+  }
+
+  /* recFilterMatch(record, filter, query): does a record pass the Records
+     page's category filter AND its notes search?
+       - category part: passes when `filter` is not a Set or is empty, or has
+         the record's whole category, or its recFilterKey(category, sub)
+       - notes part: the trimmed query is a case-insensitive substring of the
+         record's notes (plain substring, so Thai works); a blank query passes
+  */
+  function recFilterMatch(record, filter, query) {
+    const catOk = !(filter instanceof Set) || filter.size === 0
+      || filter.has(record.category)
+      || filter.has(recFilterKey(record.category, record.subcategory));
+    if (!catOk) return false;
+    const q = String(query || "").trim().toLowerCase();
+    return !q || String(record.notes || "").toLowerCase().includes(q);
+  }
+
   /* ---------- Category editor helpers ----------
      iconsInUse(cats): the distinct icon ids used by one type's categories
      ([{ icon, subs: [{ icon? }] }]) and by their sub-categories that have an
@@ -750,6 +867,7 @@
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
     planReconversion, summarizeTotals, summaryAverage, yearsAverage, categoryBreakdown, summaryBreakdown,
     reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks, labelSqueeze, labelWords,
+    recFilterKey, recFilterRows, recFilterToggle, recFilterMatch,
     iconsInUse, categoryDraftError, COLOR_PRESETS,
   };
 });
