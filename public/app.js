@@ -1686,10 +1686,12 @@ function renderDashboard(list) {
     listTitle = "Recent: " + selectedSlice;
   }
   // The same selection is what the centre number sums (its counted records),
-  // so the centre-tap pop-up groups listFiltered. Empty chart: no centre tap.
+  // so the centre-tap pop-up groups listFiltered. Empty chart, or an older
+  // cached finance-helpers.js without categoryBreakdown: no centre tap.
   centreRecords = listFiltered;
   const hole = document.getElementById("chartHole"); // older cached index.html: none
-  if (hole) hole.classList.toggle("hidden", labels.length === 0);
+  if (hole)
+    hole.classList.toggle("hidden", labels.length === 0 || typeof categoryBreakdown !== "function");
   const recent = listFiltered.slice(0, 10);
   $("#dashListTitle").textContent = listTitle;
   $("#dashRecordCount").textContent =
