@@ -4,7 +4,7 @@ A 100% offline static PWA with two modes:
 - **MuniTrakr** — expense & investment tracker
 - **DebtTrakr** — per-person IOU ledger
 
-Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v87**.
+Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data lives in `localStorage`. Deployed at **https://fosz-munitrakr.pages.dev** (Cloudflare Pages, auto-deploys on push to `main`). Source: **https://github.com/FosZafel2oZ/fosz-munitrakr**. Current version: **v88**.
 
 ---
 
@@ -18,7 +18,7 @@ ProjectExpenses/
 │  ├─ recurring.js                 UMD: cadence math + rule helpers (pure)
 │  ├─ debts.js                     UMD: per-person balance math + cycle reset (pure); every balance function counts only items in the default currency (via `amountInDefault`)
 │  ├─ debt-card.js                 UMD: share-card model (pure) + canvas renderer (uses the shared `amountInDefault`)
-│  ├─ finance-helpers.js           UMD: reconcileRenames + FX rate service factory + the default-currency counting rule (`amountInDefault`), reconversion planner, and the Summary page's `summarizeTotals` / `summaryAverage` / `yearsAverage`
+│  ├─ finance-helpers.js           UMD: reconcileRenames + FX rate service factory + the default-currency counting rule (`amountInDefault`), reconversion planner, and the Summary page's `summarizeTotals` / `summaryAverage` / `yearsAverage`, and the Add Record quick-pick list (`recentPicks`)
 │  ├─ styles.css                   all styles incl. per-theme overrides
 │  ├─ sw.js                        service worker (stale-while-revalidate)
 │  ├─ manifest.webmanifest         PWA manifest — icon entries point at icon-wallet.png only
@@ -31,11 +31,11 @@ ProjectExpenses/
 ├─ design/
 │  ├─ icon-wallet.svg              source drawing for icon-wallet.png — not deployed, not read by the app
 │  └─ icon-wallet-red.svg          source drawing for icon-wallet-red.png — not deployed, not read by the app
-├─ tests/                          node tests/run.js — 277 unit tests
+├─ tests/                          node tests/run.js — 291 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
-│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + iconHref/homeIconHref/effectiveIconChoice/headerIconHref/iconChoiceFromPicture/migrateIconChoices + amountInDefault/countNotCounted/applyMarkup/clearConversionFields/planReconversion/reconversionMarkupPct/dedupeGetRate/mapLimit + summarizeTotals/summaryAverage/yearsAverage
+│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + iconHref/homeIconHref/effectiveIconChoice/headerIconHref/iconChoiceFromPicture/migrateIconChoices + amountInDefault/countNotCounted/applyMarkup/clearConversionFields/planReconversion/reconversionMarkupPct/dedupeGetRate/mapLimit + summarizeTotals/summaryAverage/yearsAverage + recentPicks
 │  ├─ debts.test.js                personBalances + cycle reset + settlements (incl. not-counted items skipped, cent-exact closure) + planDebtReconversion
 │  └─ debt-card.test.js          share-card model wording + balance math
 ├─ serve.js                        zero-dep static server (local preview)
@@ -46,7 +46,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `277/277 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `291/291 passed, 0 failed`.
 
 ---
 
@@ -169,6 +169,13 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 
 ### Dashboard auto-fit
 - Big totals on the dashboard cards + donut center auto-shrink font when text overflows (so `THB 1,000,000,000,000,000` doesn't blow out the layout). Currency moved into the muted label (`"2026 Expenses · THB"`) to leave more horizontal room for the number itself.
+
+### Add Record quick picks
+- The row above the Category picker in the Add/Edit Record modal (`#freqField` / `#freqCats`, label **Recently added**) shows up to **10** quick picks of the modal's current type (expenses and investments kept separate). `buildFreqCats()` fills it from `recentPicks(records, modalType, settings[modalType])` (`finance-helpers.js`) and runs when the modal opens and when the type toggle is switched. The row scrolls sideways and the whole field is hidden when there are no picks (or if an older cached `finance-helpers.js` has no `recentPicks`).
+- A pick is a (category, sub-category) pair from a record; a record saved without a sub-category gives a **main-type** pick, one saved with a sub-category gives a **sub-type** pick (the two are different picks of the same category).
+- **Order:** by the record's numeric `createdAt`, newest first (leftmost) — not by its `date`; records without a numeric `createdAt` sort last. Each distinct pick appears once, at its newest occurrence. Records generated by a recurring rule (truthy `ruleId`) and records of the other type are ignored.
+- **Deleted / renamed settings:** a pick whose category is no longer in settings for that type is skipped; if only its sub-category is gone from that category it becomes the main-type pick (and de-duplicates as such). Names match case-insensitively and are shown in the settings' spelling.
+- **Chips** (existing `.freq-*` classes): a main-type chip is the category icon on the category colour, labelled with the category name; a sub-type chip is the main category's icon on the sub-category's own colour (`subColor`), labelled with the sub-category name. Tapping a main-type chip runs `setCategory(category)`; tapping a sub-type chip runs `setCategory(category)` then `setSub(sub)`, so the sub picker shows it as if picked by hand.
 
 ### Split the bill
 - Add Record modal (expense type, Add flow only): "Split the bill" checkbox above the recurring section (mutually exclusive with it). User's share is the auto-computed remainder; "Split evenly" uses `evenShares` (debts.js) with the rounding remainder going to the user. On save: the expense stores only the user's share (notes auto-append the full breakdown), and one `lend` debt per participant is created on the DebtTrakr side in a single batched `saveStore()` (same currency/date; debt notes are identical to the expense notes — the user's own notes and the auto-generated breakdown are joined by a middle dot (` · `), not a newline, so the note reads as one line everywhere it appears). Checking the toggle auto-scrolls the form to the section; the person menu opens upward. Expense and debts are independent after creation.
@@ -343,7 +350,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 
 - **Stale-while-revalidate** strategy: serves cached response immediately, refreshes cache in background. First load after a deploy shows the OLD version, the next load shows the new one. "Check for updates" forces an immediate swap.
 - FX API calls bypass the SW (explicit early-out for `frankfurter`; the currency-api hosts are cross-origin so the handler's same-origin guard skips them too). Note: sw.js's line-1 comment says "network-first" but the fetch handler is stale-while-revalidate — the comment is stale, the description here is correct.
-- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v87` / `munitrakr-v87`.
+- **Lockstep version bump on every release:** `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` must match. Current: `v88` / `munitrakr-v88`.
 - Release flow: edit → bump both versions → `node --check public/app.js && node --check public/sw.js` → `node tests/run.js` → `git add -A && git commit && git push` → Cloudflare Pages auto-deploys → on phone, Settings → App version → Check for updates.
 
 ---
@@ -410,6 +417,8 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `summaryAverage(total, year, currentYear, currentMonth)` / `yearsAverage(totals)` | pure (from `finance-helpers.js`) — the average-per-month (÷ current month number for the current year, else ÷ 12) and the mean of yearly totals (0 for an empty list), both rounded to cents |
 | `planReconversion(items, def, opts)` | pure, async (from `finance-helpers.js`) — plans the RECORDS half of a convert run (own-date rates); never mutates; resolves `{ ok: true, updates: [{ item, fields }] }` or `{ ok: false, failed, total, failedItems }` |
 | `planDebtReconversion(debts, def, opts)` | pure, async (from `debts.js`) — plans the DEBTS half (today's rate, per-person residue pin so settled cycles stay settled); same result shape |
+| `recentPicks(records, type, cats, limit)` | pure (from `finance-helpers.js`) — the Add Record quick-pick list: `[{ category, sub }]` newest-`createdAt` first (`sub` = `""` for a main-type pick), de-duplicated, at most `limit` (default 10); skips `ruleId` records, other-type records and deleted categories, and falls back to the main pick for a deleted sub-category |
+| `buildFreqCats()` | `app.js` — builds the quick-pick row (`#freqCats`) from `recentPicks`; called by `openModal` and the type toggle (see §4 Add Record quick picks) |
 | `reconversionMarkupPct(item, pct)` / `dedupeGetRate(getRate)` / `mapLimit(list, n, fn)` | pure (from `finance-helpers.js`) — the convert run's markup rule, one-request-per-`date:from:to` wrapper, and worker pool |
 | `defCur()` / `rowAmount(item, origCls)` / `renderNcWarn(id, n)` / `notCountedShareMsg(list, def)` | `app.js` — current default currency; a row's `{ main, sub }` under the counting rule; the `.nc-warn` screen line; the share-refusal text |
 | `renderConvertNotice()` / `afterCurrencySave(prevDef)` / `openConvertModal(c)` / `runConversion(btn)` | `app.js` — Settings notice (`#convertNotice`), post-Save hook, prompt (`#convertModal`), and the all-or-nothing conversion run (guarded by `_converting`) |
