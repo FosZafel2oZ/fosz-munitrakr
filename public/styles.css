@@ -1446,7 +1446,7 @@ body.theme-yoimiya .rn-menu{
 #personIconGrid button.active { border-color: var(--accent); }
 #personIconGrid button svg { width: 22px; height: 22px; }
 
-/* Category icon picker: "Games" + "General" groups, 6 per row; a corner dot
+/* Category icon picker: the 12 ICON_GROUPS (heading + grid each), 6 per row; a corner dot
    marks icons already used by a category / sub-category of that type. */
 .icon-note { display: flex; align-items: center; gap: 7px; margin: -8px 0 4px;
   font-size: 12px; color: var(--muted); }
