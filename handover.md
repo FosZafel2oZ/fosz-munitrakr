@@ -14,11 +14,11 @@ Vanilla JS + CSS + Chart.js (vendored). No backend, no build step. All data live
 ProjectExpenses/
 ├─ public/                         <— THIS folder is the deployable PWA
 │  ├─ index.html                   markup for all views + modals
-│  ├─ app.js                       all client logic (~5,950 lines, single file)
+│  ├─ app.js                       all client logic (~6,300 lines, single file)
 │  ├─ recurring.js                 UMD: cadence math + rule helpers (pure)
 │  ├─ debts.js                     UMD: per-person balance math + cycle reset (pure); every balance function counts only items in the default currency (via `amountInDefault`)
 │  ├─ debt-card.js                 UMD: share-card model (pure) + canvas renderer (uses the shared `amountInDefault`)
-│  ├─ finance-helpers.js           UMD: reconcileRenames + FX rate service factory + the default-currency counting rule (`amountInDefault`), reconversion planner, and the Summary page's `summarizeTotals` / `summaryAverage` / `yearsAverage`, and the Add Record quick-pick list (`recentPicks`)
+│  ├─ finance-helpers.js           UMD: reconcileRenames + FX rate service factory + the default-currency counting rule (`amountInDefault`), reconversion planner, and the Summary page's `summarizeTotals` / `summaryAverage` / `yearsAverage`, the Add Record quick-pick list (`recentPicks`), and the category-editor helpers (`iconsInUse`, `categoryDraftError`, `COLOR_PRESETS`)
 │  ├─ styles.css                   all styles incl. per-theme overrides
 │  ├─ sw.js                        service worker (stale-while-revalidate)
 │  ├─ manifest.webmanifest         PWA manifest — icon entries point at icon-wallet.png only
@@ -31,11 +31,11 @@ ProjectExpenses/
 ├─ design/
 │  ├─ icon-wallet.svg              source drawing for icon-wallet.png — not deployed, not read by the app
 │  └─ icon-wallet-red.svg          source drawing for icon-wallet-red.png — not deployed, not read by the app
-├─ tests/                          node tests/run.js — 291 unit tests
+├─ tests/                          node tests/run.js — 308 unit tests
 │  ├─ run.js                       runner
 │  ├─ _lib.js                      test() + assert helpers (async-aware)
 │  ├─ recurring.test.js            cadence + rule logic
-│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + iconHref/homeIconHref/effectiveIconChoice/headerIconHref/iconChoiceFromPicture/migrateIconChoices + amountInDefault/countNotCounted/applyMarkup/clearConversionFields/planReconversion/reconversionMarkupPct/dedupeGetRate/mapLimit + summarizeTotals/summaryAverage/yearsAverage + recentPicks
+│  ├─ finance-helpers.test.js      reconcileRenames + FX caching + iconHref/homeIconHref/effectiveIconChoice/headerIconHref/iconChoiceFromPicture/migrateIconChoices + amountInDefault/countNotCounted/applyMarkup/clearConversionFields/planReconversion/reconversionMarkupPct/dedupeGetRate/mapLimit + summarizeTotals/summaryAverage/yearsAverage + recentPicks + iconsInUse/categoryDraftError/COLOR_PRESETS
 │  ├─ debts.test.js                personBalances + cycle reset + settlements (incl. not-counted items skipped, cent-exact closure) + planDebtReconversion
 │  └─ debt-card.test.js          share-card model wording + balance math
 ├─ serve.js                        zero-dep static server (local preview)
@@ -46,7 +46,7 @@ ProjectExpenses/
 - **No backend, no auth.** Everything runs in the browser; data lives in `localStorage`.
 - **Local preview:** `npm start` → http://localhost:3000.
 - **Deploy:** `git push origin main` → Cloudflare Pages auto-pulls and rebuilds. SW auto-updates on next open. (No manual upload needed — the live site at `fosz-munitrakr.pages.dev` mirrors `main`.)
-- **Tests:** `node tests/run.js` → must print `291/291 passed, 0 failed`.
+- **Tests:** `node tests/run.js` → must print `308/308 passed, 0 failed`.
 
 ---
 
@@ -54,7 +54,7 @@ ProjectExpenses/
 
 A single in-memory `currentMode: "finance" | "debt"` drives which UI surfaces are active. Mode is **not persisted** — every fresh boot lands on MuniTrakr. Tap the topbar title or header icon to toggle modes (no dropdown).
 
-`showView()` enforces mode-compatibility: requesting a debt-only view (`person-history`, `debt-records`) while in finance mode auto-redirects to dashboard (and vice versa for the finance-only views `records` and `summary`). Prevents orphaned states on app reopen.
+`showView()` enforces mode-compatibility: requesting a debt-only view (`person-history`, `debt-records`) while in finance mode auto-redirects to dashboard (and vice versa for the finance-only views `records`, `summary` and `catedit`). Prevents orphaned states on app reopen.
 
 ---
 
@@ -88,7 +88,9 @@ A single in-memory `currentMode: "finance" | "debt"` drives which UI surfaces ar
   debts:   Debt[],                         // DebtTrakr — Lend/Borrow/Paid-back events
 }
 
-type Category = { id, name, color, icon, subs: { id, name, color }[] }
+type Category = { id, name, color, icon, subs: { id, name, color, icon? }[] }
+// sub.icon is optional: a sub without one shows (and follows) its category's icon — see §6 Categories.
+// An icon id that isn't in ICONS (e.g. from an old backup) falls back the same way.
 
 type Record = {
   id, userId?, type: "expense"|"investment",
@@ -138,6 +140,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
   - **Counting:** every figure comes from `summarizeTotals(records, def, currentYear)` (`finance-helpers.js`), which reads each record through `amountInDefault` — not-counted records are left out (and flagged by the warning). Records whose date isn't `YYYY-MM-DD` with month 01–12, whose type isn't `expense`/`investment`, or whose amount isn't finite are skipped. Sums are rounded to cents.
   - **Not included:** tapping a row to filter records, DebtTrakr summaries.
 - **Top-bar buttons.** Two floating buttons: `#settingsBtn` (gear) and, immediately left of it, `#summaryBtn` (bar-chart icon, `aria-label="Summary"`, same `.float-btn` look). `updateSettingsBtn()` shows `#summaryBtn` only in MuniTrakr mode and never on Settings. On the Summary page the chart button is lit (`.is-on`: accent colour + border, `aria-pressed` kept in sync by `updateSettingsBtn()`) and `#settingsBtn` becomes the Back arrow (`.is-back`, aria-label "Back"); both buttons return to `summaryPrev`, the view the chart button was tapped from (`enterSummary()` records it; a stored `summary` or `settings` there falls back to the dashboard). `.topbar` has `padding-right: 118px` and the date subtitle ellipsises, so neither button covers it. The date uses `weekday: "short"` ("Wed, September 30, 2026") so the longest case fits at 375px without ellipsis. The Months/Years buttons carry `aria-pressed` (synced in `renderSummary()`) and `#sumYear` is `aria-live="polite"`. The v86/v87 top-level bindings (`#convert*`, `#summaryBtn`, `#sumYearPrev/Next`) are null-guarded so a newer `app.js` on an older cached `index.html` still boots.
+- **Category Edit page** (`#view-catedit`, MuniTrakr only) — edits one category (or a new one) of the type chosen in Settings → Categories; reached from there, not from the dashboard (see §6 Categories).
 - **Settings** — collapsible sections (see §6).
 
 ### Currency & FX
@@ -177,7 +180,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 - A pick is a (category, sub-category) pair from a record; a record saved without a sub-category gives a **main-type** pick, one saved with a sub-category gives a **sub-type** pick (the two are different picks of the same category).
 - **Order:** by the record's numeric `createdAt`, newest first (leftmost) — not by its `date`; records without a numeric `createdAt` sort last; ties (equal or missing `createdAt`) go to the later position in the records array (the newer record). Each distinct pick appears once, at its newest occurrence. Records of the other type are ignored, and so are records linked to a recurring rule (truthy `ruleId`) unless they carry `manual: true` (the user typed or edited them: Add Record with "Make this recurring" ticked, or the banner's Edit & Confirm); rule-generated records and plain banner Confirms never count.
 - **Deleted / renamed settings:** a pick whose category is no longer in settings for that type is skipped; if only its sub-category is gone from that category it becomes the main-type pick (and de-duplicates as such). Names match case-insensitively and are shown in the settings' spelling.
-- **Chips** (existing `.freq-*` classes): a main-type chip is the category icon on the category colour, labelled with the category name; a sub-type chip is the main category's icon on the sub-category's own colour (`subColor`), labelled with the sub-category name and given `aria-label="<category>, <sub>"`. The row's `scrollLeft` is reset to 0 on every rebuild and again in `openModal` once the modal is visible. Tapping a main-type chip runs `setCategory(category)`; tapping a sub-type chip runs `setCategory(category)` then `setSub(sub)`, so the sub picker shows it as if picked by hand.
+- **Chips** (existing `.freq-*` classes): a main-type chip is the category icon on the category colour, labelled with the category name; a sub-type chip is the sub-category's icon (`subIcon`: its own, else the main category's) on the sub-category's own colour (`subColor`), labelled with the sub-category name and given `aria-label="<category>, <sub>"`. The row's `scrollLeft` is reset to 0 on every rebuild and again in `openModal` once the modal is visible. Tapping a main-type chip runs `setCategory(category)`; tapping a sub-type chip runs `setCategory(category)` then `setSub(sub)`, so the sub picker shows it as if picked by hand.
 
 ### Split the bill
 - Add Record modal (expense type, Add flow only): "Split the bill" checkbox above the recurring section (mutually exclusive with it). User's share is the auto-computed remainder; "Split evenly" uses `evenShares` (debts.js) with the rounding remainder going to the user. On save: the expense stores only the user's share (notes auto-append the full breakdown), and one `lend` debt per participant is created on the DebtTrakr side in a single batched `saveStore()` (same currency/date; debt notes are identical to the expense notes — the user's own notes and the auto-generated breakdown are joined by a middle dot (` · `), not a newline, so the note reads as one line everywhere it appears). Checking the toggle auto-scrolls the form to the section; the person menu opens upward. Expense and debts are independent after creation.
@@ -235,7 +238,7 @@ Migrations in `loadStore()` cover: array defaults (`people`, `debts`, `recurring
 
 In MuniTrakr mode:
 1. Recurring (rule list + Add rule)
-2. Categories (drag-reorder, icon picker modal + color, add-form with icon picker)
+2. Categories (view-only list with auto-saved drag-reorder; a pencil per row and **+ Add category** open the Edit page — see below)
 3. Preferences (Your name, Debt share image language, Card FX markup %)
 4. Currencies (`#currencyBlock`: the not-counted notice + Convert now when any item isn't in the default — see §4 Currency & FX; Default currency + ISO-validated add/remove + reorder; every valid code auto-converts)
 5. Theme (theme select, then three identical icon pickers, in order: Home-screen icon, Header icon (MuniTrakr), Header icon (DebtTrakr) — each a row of three tiles, Wallet / Yoimiya / Your picture, no upload/reset buttons)
@@ -245,6 +248,30 @@ In MuniTrakr mode:
 In DebtTrakr mode: **People** replaces Recurring + Categories; everything else is identical and shared.
 
 Section visibility is driven by `data-mode` attributes on each `.settings-block` (`"finance"`, `"debt"`, or `"any"`); `showView` toggles `display` per-block when entering Settings.
+
+### Categories (Settings → Categories and the Edit page)
+
+**The list is view-only.** `#catBlock` holds the `Expense` | `Investment` seg (`#catTypeSeg`, sets `catTypeTab`) and `#catList`, which `renderCatList()` draws straight from the saved `settings[catTypeTab]`: one `.cl-row` per category with a drag handle `⠿` (`.cl-drag`), the category's icon tile on its colour, its name, and under the name a row of small sub-category tiles (each sub's icon, `subIconOf`, on the sub's colour; `title` = the sub's name) or the muted text `No sub-categories`, then a pencil button (`aria-label="Edit <name>"`) that runs `openCatEdit(type, index)`. Below the list: an outlined `+ Add category` (`#catAddBtn`, `openCatEdit(catTypeTab, null)`), the hint `Drag ⠿ to reorder — the order is saved automatically.` and a message line (`#catListMsg`). There is no inline editing, add-category form or `Save Categories` button any more (`renderCatManager`, `#newCatIcon`/`#newCatColor`/`#newCatName`/`#addCatBtn` and `#saveSettings` are gone).
+
+**Order auto-saves.** `makeDraggable` reorders a copy of the list; on drop `saveCatOrder(type, order)` compares it with the saved list (a tap or a drop in place saves nothing) and otherwise calls `persistCategories`. On failure the list is redrawn in the saved order and `#catListMsg` says "Couldn't save the new order — storage may be full."
+
+**`persistCategories(type, list)` is the one save path for categories** (order, Edit-page Save, Delete). It deep-copies the SAVED `settings`, replaces only `payload[type]`, and sends it through `PUT /settings` (so `reconcileRenames` still renames existing records by category/sub `id`). It never uses `buildSettingsPayload()`, whose DOM drafts (currency list, FX markup, share language, default-currency pick) would commit other sections' unsaved edits. It then reads `fin_store` back and checks that `settings[type]` matches what was sent (`saveStore()` swallows write errors). On failure it restores the previous in-memory `settings`, calls `loadStore()` and returns `false`; on success it resyncs only `settingsDraft[type]`, calls `populateDatalists()` and `loadRecords()`, and returns `true`.
+
+**The Edit page** (`#view-catedit`; title `Edit category`, or `New category` for a new one). `openCatEdit` deep-copies the category into `catEdit = { type, isNew, idx, draft, opened }` (a new one starts with a fallback colour from `FALLBACK`, icon `tag` and no subs); `showView` clears `catEdit` whenever the view changes to anything but `catedit`. Nothing is saved until **Save**.
+- **Main category** card: one row — large icon tile (`#ceIcon` → icon picker), colour swatch (`#ceColor` → colour sheet), name input (`#ceName`). Picking a main icon redraws the sub rows, because a sub without its own icon follows it.
+- **Sub-categories** card (`#ceSubs`): per sub a drag handle `⠿` (`makeDraggable`, reorders the draft), a small icon tile (→ icon picker), a small colour swatch (→ colour sheet), a name input and `✕` (removes it from the draft). An outlined `+ Add sub-category` (`#ceAddSub`) adds a sub named `New sub` with the next `FALLBACK` colour and no `icon`. Picking an icon for a sub stores it as `sub.icon`, even when it equals the main icon (from then on it no longer follows the main icon).
+- **Save** (`#ceSave`, `saveCatEdit`): `categoryDraftError(draft, otherCategoriesOfThisType)` (`finance-helpers.js`) returns the first problem, shown in `#ceMsg` (`role="alert"`): blank name ("Enter a category name."), a name equal — trimmed, case-insensitive — to another category of the type ("A category named "X" already exists."; re-casing its own name is fine), a blank sub name ("Enter a name for every sub-category."), two subs with the same trimmed, case-insensitive name ("Two sub-categories are both named "X"."). Editing the name or adding/removing a sub clears the message. If valid it trims the names, calls `persistCategories` (`_catEditBusy` blocks double taps) and returns to the list; on failure `#ceMsg` shows "Couldn't save — storage may be full." and the page stays.
+- **Delete category** (`#ceDelete`, `deleteCatEdit`; hidden for a new category): `confirm`, then `persistCategories` without it, then back to the list.
+- **Leaving** (the top-right button, which shows the back arrow here and has `aria-label="Back"`, or tapping the title/header icon to switch mode) goes through `catEditMayLeave()`: with unsaved changes (the draft's JSON differs from `catEdit.opened`) it asks `Discard your changes?`. `backToCatList(rowIdx)` returns to Settings with `#catBlock` expanded on the same type tab, scrolled to it (and to the edited category's row, when there is one). `#summaryBtn` is hidden on this page; `catedit` is in `FINANCE_ONLY`, `savePrefs` stores it as `dashboard` (like `settings`), and `showView` redirects to the dashboard when there is no draft.
+- The new bindings (`#catAddBtn`, `#ceIcon`, `#ceColor`, `#ceName`, `#ceAddSub`, `#ceSave`, `#ceDelete`) are null-guarded, and `openCatEdit` returns when `#view-catedit` is missing, so a newer `app.js` on an older cached `index.html` still boots.
+
+**Sub-category icons.** `subIconOf(cat, sub)` (`app.js`) returns `sub.icon` when it is a known `ICONS` id, else `cat.icon`, else `"tag"`; `subIcon(type, catName, subName)` looks both up by name (case-insensitive). `subTileHTML(cat, sub)` is the small `.pick-ico` tile (the sub's icon on the sub's colour). The sub's icon (on the sub's colour) shows in: records-list rows (`recordCardHTML`, for a record with a sub-category; without one, the main icon), the Recently-added quick-pick chips (sub-type chips), the Add Record sub picker (menu and button), the bulk Change-Category sub picker, the recurring-rule editor's sub picker, the Settings category list's mini tiles and the Edit page. Everywhere else a category icon appears (main-category pickers and filters) it is the main icon.
+
+**Category icons.** `ICONS` has **53** ids (line style, `currentColor` strokes): the 29 original icons, 21 general ones added in v88 (`bag`, `shirt`, `scissors`, `paw`, `bus`, `bike`, `fuel`, `wrench`, `cap`, `medical`, `glass`, `camera`, `laptop`, `tv`, `ticket`, `gem`, `sparkles`, `dice`, `umbrella`, `bank`, `globe`) and three game icons — `crown` (Paimon's crown), `tacet` (Tacet Mark, drawn horizontally) and `slug` (Originium slug). `GAME_ICON_IDS = ["crown", "tacet", "slug"]` lists the games; `ICON_IDS` is every key. People icons (`PEOPLE_ICONS`) are a separate set.
+
+**Icon picker** — `openCatIconPicker(currentIconId, onPick, cats)` (`#catIconModal`, title `Choose icon`; a backdrop tap or ✕ closes it). The grid has two labelled groups, `Games` (the three) then `General` (the other 50), 6 tiles per row. `cats` is the category list of the relevant type; `iconsInUse(cats)` (`finance-helpers.js`, pure) returns the distinct icon ids used by those categories and by sub-categories that have an icon of their own (a sub without one adds nothing). Each such tile gets an accent dot (`.used`, `aria-label="<id> (already in use)"`) and `#catIconNote` (`already in use — can still be picked`, with the dot) shows under the title while at least one is marked. Used icons stay selectable and the current icon is highlighted (`.active`). Picking calls `onPick(id)` and closes. The Edit page passes the type's saved categories except the one being edited, plus the draft (`catEditIconCats()`), so its unsaved picks count too. If `cats` is omitted nothing is marked.
+
+**Colour sheet** — `openColorSheet(currentColor, onPick)` (`#colorSheetModal`, title `Choose colour`). It shows the 18 `COLOR_PRESETS` (`finance-helpers.js`, fixed order) as round swatches, 6 per row, the current colour ringed, followed by a dashed round `+` that opens the system colour picker for any other colour (the ring moves to the `+`, painted in the custom colour, when the current colour isn't a preset). Tapping a preset calls `onPick(hex)` and closes the sheet. The `+` is a `<label>` around a visually-hidden `<input type="color">` so iOS opens the picker from a real tap; its `input` event calls `onPick(hex)` on every live change with the sheet still open, and its `change` event (picker dismissed) closes the sheet and calls `onPick` once more. Each open owns a token (`_colorSheetToken`) so a stale picker from an earlier open can't fire. Used by the Edit page (main and sub colours) and by the new-category colour panel in the Add Record modal (`showColorPanel`: each row is a `.nc-swatch` button whose colour sits in `data-color`, which the save path reads). People colours still use a plain `<input type="color">`.
 
 ### Icon pickers (home-screen icon + both header icons)
 
@@ -366,7 +393,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 - **Categories matched by NAME on records**, but renames propagate via stable `id` through `reconcileRenames(oldS, newS, records)` (in `finance-helpers.js`) inside the shim `PUT /settings`.
 - **API shim** (`api()` in `app.js`) preserves the original Express endpoint signatures (`/me`, `/account`, `/settings`, `/records`, `/records/:id`, `/records/bulk`) but is backed entirely by localStorage. Debts skip the shim (direct `store.debts` access since there's no legacy contract).
 - **Modal scroll lock:** `body.modal-open { overflow: hidden }` + `overscroll-behavior: contain` to block iOS scroll-chaining. Each modal's open/close path must update the body class.
-- **Drag-reorder** in Settings (Categories, Currencies, recurring rule rows): pointer-events based via `makeDraggable(container, rowSel, handleSel, arr, render)`.
+- **Drag-reorder** (Settings → Categories list, the Edit page's sub-category rows, Currencies, recurring rule rows): pointer-events based via `makeDraggable(container, rowSel, handleSel, arr, render)`. The category list's `render` callback saves the new order (`saveCatOrder`).
 - **Backup uses Web Share API** with `{ files: [file] }` only (no `text`/`title` — those cause iOS targets to save extra files). Falls back to direct download when `canShare(files)` is false.
 - **iOS emoji rendering:** Unicode characters like ⏸ ▶ get substituted with Apple's emoji font. All icon buttons use inline SVG instead. The share card follows the same rule: its checkmark and note glyph are canvas paths, and the person icon is a rasterized SVG injected by the caller.
 - **iOS PWA cold start:** mode is reset to `"finance"`, but persisted `currentView` is restored. `showView`'s mode-compatibility gate redirects orphaned debt-only views to dashboard.
@@ -379,6 +406,9 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 - **`saveStore()` returns `true`/`false`.** It still never throws; callers that ignore the result behave as before. `runConversion` checks it and shows the storage-full message instead of "Converted …".
 - **Known limitation: an offline Add Debt of a foreign settling entry saves unsplit and not counted.** With no rate the entry has no value in the default currency, so `planSplit` can't see an overshoot and `saveDebtFromModal` inserts the single record (`rateUnavailable`); it shows as not counted until it's converted. (Paid-by-someone-else is different: it blocks the save pre-flight when netting would need a rate it can't get.)
 - **Aero's `.settings-block > *{position:relative}`** (see `styles.css`, the "Make sure normal content stacks above the gloss" rule) overrides `position:absolute` on any direct child, which would silently un-hide a `.visually-hidden` element placed directly inside a `.settings-block`. Each icon picker's `<input type="file" class="visually-hidden iconpick-input">` is wrapped inside its own `.iconpick` wrapper (`#iconPickHome`/`#iconPickFinance`/`#iconPickDebt`; the home one is also what standalone mode hides) for this reason, so the input itself is a grandchild, not a direct child.
+- **Recurring rules and people are written straight to the store, never through the settings payload.** `PUT /settings` (`api()`) therefore always overwrites `body.recurring` and `body.people` with the store's own lists before saving, whatever the caller sent. Don't rely on a settings save to change either list (write `store.settings.recurring` / `.people` and call `saveStore()`), and don't "fix" the override: the in-memory `settings` copy goes stale after boot, so without it a theme change, currency/FX/language save, header-icon pick, category save or the Add Record new-category flow would wipe a rule or person added since — or roll back the bookmarks `processRecurring` advanced at boot.
+- **`openColorSheet`'s `onPick` fires on every live `input` event of the system picker, not once.** Keep callbacks cheap (paint, update a draft or a `data-` attribute); never save, call `api()` or re-render a big list from one. The Edit page and `showColorPanel` only repaint swatches and set the draft / `data-color`.
+- **The module-level `settings` object is a copy that can lag the store.** Every `api()` call starts with `loadStore()`, which re-parses `fin_store` into a new `store`, so `settings` (the result of the last `api("/me")` or `PUT /settings`) is not `store.settings` and doesn't see writes made straight to the store (recurring rules, people, `processRecurring`'s bookmarks, the conversion run). Don't assume it is current for those; read `store.settings` after a `loadStore()` when you need the live value.
 
 ---
 
@@ -387,12 +417,12 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | Name | Purpose |
 |------|---------|
 | `currentMode` | `"finance" \| "debt"` — drives mode-specific UI |
-| `currentView` | last-active view (persisted in `fin_prefs`; `settings` is saved as `dashboard`, `summary` is saved as is) |
+| `currentView` | last-active view (persisted in `fin_prefs`; `settings` and `catedit` are saved as `dashboard`, `summary` is saved as is) |
 | `summaryMode` | `"months" \| "years"` — the Summary toggle; persisted in `fin_prefs` (key `summaryMode`, next to `view`, `activeType`, `range`) and restored by `loadPrefs` only when it is one of the two values |
 | `summaryYear` / `summaryShownYear` / `summaryPrev` | Summary state, not persisted: the year picked in Months view (`null` = current year), the year actually on screen after clamping, and the view the Summary page returns to |
 | `renderSummary()` / `enterSummary()` / `leaveSummary()` / `fitInside(el, maxPx, minPx)` | `app.js` — draws the Summary page (also called from `refresh()` while it is on screen); opens it remembering `summaryPrev`; returns to it; shrinks an element's font until its text fits its own clipped box |
 | `store` | the persisted `fin_store` object |
-| `settings` | alias to `store.settings`, refreshed via `api("/me")` |
+| `settings` | in-memory copy of the settings, set from `api("/me")` at boot and from each `PUT /settings` result — not an alias of `store.settings` (every `api()` call reloads `store`), so it can lag the store; see §9 |
 | `records` | in-memory copy of MuniTrakr records (sorted desc by date) |
 | `multiSelect` / `selected` / `lastTyped` | MuniTrakr records-page selection state |
 | `debtMultiSelect` / `debtSelected` / `lastDbtRows` / `debtRecFilter` | DebtTrakr records-page selection + filter state |
@@ -400,7 +430,7 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `blockSelect(ids, selected, tappedId)` | pure (from `debts.js`) — returns the new selection as a gap-free block in display order: tapping outside the current block extends it to cover the tap (filling any gap), tapping the block's top (newest) row drops only that row, tapping any other row in the block drops it and everything older; used by both debt screens so a shared statement's "previous" balance is always the true balance before the first selected record |
 | `pendingConfirmations` | recurring banner queue (derived, not persisted) |
 | `_currentHistoryPersonId` | which person's history is open |
-| `PEOPLE_ICONS` / `personIconSvg(id, cls)` | people-icon library (separate from category `ICONS`) |
+| `PEOPLE_ICONS` / `personIconSvg(id, cls)` | people-icon library (separate from category `ICONS`, the 53-icon category set — see §6 Categories) |
 | `THEMES` / `applyTheme()` / `applyHeaderIcon()` | theming |
 | `applyHomeIcon()` | replaces the `apple-touch-icon` `<link>` with a fresh element pointing at `homeIconHref(settings)`; called at startup and on every home-screen-icon change, since iOS only reads the tag at Add-to-Home-Screen time |
 | `Fireworks` | IIFE — `.start()` / `.stop()` (Yoimiya only) |
@@ -420,6 +450,14 @@ Three themes, toggled by class on both `<body>` and `<html>` (so the HTML solid 
 | `planReconversion(items, def, opts)` | pure, async (from `finance-helpers.js`) — plans the RECORDS half of a convert run (own-date rates); never mutates; resolves `{ ok: true, updates: [{ item, fields }] }` or `{ ok: false, failed, total, failedItems }` |
 | `planDebtReconversion(debts, def, opts)` | pure, async (from `debts.js`) — plans the DEBTS half (today's rate, per-person residue pin so settled cycles stay settled); same result shape |
 | `recentPicks(records, type, cats, limit)` | pure (from `finance-helpers.js`) — the Add Record quick-pick list: `[{ category, sub }]` newest-`createdAt` first (`sub` = `""` for a main-type pick), de-duplicated, at most `limit` (default 10); skips `ruleId` records that lack `manual: true`, other-type records and deleted categories, and falls back to the main pick for a deleted sub-category |
+| `ICONS` / `ICON_IDS` / `GAME_ICON_IDS` / `iconSvg(id, cls)` | `app.js` — the 53 category icon paths, their ids, the three game ids shown under `Games` in the icon picker, and the SVG builder (unknown id → `tag`) |
+| `catIcon(type, name)` / `subIconOf(cat, sub)` / `subIcon(type, catName, subName)` / `subTileHTML(cat, sub)` | `app.js` — a category's icon (`tag` fallback); a sub's own icon, else its category's, else `tag` (settings objects / lookup by name); the small icon-on-colour tile sub pickers show |
+| `iconsInUse(cats)` | pure (from `finance-helpers.js`) — distinct icon ids used by a type's categories and by subs with their own icon; drives the icon picker's in-use dots |
+| `categoryDraftError(draft, cats)` | pure (from `finance-helpers.js`) — `""` when an Edit-page draft can be saved, else the first problem as the message to show (blank/duplicate category name against `cats`, blank/duplicate sub name) |
+| `COLOR_PRESETS` | (from `finance-helpers.js`) — the colour sheet's 18 preset hexes in display order |
+| `openCatIconPicker(currentIconId, onPick, cats)` / `openColorSheet(currentColor, onPick)` / `closeColorSheet()` | `app.js` — the grouped icon picker (`#catIconModal`) and the colour sheet (`#colorSheetModal`); the sheet's `onPick` fires on every live `input` (see §9) |
+| `renderCatList()` / `saveCatOrder(type, order)` / `persistCategories(type, list)` | `app.js` — draws the view-only Settings → Categories list; saves a dragged order; the one save path for categories (saved settings with one type's list replaced, read-back check, returns true/false) |
+| `catEdit` / `openCatEdit(type, idx)` / `saveCatEdit()` / `deleteCatEdit()` / `catEditMayLeave()` / `leaveCatEdit()` / `backToCatList(rowIdx)` | `app.js` — the Edit-page state (`{ type, isNew, idx, draft, opened }`, `null` when the page isn't open) and its open / save / delete / leave-with-discard-prompt / return-to-Settings functions |
 | `buildFreqCats()` | `app.js` — builds the quick-pick row (`#freqCats`) from `recentPicks`; called by `openModal` and the type toggle (see §4 Add Record quick picks) |
 | `reconversionMarkupPct(item, pct)` / `dedupeGetRate(getRate)` / `mapLimit(list, n, fn)` | pure (from `finance-helpers.js`) — the convert run's markup rule, one-request-per-`date:from:to` wrapper, and worker pool |
 | `defCur()` / `rowAmount(item, origCls)` / `renderNcWarn(id, n)` / `notCountedShareMsg(list, def)` | `app.js` — current default currency; a row's `{ main, sub }` under the counting rule; the `.nc-warn` screen line; the share-refusal text |
