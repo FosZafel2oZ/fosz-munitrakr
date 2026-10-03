@@ -683,7 +683,6 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
   border-radius:16px;padding:16px;margin-bottom:14px}
 .nc-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:14px}
 .nc-row:last-child{margin-bottom:0}
-.nc-row input[type=color]{width:32px;height:32px;flex-shrink:0}
 .nc-row .nc-label{flex:1;font-weight:700}
 .nc-row .nc-tag{font-size:11px;color:var(--muted);font-weight:700;
   background:var(--card);padding:4px 9px;border-radius:7px}
@@ -1393,13 +1392,11 @@ body.theme-yoimiya .rn-menu{
   -webkit-tap-highlight-color: transparent;
 }
 
-#personIconGrid,
-#catIconGrid {
+#personIconGrid {
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
   padding: 4px 0 8px;
 }
-#personIconGrid button,
-#catIconGrid button {
+#personIconGrid button {
   -webkit-appearance: none; appearance: none;
   width: 100%; aspect-ratio: 1/1;
   display: flex; align-items: center; justify-content: center;
@@ -1408,10 +1405,50 @@ body.theme-yoimiya .rn-menu{
   cursor: pointer; padding: 0;
   -webkit-tap-highlight-color: transparent;
 }
-#personIconGrid button.active,
-#catIconGrid button.active { border-color: var(--accent); }
-#personIconGrid button svg,
-#catIconGrid button svg { width: 22px; height: 22px; }
+#personIconGrid button.active { border-color: var(--accent); }
+#personIconGrid button svg { width: 22px; height: 22px; }
+
+/* Category icon picker: "Games" + "General" groups, 6 per row; a corner dot
+   marks icons already used by a category / sub-category of that type. */
+.icon-note { display: flex; align-items: center; gap: 7px; margin: -8px 0 4px;
+  font-size: 12px; color: var(--muted); }
+.in-use-dot, .icon-group button.used::after {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 2px var(--card); }
+.in-use-dot { display: inline-block; flex: none; }
+.icon-group-title { margin: 12px 0 7px; font-size: 11px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.icon-group { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.icon-group button {
+  -webkit-appearance: none; appearance: none; position: relative;
+  aspect-ratio: 1/1; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+.icon-group button svg { width: 22px; height: 22px; }
+.icon-group button.active { border-color: var(--accent); background: var(--accent-soft); }
+.icon-group button.used::after { content: ""; position: absolute; top: 4px; right: 4px; }
+
+/* Colour sheet (openColorSheet) + the square swatch buttons that open it */
+.color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+  justify-items: center; padding: 2px 0 4px; }
+.color-dot { position: relative; width: 40px; height: 40px; border-radius: 50%;
+  border: 2px solid transparent; padding: 0; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  -webkit-tap-highlight-color: transparent; }
+.color-dot.sel { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+.color-dot.plus { display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 2px dashed var(--muted); color: var(--muted);
+  font-size: 22px; font-weight: 600; line-height: 1; }
+.color-dot.plus.custom { border-style: solid; color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,.55); }
+.color-swatch { flex: none; width: 34px; height: 34px; border-radius: 10px;
+  border: 2px solid rgba(255,255,255,.2); padding: 0; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  -webkit-tap-highlight-color: transparent; }
+.color-swatch.sm { width: 24px; height: 24px; border-radius: 8px; }
 
 .add-person-inline {
   display: flex; gap: 8px; align-items: center; margin-top: 8px;

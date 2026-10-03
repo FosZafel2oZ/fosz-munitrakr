@@ -940,14 +940,26 @@
   </div>
 </div>
 
-<!-- Category icon-picker modal (used by Settings → Categories — list rows AND add form) -->
+<!-- Category icon-picker modal (openCatIconPicker): Games + General groups, dot on icons already in use -->
 <div id="catIconModal" class="modal-overlay hidden">
   <div class="modal modal-narrow">
     <div class="modal-head">
       <h3>Choose icon</h3>
       <button type="button" class="ghost-btn" id="catIconClose">✕</button>
     </div>
-    <div id="catIconGrid" class="icon-grid"></div>
+    <div id="catIconNote" class="icon-note hidden"><i class="in-use-dot"></i>already in use — can still be picked</div>
+    <div id="catIconGrid"></div>
+  </div>
+</div>
+
+<!-- Colour sheet (openColorSheet): 18 presets + a "+" for any other colour -->
+<div id="colorSheetModal" class="modal-overlay hidden">
+  <div class="modal modal-narrow">
+    <div class="modal-head">
+      <h3>Choose colour</h3>
+      <button type="button" class="ghost-btn" id="colorSheetClose">✕</button>
+    </div>
+    <div id="colorSheetGrid" class="color-grid"></div>
   </div>
 </div>
 

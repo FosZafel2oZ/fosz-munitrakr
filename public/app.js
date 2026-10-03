@@ -2691,10 +2691,21 @@ function showColorPanel(items) {
   items.forEach((it, i) => {
     const row = document.createElement("div");
     row.className = "nc-row";
+    const color = FALLBACK[i % FALLBACK.length];
+    // The swatch button holds the chosen colour in data-color (the save path
+    // reads it); tapping it opens the colour sheet.
     row.innerHTML = `
-      <input type="color" value="${FALLBACK[i % FALLBACK.length]}" />
+      <button type="button" class="color-swatch nc-swatch" data-color="${color}"
+        style="background:${color}" aria-label="Choose colour for ${escapeHtml(it.name)}"></button>
       <span class="nc-label">${escapeHtml(it.name)}</span>
       <span class="nc-tag">${it.kind === "cat" ? "Category" : "Sub of " + escapeHtml(it.category)}</span>`;
+    const sw = row.querySelector(".nc-swatch");
+    sw.addEventListener("click", () => {
+      openColorSheet(sw.dataset.color, (next) => {
+        sw.dataset.color = next;
+        sw.style.background = next;
+      });
+    });
     box.appendChild(row);
   });
   $("#newColorPanel").classList.remove("hidden");
@@ -3257,8 +3268,8 @@ $("#recordForm").addEventListener("submit", async (e) => {
   // step 2: persist new settings (if any) then save record
   try {
     if (pendingNew) {
-      const colors = $$("#newColorList .nc-row input[type=color]").map(
-        (i) => i.value
+      const colors = $$("#newColorList .nc-row .nc-swatch").map(
+        (b) => b.dataset.color
       );
       applyNewToSettings(pendingNew, colors);
       settings = await api("/settings", "PUT", settings);
@@ -3545,7 +3556,7 @@ function renderCatManager() {
       openCatIconPicker(cat.icon, (next) => {
         cat.icon = next;
         iconBtn.innerHTML = iconSvg(cat.icon, "ip-svg");
-      });
+      }, list);
     });
     const subsBox = row.querySelector(".subs");
     cat.subs.forEach((s, si) => {
@@ -3609,16 +3620,33 @@ function renderCatManager() {
     })
   );
 }
-// Category icon-picker modal — reusable. Mirrors openPersonIconPicker.
-function openCatIconPicker(currentIconId, onPick) {
+// Category icon-picker modal — reusable. Two groups (Games, then General); a
+// dot marks every icon already used by a category or sub-category of `cats`
+// (the caller's type's category list). Used icons stay pickable; the current
+// icon is highlighted.
+function openCatIconPicker(currentIconId, onPick, cats) {
   const m = document.getElementById("catIconModal");
   const grid = document.getElementById("catIconGrid");
   if (!m || !grid) return;
-  grid.innerHTML = ICON_IDS.map((id) =>
-    '<button type="button" data-id="' + id + '" class="' + (id === currentIconId ? "active" : "") + '">' +
-      iconSvg(id) +
-    '</button>'
-  ).join("");
+  const used = typeof iconsInUse === "function" ? iconsInUse(cats || []) : [];
+  const group = (title, ids) =>
+    '<div class="icon-group-title">' + title + '</div>' +
+    '<div class="icon-group">' +
+    ids.map((id) => {
+      const isUsed = used.includes(id);
+      return '<button type="button" data-id="' + id + '" aria-label="' + id + (isUsed ? " (already in use)" : "") +
+        '" class="' + (id === currentIconId ? "active" : "") + (isUsed ? " used" : "") + '">' +
+        iconSvg(id) +
+      '</button>';
+    }).join("") +
+    '</div>';
+  grid.innerHTML =
+    group("Games", GAME_ICON_IDS) +
+    group("General", ICON_IDS.filter((id) => !GAME_ICON_IDS.includes(id)));
+  const note = document.getElementById("catIconNote");
+  if (note) note.classList.toggle("hidden", !used.length);
+  const box = m.querySelector(".modal");
+  if (box) box.scrollTop = 0;
   grid.querySelectorAll("button").forEach((b) => {
     b.addEventListener("click", () => {
       grid.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x === b));
@@ -3640,6 +3668,69 @@ function closeCatIconPicker() {
   if (!anyOpen) document.body.classList.remove("modal-open");
 }
 document.getElementById("catIconClose")?.addEventListener("click", closeCatIconPicker);
+document.getElementById("catIconModal")?.addEventListener("click", (e) => {
+  if (e.target.id === "catIconModal") closeCatIconPicker();
+});
+
+// Colour sheet — reusable. `currentColor` is ringed (on its preset, or on the
+// "+" circle when it isn't one); picking a preset — or any colour from the
+// system picker behind the "+" — calls onPick(hex) and closes the sheet. The
+// "+" is a <label> around a visually-hidden colour input so iOS opens the
+// system picker from a real tap.
+function openColorSheet(currentColor, onPick) {
+  const m = document.getElementById("colorSheetModal");
+  const grid = document.getElementById("colorSheetGrid");
+  if (!m || !grid) return;
+  const presets = typeof COLOR_PRESETS !== "undefined" ? COLOR_PRESETS : [];
+  const cur = String(currentColor || "").toLowerCase();
+  const isPreset = presets.includes(cur);
+  const hex6 = /^#[0-9a-f]{6}$/.test(cur);
+  const pick = (hex) => {
+    closeColorSheet();
+    onPick(hex);
+  };
+  grid.innerHTML = "";
+  presets.forEach((c) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "color-dot" + (c === cur ? " sel" : "");
+    b.style.background = c;
+    b.setAttribute("aria-label", c);
+    b.addEventListener("click", () => pick(c));
+    grid.appendChild(b);
+  });
+  const plus = document.createElement("label");
+  plus.className = "color-dot plus" + (!isPreset && hex6 ? " sel custom" : "");
+  if (!isPreset && hex6) plus.style.background = cur;
+  plus.setAttribute("aria-label", "Other colour");
+  plus.innerHTML =
+    '<span aria-hidden="true">+</span>' +
+    '<input type="color" class="visually-hidden" value="' + (hex6 ? cur : "#7c5cff") + '" />';
+  const inp = plus.querySelector("input");
+  let done = false;
+  const take = () => {
+    if (done) return;
+    done = true;
+    pick(inp.value);
+  };
+  inp.addEventListener("input", take);
+  inp.addEventListener("change", take);
+  grid.appendChild(plus);
+  m.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+function closeColorSheet() {
+  const m = document.getElementById("colorSheetModal");
+  if (m) m.classList.add("hidden");
+  // Release the page-scroll lock only when no other modal is still showing
+  // (the sheet opens on top of the Add Record modal).
+  if (!document.querySelector(".modal-overlay:not(.hidden)"))
+    document.body.classList.remove("modal-open");
+}
+document.getElementById("colorSheetClose")?.addEventListener("click", closeColorSheet);
+document.getElementById("colorSheetModal")?.addEventListener("click", (e) => {
+  if (e.target.id === "colorSheetModal") closeColorSheet();
+});
 
 // Icon picker state for the "Add a new category" row.
 let _newCatIconId = "tag";
@@ -3658,7 +3749,7 @@ function _paintNewCatIconTile() {
     openCatIconPicker(_newCatIconId, (next) => {
       _newCatIconId = next;
       _paintNewCatIconTile();
-    });
+    }, settingsDraft[catTypeTab]);
   });
   const colorInp = document.getElementById("newCatColor");
   if (colorInp) {
