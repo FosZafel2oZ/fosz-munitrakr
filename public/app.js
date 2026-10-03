@@ -328,7 +328,37 @@ function loadStore() {
       migratedTimestamps = true;
     }
   }
-  if (migratedTimestamps) {
+  // Migration: every category and sub-category needs an id. Renames reach
+  // records and rules only through reconcileRenames' id match (which skips
+  // id-less entries), so heal any missing ones here — the old Settings screen
+  // used to do it for categories when it opened; the view-only list doesn't.
+  let healedIds = false;
+  const takenIds = new Set();
+  const cats = ["expense", "investment"]
+    .map((t) => store.settings[t])
+    .filter(Array.isArray)
+    .flat()
+    .filter((c) => c && typeof c === "object");
+  cats.forEach((c) => {
+    if (c.id) takenIds.add(c.id);
+    if (Array.isArray(c.subs))
+      c.subs.forEach((s) => { if (s && s.id) takenIds.add(s.id); });
+  });
+  const freshId = (prefix) => {
+    let id;
+    do { id = prefix + uid(); } while (takenIds.has(id));
+    takenIds.add(id);
+    return id;
+  };
+  cats.forEach((c) => {
+    if (!c.id) { c.id = freshId("c"); healedIds = true; }
+    if (Array.isArray(c.subs))
+      c.subs.forEach((s) => {
+        if (s && typeof s === "object" && !s.id) { s.id = freshId("s"); healedIds = true; }
+      });
+  });
+
+  if (migratedTimestamps || healedIds) {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch {}
   }
 }
@@ -402,8 +432,9 @@ function sanitizeRecord(b) {
 }
 
 // Propagate category/sub-category renames is implemented in
-// public/finance-helpers.js as reconcileRenames(oldS, newS, records).
-// Call sites in this file pass store.records explicitly (see line ~267).
+// public/finance-helpers.js as reconcileRenames(oldS, newS, records, rules).
+// Its one call site, the PUT /settings route in api(), passes store.records
+// and store.settings.recurring explicitly.
 
 /* api(): same call sites as before, now backed by localStorage (no server) */
 async function api(path, method = "GET", body) {
@@ -422,7 +453,9 @@ async function api(path, method = "GET", body) {
   if (path === "/settings" && method === "PUT") {
     // Renaming a category/sub in settings must rename it on existing records
     // (records store names as strings; categories are matched by id here).
-    reconcileRenames(store.settings, body, store.records);
+    // Recurring rules (store.settings.recurring, kept below) follow the same
+    // renames — same id match, same type-aware rules as records.
+    reconcileRenames(store.settings, body, store.records, store.settings.recurring);
     // Recurring rules and people are only ever written straight to the store
     // (never through this route), and the in-memory `settings` copy a caller
     // sends goes stale after boot — always keep the store's own, current lists.
@@ -4804,6 +4837,13 @@ function renderConfirmBanner() {
     return;
   }
   root.classList.remove("hidden");
+  // Show each rule as it is now (a category rename since boot renames the
+  // stored rule; the queued copy would still show the old name).
+  const liveRules = (store && store.settings && store.settings.recurring) || [];
+  for (const p of pendingConfirmations) {
+    const live = liveRules.find((r) => r.id === p.ruleId);
+    if (live) p.rule = live;
+  }
   const shown = pendingConfirmations.slice(0, 3);
   const extra = pendingConfirmations.length - shown.length;
   let html = shown.map((p, i) =>

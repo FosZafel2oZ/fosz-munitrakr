@@ -83,6 +83,130 @@ test("reconcileRenames: handles both expense and investment in one pass", () => 
   assert.equal(records[1].category, "Equities");
 });
 
+test("reconcileRenames: unchanged id-less categories never rename anything", () => {
+  // Without the id guard both entries keyed as "undefined": new "Food" matched
+  // old "Transport" and every Transport record became Food.
+  const cats = () => [
+    { name: "Food", subs: [] },
+    { name: "Transport", subs: [] },
+    { id: "", name: "Other", subs: [] },
+    { id: null, name: "Bills", subs: [] },
+  ];
+  const oldS = settings({ expense: cats() });
+  const newS = settings({ expense: cats() });
+  const records = [
+    { type: "expense", category: "Food", subcategory: "" },
+    { type: "expense", category: "Transport", subcategory: "" },
+    { type: "expense", category: "Other", subcategory: "" },
+    { type: "expense", category: "Bills", subcategory: "" },
+  ];
+  H.reconcileRenames(oldS, newS, records);
+  assert.deepEqual(records.map((r) => r.category), ["Food", "Transport", "Other", "Bills"]);
+});
+
+test("reconcileRenames: id-less categories never match even when reordered", () => {
+  const oldS = settings({ expense: [{ name: "Food", subs: [] }, { name: "Transport", subs: [] }] });
+  const newS = settings({ expense: [{ name: "Transport", subs: [] }, { name: "Food", subs: [] }] });
+  const records = [
+    { type: "expense", category: "Food", subcategory: "" },
+    { type: "expense", category: "Transport", subcategory: "" },
+  ];
+  H.reconcileRenames(oldS, newS, records);
+  assert.deepEqual(records.map((r) => r.category), ["Food", "Transport"]);
+});
+
+test("reconcileRenames: unchanged id-less subs never rename anything", () => {
+  const subs = () => [{ name: "Coffee" }, { name: "Lunch" }, { id: "", name: "Snacks" }];
+  const oldS = settings({ expense: [{ id: "c1", name: "Food", subs: subs() }] });
+  const newS = settings({ expense: [{ id: "c1", name: "Food", subs: subs() }] });
+  const records = [
+    { type: "expense", category: "Food", subcategory: "Coffee" },
+    { type: "expense", category: "Food", subcategory: "Lunch" },
+    { type: "expense", category: "Food", subcategory: "Snacks" },
+  ];
+  H.reconcileRenames(oldS, newS, records);
+  assert.deepEqual(records.map((r) => r.subcategory), ["Coffee", "Lunch", "Snacks"]);
+});
+
+test("reconcileRenames: mixed lists still rename the id'd categories and subs", () => {
+  const oldS = settings({
+    expense: [
+      { id: "c1", name: "Food", subs: [{ id: "s1", name: "Coffee" }, { name: "Lunch" }, { name: "Dinner" }] },
+      { name: "Transport", subs: [] },
+      { name: "Other", subs: [] },
+    ],
+  });
+  const newS = settings({
+    expense: [
+      { id: "c1", name: "Dining", subs: [{ id: "s1", name: "Cafe" }, { name: "Lunch" }, { name: "Dinner" }] },
+      { name: "Transport", subs: [] },
+      { name: "Other", subs: [] },
+    ],
+  });
+  const records = [
+    { type: "expense", category: "Food", subcategory: "Coffee" },
+    { type: "expense", category: "Food", subcategory: "Lunch" },
+    { type: "expense", category: "Food", subcategory: "Dinner" },
+    { type: "expense", category: "Transport", subcategory: "" },
+    { type: "expense", category: "Other", subcategory: "" },
+  ];
+  H.reconcileRenames(oldS, newS, records);
+  assert.deepEqual(
+    records.map((r) => r.category + "/" + r.subcategory),
+    ["Dining/Cafe", "Dining/Lunch", "Dining/Dinner", "Transport/", "Other/"]
+  );
+});
+
+test("reconcileRenames: rules (4th argument) follow category and sub renames, type-aware", () => {
+  const oldS = {
+    expense: [{ id: "c1", name: "Food", subs: [{ id: "s1", name: "Coffee" }] }],
+    investment: [{ id: "i1", name: "Stocks", subs: [] }],
+  };
+  const newS = {
+    expense: [{ id: "c1", name: "Dining", subs: [{ id: "s1", name: "Cafe" }] }],
+    investment: [{ id: "i1", name: "Equities", subs: [] }],
+  };
+  const records = [{ type: "expense", category: "Food", subcategory: "Coffee" }];
+  const rules = [
+    { id: "rule_1", type: "expense", category: "Food", subcategory: "Coffee", amount: 5 },
+    { id: "rule_2", type: "expense", category: "Food", subcategory: "", amount: 6 },
+    { id: "rule_3", type: "investment", category: "Food", subcategory: "Coffee" }, // other type
+    { id: "rule_4", type: "investment", category: "Stocks", subcategory: "" },
+  ];
+  H.reconcileRenames(oldS, newS, records, rules);
+  assert.equal(records[0].category, "Dining");
+  assert.equal(records[0].subcategory, "Cafe");
+  assert.deepEqual(
+    rules.map((r) => r.type + ":" + r.category + "/" + r.subcategory),
+    ["expense:Dining/Cafe", "expense:Dining/", "investment:Food/Coffee", "investment:Equities/"]
+  );
+  assert.equal(rules[0].amount, 5); // nothing else touched
+});
+
+test("reconcileRenames: rules are renamed even when records is not an array", () => {
+  const oldS = settings({ expense: [{ id: "c1", name: "A", subs: [] }] });
+  const newS = settings({ expense: [{ id: "c1", name: "B", subs: [] }] });
+  const rules = [{ type: "expense", category: "A", subcategory: "" }];
+  H.reconcileRenames(oldS, newS, null, rules);
+  assert.equal(rules[0].category, "B");
+});
+
+test("reconcileRenames: id-less categories/subs never rename rules", () => {
+  const cats = () => [
+    { name: "Food", subs: [{ name: "Coffee" }, { name: "Lunch" }] },
+    { name: "Transport", subs: [] },
+  ];
+  const rules = [
+    { type: "expense", category: "Transport", subcategory: "" },
+    { type: "expense", category: "Food", subcategory: "Lunch" },
+  ];
+  H.reconcileRenames(settings({ expense: cats() }), settings({ expense: cats() }), [], rules);
+  assert.deepEqual(
+    rules.map((r) => r.category + "/" + r.subcategory),
+    ["Transport/", "Food/Lunch"]
+  );
+});
+
 
 /* ============================================================ */
 /* makeRateService — getRate + caching                          */

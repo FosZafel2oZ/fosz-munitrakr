@@ -10,29 +10,52 @@
 })(typeof window !== "undefined" ? window : globalThis, function () {
 
   /* ---------- Category/sub-category rename propagation ----------
-     Pure: takes old settings, new settings, and the records array, and
-     mutates record.category / record.subcategory in place for any renames
-     detected by stable id match.
+     Pure: takes old settings, new settings, the records array and (optional)
+     the recurring rules array, and mutates item.category / item.subcategory
+     in place for any renames detected by stable id match. Records and rules
+     share the same shape here ({ type, category, subcategory }) and follow
+     exactly the same rules.
+     A category or sub without an id (falsy) is never matched on either side:
+     id-less entries would all collide under one key and could rename one
+     category's (or sub's) items into another's.
   */
-  function reconcileRenames(oldS, newS, records) {
-    if (!Array.isArray(records)) return;
+  function reconcileRenames(oldS, newS, records, rules) {
+    const lists = [records, rules].filter(Array.isArray);
+    if (!lists.length) return;
+    const each = (fn) =>
+      lists.forEach((list) =>
+        list.forEach((r) => {
+          if (r && typeof r === "object") fn(r);
+        })
+      );
+    const arr = (x) => (Array.isArray(x) ? x : []);
     ["expense", "investment"].forEach((type) => {
       const oldById = {};
-      (oldS[type] || []).forEach((c) => (oldById[c.id] = c));
-      (newS[type] || []).forEach((nc) => {
-        const oc = oldById[nc.id];
+      arr(oldS && oldS[type]).forEach((c) => {
+        if (c && c.id) oldById[c.id] = c;
+      });
+      arr(newS && newS[type]).forEach((nc) => {
+        if (!nc || !nc.id) return;
+        const oc = Object.prototype.hasOwnProperty.call(oldById, nc.id)
+          ? oldById[nc.id]
+          : null;
         if (!oc) return;
         if (oc.name && nc.name && oc.name !== nc.name) {
-          records.forEach((r) => {
+          each((r) => {
             if (r.type === type && r.category === oc.name) r.category = nc.name;
           });
         }
         const oldSub = {};
-        (oc.subs || []).forEach((s) => (oldSub[s.id] = s));
-        (nc.subs || []).forEach((ns) => {
-          const os = oldSub[ns.id];
+        arr(oc.subs).forEach((s) => {
+          if (s && s.id) oldSub[s.id] = s;
+        });
+        arr(nc.subs).forEach((ns) => {
+          if (!ns || !ns.id) return;
+          const os = Object.prototype.hasOwnProperty.call(oldSub, ns.id)
+            ? oldSub[ns.id]
+            : null;
           if (os && os.name && ns.name && os.name !== ns.name) {
-            records.forEach((r) => {
+            each((r) => {
               if (
                 r.type === type &&
                 r.category === nc.name &&
