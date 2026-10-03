@@ -1298,8 +1298,30 @@ test("recentPicks: records without a numeric createdAt sort last", () => {
     pk("Fun", "", 5),
   ];
   const out = H.recentPicks(recs, "expense", PICK_CATS);
-  assert.equal(out[0].category, "Fun");
-  assert.equal(out.length, 3);
+  // Fun has the only numeric createdAt; the other two tie, later array position first
+  assert.deepEqual(out, [
+    { category: "Fun", sub: "" },
+    { category: "Rent", sub: "" },
+    { category: "Food", sub: "" },
+  ]);
+});
+
+test("recentPicks: records with no createdAt at all keep newest-last-in-array first", () => {
+  const recs = [pk("Food", "", undefined), pk("Rent", "", undefined), pk("Fun", "", undefined)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [
+    { category: "Fun", sub: "" },
+    { category: "Rent", sub: "" },
+    { category: "Food", sub: "" },
+  ]);
+});
+
+test("recentPicks: equal createdAt ties go to the later array position", () => {
+  const recs = [pk("Food", "", 50), pk("Rent", "", 50), pk("Fun", "", 10)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [
+    { category: "Rent", sub: "" },
+    { category: "Food", sub: "" },
+    { category: "Fun", sub: "" },
+  ]);
 });
 
 test("recentPicks: category/sub matching ignores case, result uses the settings spelling", () => {

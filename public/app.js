@@ -2234,9 +2234,11 @@ function buildFreqCats() {
         : catColor(modalType, p.category);
       return `<button type="button" class="freq-chip" data-cat="${escapeHtml(
         p.category
-      )}" data-sub="${escapeHtml(
+      )}" data-sub="${escapeHtml(p.sub)}"${
         p.sub
-      )}"><span class="freq-ic" style="background:${color}">${iconSvg(
+          ? ` aria-label="${escapeHtml(p.category + ", " + p.sub)}"`
+          : ""
+      }><span class="freq-ic" style="background:${color}">${iconSvg(
         catIcon(modalType, p.category)
       )}</span><span class="freq-lbl">${escapeHtml(p.sub || p.category)}</span></button>`;
     })
@@ -2247,6 +2249,7 @@ function buildFreqCats() {
       if (b.dataset.sub) setSub(b.dataset.sub);
     })
   );
+  wrap.scrollLeft = 0; // newest picks in view
 }
 
 function setCategory(name) {
@@ -2583,6 +2586,7 @@ function openModal(record, prefill) {
   setCategory(src ? src.category : "");
   if (src && src.subcategory) setSub(src.subcategory);
   $("#modal").classList.remove("hidden");
+  $("#freqCats").scrollLeft = 0; // buildFreqCats ran while the modal was hidden
   syncModalLock();
   setRecRecurringSection(record);
   splitPeople = [];

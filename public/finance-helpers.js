@@ -310,7 +310,8 @@
      list ([{ name, subs: [{ name }] }]). Returns [{ category, sub }] newest
      first, `sub` = "" for a main-type pick; at most `limit` (default 10).
        - recency is the record's numeric createdAt (not its date), newest
-         first; records without a numeric createdAt sort last
+         first; records without a numeric createdAt sort last; ties (equal or
+         missing createdAt) go to the later array position (newer record)
        - records of another type, and records made by a recurring rule
          (truthy ruleId), are ignored
        - each distinct pick appears once, at its newest occurrence; a main
@@ -328,12 +329,14 @@
     const picks = [];
     const seen = new Set();
     records
-      .filter((r) => r && r.type === type && !r.ruleId && r.category)
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => r && r.type === type && !r.ruleId && r.category)
       .sort((a, b) => {
-        const x = ms(a), y = ms(b);
-        return x === y ? 0 : y > x ? 1 : -1;
+        const x = ms(a.r), y = ms(b.r);
+        if (x !== y) return y > x ? 1 : -1;
+        return b.i - a.i; // tie: the later array position (newer record) first
       })
-      .forEach((r) => {
+      .forEach(({ r }) => {
         if (picks.length >= max) return;
         const cat = cats.find((c) => lc(c.name) === lc(r.category));
         if (!cat) return;
