@@ -2821,35 +2821,52 @@ function buildFreqCats() {
 
 // Narrowest a "Recently added" label may be squeezed (84% of its natural width).
 const FREQ_LBL_MIN_SCALE = 0.84;
-let freqMeasureCtx = null;
+// Added to the widest word before it is compared with the label width, so
+// sub-pixel rounding can never orphan a last letter on the second line.
+const FREQ_LBL_SLACK_PX = 0.5;
 
 // A label whose widest single word is wider than the label (its CSS max-width,
 // 62px) is squeezed horizontally just enough for that word to fit on one
 // line, never below FREQ_LBL_MIN_SCALE (labelSqueeze, finance-helpers.js); the
 // text height is unchanged. The label is widened by 1/scale, given equal
 // negative side margins so the chip stays as wide as before, and scaled with
-// scaleX about its centre. Measured with a canvas from the label's computed
-// font, so it works while the modal is hidden (display:none).
+// scaleX about its centre. Each word is measured in the DOM, by one reused
+// off-screen span on <body> (so it works while the modal is display:none)
+// carrying the label's computed font, i.e. by the same text engine that lays
+// the label out; the span is always removed again.
 function squeezeFreqLabels(wrap) {
   if (typeof labelSqueeze !== "function") return; // older cached helpers: no squeeze
-  if (!freqMeasureCtx) freqMeasureCtx = document.createElement("canvas").getContext("2d");
-  if (!freqMeasureCtx) return;
-  wrap.querySelectorAll(".freq-lbl").forEach((lbl) => {
-    const cs = getComputedStyle(lbl);
-    const maxPx = parseFloat(cs.maxWidth);
-    freqMeasureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    let widest = 0;
-    (lbl.textContent || "").split(/\s+/).forEach((word) => {
-      if (word) widest = Math.max(widest, freqMeasureCtx.measureText(word).width);
+  const ruler = document.createElement("span");
+  ruler.style.cssText =
+    "position:absolute;visibility:hidden;white-space:nowrap;left:-9999px;top:0;pointer-events:none";
+  document.body.appendChild(ruler);
+  try {
+    wrap.querySelectorAll(".freq-lbl").forEach((lbl) => {
+      const cs = getComputedStyle(lbl);
+      const maxPx = parseFloat(cs.maxWidth);
+      ruler.style.fontFamily = cs.fontFamily;
+      ruler.style.fontSize = cs.fontSize;
+      ruler.style.fontWeight = cs.fontWeight;
+      ruler.style.fontStyle = cs.fontStyle;
+      ruler.style.letterSpacing = cs.letterSpacing;
+      let widest = 0;
+      (lbl.textContent || "").split(/s+/).forEach((word) => {
+        if (!word) return;
+        ruler.textContent = word;
+        widest = Math.max(widest, ruler.getBoundingClientRect().width);
+      });
+      if (widest > 0) widest += FREQ_LBL_SLACK_PX;
+      const k = labelSqueeze(widest, maxPx, FREQ_LBL_MIN_SCALE);
+      if (k >= 1) return;
+      lbl.style.maxWidth = "none";
+      lbl.style.width = (maxPx / k).toFixed(2) + "px";
+      lbl.style.margin = "0 " + (-(maxPx / k - maxPx) / 2).toFixed(2) + "px";
+      lbl.style.transform = "scaleX(" + k + ")";
+      lbl.dataset.squeeze = String(k);
     });
-    const k = labelSqueeze(widest, maxPx, FREQ_LBL_MIN_SCALE);
-    if (k >= 1) return;
-    lbl.style.maxWidth = "none";
-    lbl.style.width = (maxPx / k).toFixed(2) + "px";
-    lbl.style.margin = "0 " + (-(maxPx / k - maxPx) / 2).toFixed(2) + "px";
-    lbl.style.transform = "scaleX(" + k + ")";
-    lbl.dataset.squeeze = String(k);
-  });
+  } finally {
+    ruler.remove();
+  }
 }
 
 function setCategory(name) {
