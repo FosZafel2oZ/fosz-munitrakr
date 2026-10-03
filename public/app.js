@@ -1837,7 +1837,17 @@ document.getElementById("chartHole")?.addEventListener("click", () => {
 /* ---------------- Records page + multi-select ---------------- */
 let multiSelect = false;
 let lastTyped = []; // records currently shown on the Records page
-let recFilter = new Set(); // category filter on the Records page
+// Records page filter: a Set of recFilterKey keys (a bare name = the whole
+// category). Rebuilt by recFilterToggle, so it is reassigned, not mutated.
+let recFilter = new Set();
+let recFilterOpen = new Set(); // categories whose sub rows show in the menu
+let recQuery = ""; // notes search text (the bar under the title)
+// An older cached finance-helpers.js lacks the filter helpers: the page then
+// keeps the category-only filter and hides the search bar.
+function recFilterHelpersOk() {
+  return typeof recFilterKey === "function" && typeof recFilterRows === "function" &&
+    typeof recFilterToggle === "function" && typeof recFilterMatch === "function";
+}
 
 function renderBulk(list) {
   const expenses = list.filter((r) => r.type === "expense");
@@ -1855,15 +1865,23 @@ function renderBulk(list) {
   $("#recCardInvest").classList.toggle("active", activeType === "investment");
 
   let typed = activeType === "expense" ? expenses : invest;
-  if (recFilter.size) typed = typed.filter((r) => recFilter.has(r.category));
+  const helpersOk = recFilterHelpersOk();
+  if (helpersOk) typed = typed.filter((r) => recFilterMatch(r, recFilter, recQuery));
+  else if (recFilter.size) typed = typed.filter((r) => recFilter.has(r.category));
   lastTyped = typed;
   $("#bulkListTitle").textContent =
     (activeType === "expense" ? "Expense" : "Investment") + " Records";
   $("#bulkRecordCount").textContent = typed.length;
   $("#recFilterBtn").classList.toggle("on", recFilter.size > 0);
+  const searchBar = document.getElementById("recSearchBar");
+  if (searchBar) searchBar.classList.toggle("hidden", !helpersOk);
+  const searchClear = document.getElementById("recSearchClear");
+  if (searchClear) searchClear.classList.toggle("hidden", recQuery === "");
 
   const wrap = $("#bulkList");
   wrap.classList.toggle("select-mode", multiSelect);
+  const narrowed = recFilter.size > 0 || (helpersOk && recQuery.trim() !== "");
+  $("#bulkEmpty").textContent = narrowed ? "No records match." : "No records in this range.";
   $("#bulkEmpty").classList.toggle("hidden", typed.length > 0);
   wrap.innerHTML = "";
   const visibleIds = new Set(typed.map((r) => r.id));
@@ -1983,7 +2001,8 @@ $$("#recCardExpense, #recCardInvest").forEach((card) =>
   card.addEventListener("click", () => {
     activeType = card.dataset.type;
     selected.clear();
-    recFilter.clear(); // categories differ per type
+    recFilter = new Set(); // categories differ per type (the search text stays)
+    recFilterOpen.clear();
     $("#recFilterMenu").classList.add("hidden");
     drillCategory = null;
     selectedSlice = null;
@@ -1991,50 +2010,142 @@ $$("#recCardExpense, #recCardInvest").forEach((card) =>
   })
 );
 
-/* ---- Records page: filter by category ---- */
-function buildFilterMenu() {
+/* ---- Records page: filter by category / sub-category ---- */
+// One row per category; a category with sub rows (recFilterRows) gets an arrow
+// that shows them indented under it. Rows are addressed by index (data-ci /
+// data-si) — filter keys contain a NUL, which can't live in an attribute.
+// `opening`: the menu is about to open, so partly-ticked categories expand.
+function buildFilterMenu(opening) {
   const menu = $("#recFilterMenu");
-  const cats = (settings[activeType] || []).map((c) => c.name);
+  const keepScroll = menu.scrollTop; // a rebuild after a tap stays where it was
+  const cats = settings[activeType] || [];
+  const helpersOk = recFilterHelpersOk();
+  const rows = helpersOk
+    ? recFilterRows(cats, records.filter((r) => r.type === activeType && inRange(r)), recFilter)
+    : cats.map((c) => ({ name: c.name, state: recFilter.has(c.name) ? "on" : "off", subs: [] }));
+  if (opening)
+    rows.forEach((row) => {
+      if (row.state === "part" && row.subs.length) recFilterOpen.add(row.name);
+    });
+  const nameHTML = (s) => `<span class="filter-nm">${escapeHtml(s)}</span>`;
   menu.innerHTML =
-    cats
-      .map((name) => {
-        const c = findCat(activeType, name);
-        return `<button type="button" class="filter-opt" data-name="${escapeHtml(
-          name
-        )}"><input type="checkbox" ${
-          recFilter.has(name) ? "checked" : ""
-        } /><span class="pick-ico" style="background:${
-          c ? c.color : "#3a4152"
-        }">${iconSvg(c ? c.icon || "tag" : "tag")}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(
-          name
-        )}</span></button>`;
+    rows
+      .map((row, ci) => {
+        const c = cats[ci];
+        const open = row.subs.length > 0 && recFilterOpen.has(row.name);
+        let html = `<div class="filter-row"><button type="button" class="filter-opt" data-ci="${ci}"><input type="checkbox" ${
+          row.state === "on" ? "checked" : ""
+        } /><span class="pick-ico" style="background:${c.color}">${iconSvg(
+          c.icon || "tag"
+        )}</span>${nameHTML(row.name)}</button>`;
+        if (row.subs.length)
+          html += `<button type="button" class="filter-exp${open ? " open" : ""}" data-ci="${ci}" aria-expanded="${open}" aria-label="Sub-categories of ${escapeHtml(
+            row.name
+          )}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>`;
+        html += `</div>`;
+        if (open)
+          html +=
+            `<div class="filter-subs">` +
+            row.subs
+              .map((s, si) => {
+                let tile;
+                let label = s.name;
+                if (s.kind === "sub") tile = subTileHTML(c, c.subs[si]);
+                else if (s.kind === "none") {
+                  tile = `<span class="pick-ico" style="background:#3a4152">${iconSvg("tag")}</span>`;
+                  label = NO_SUB_LABEL;
+                } else
+                  tile = `<span class="pick-ico" style="background:${subColor(
+                    activeType, row.name, s.name
+                  )}">${iconSvg(subIcon(activeType, row.name, s.name))}</span>`;
+                return `<button type="button" class="filter-opt${
+                  s.kind === "none" ? " nosub" : ""
+                }" data-ci="${ci}" data-si="${si}"><input type="checkbox" ${
+                  s.on ? "checked" : ""
+                } />${tile}${nameHTML(label)}</button>`;
+              })
+              .join("") +
+            `</div>`;
+        return html;
       })
       .join("") +
     `<button type="button" class="filter-clear" id="recFilterClear">Clear filters</button>`;
+  // "Some of it" shows as the checkbox's dash; only settable from script.
+  rows.forEach((row, ci) => {
+    if (row.state !== "part") return;
+    const box = menu.querySelector(`.filter-row .filter-opt[data-ci="${ci}"] input`);
+    if (box) box.indeterminate = true;
+  });
+  const retick = () => {
+    buildFilterMenu();
+    renderBulk(records.filter(inRange));
+  };
   menu.querySelectorAll(".filter-opt").forEach((b) =>
     b.addEventListener("click", (e) => {
       e.stopPropagation(); // keep the dropdown open while picking
-      const n = b.dataset.name;
-      if (recFilter.has(n)) recFilter.delete(n);
-      else recFilter.add(n);
+      const row = rows[+b.dataset.ci];
+      const sub = b.dataset.si == null ? null : row.subs[+b.dataset.si];
+      if (helpersOk) recFilter = recFilterToggle(recFilter, row, sub ? sub.key : null);
+      else if (recFilter.has(row.name)) recFilter.delete(row.name); // old helpers: categories only
+      else recFilter.add(row.name);
+      retick();
+    })
+  );
+  menu.querySelectorAll(".filter-exp").forEach((b) =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const n = rows[+b.dataset.ci].name;
+      if (recFilterOpen.has(n)) recFilterOpen.delete(n);
+      else recFilterOpen.add(n);
       buildFilterMenu();
-      renderBulk(records.filter(inRange));
     })
   );
   menu.querySelector("#recFilterClear").addEventListener("click", (e) => {
     e.stopPropagation();
-    recFilter.clear();
-    buildFilterMenu();
-    renderBulk(records.filter(inRange));
+    recFilter = new Set(); // ticks only — the search text and open rows stay
+    retick();
   });
+  menu.scrollTop = keepScroll;
 }
 $("#recFilterBtn").addEventListener("click", (e) => {
   e.stopPropagation();
   const m = $("#recFilterMenu");
   const open = m.classList.contains("hidden");
-  if (open) buildFilterMenu();
+  if (open) buildFilterMenu(true);
   m.classList.toggle("hidden");
+  if (open) m.scrollTop = 0; // a fresh open starts at the top
 });
+
+// Notes search bar (always shown under the title). An older cached
+// index.html has no bar: recQuery then stays "" and nothing else changes.
+const recSearchInput = document.getElementById("recSearch");
+const recSearchClearBtn = document.getElementById("recSearchClear");
+if (recSearchInput) {
+  recSearchInput.value = ""; // never restored across reloads
+  recSearchInput.addEventListener("input", () => {
+    recQuery = recSearchInput.value;
+    renderBulk(records.filter(inRange));
+  });
+  recSearchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      recSearchInput.blur(); // dismiss the keyboard
+    }
+  });
+}
+if (recSearchClearBtn) {
+  // Keep the keyboard up: don't let the tap move focus off the input.
+  recSearchClearBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  recSearchClearBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    recQuery = "";
+    if (recSearchInput) {
+      recSearchInput.value = "";
+      recSearchInput.focus();
+    }
+    renderBulk(records.filter(inRange));
+  });
+}
 // Bulk modal uses the active type's categories (records in the Records
 // tab are filtered to the active Expense/Investment type).
 function buildBulkCatMenu() {
