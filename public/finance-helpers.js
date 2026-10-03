@@ -304,6 +304,49 @@
     return Math.round((sum / totals.length) * 100) / 100;
   }
 
+  /* ---------- recentPicks ----------
+     The Add-Record quick-pick row: the most recently added (category,
+     subcategory) picks of one type. `cats` is that type's settings category
+     list ([{ name, subs: [{ name }] }]). Returns [{ category, sub }] newest
+     first, `sub` = "" for a main-type pick; at most `limit` (default 10).
+       - recency is the record's numeric createdAt (not its date), newest
+         first; records without a numeric createdAt sort last
+       - records of another type, and records made by a recurring rule
+         (truthy ruleId), are ignored
+       - each distinct pick appears once, at its newest occurrence; a main
+         pick and a sub pick of one category are different picks
+       - a category no longer in `cats` is skipped; a sub no longer under its
+         category falls back to the main pick (and de-dups as such)
+     Names match case-insensitively and come back in the settings' spelling.
+     Pure: never mutates its inputs.
+  */
+  function recentPicks(records, type, cats, limit) {
+    const max = limit === undefined ? 10 : limit;
+    if (!Array.isArray(records) || !Array.isArray(cats)) return [];
+    const lc = (x) => String(x).toLowerCase();
+    const ms = (r) => (typeof r.createdAt === "number" && Number.isFinite(r.createdAt) ? r.createdAt : -Infinity);
+    const picks = [];
+    const seen = new Set();
+    records
+      .filter((r) => r && r.type === type && !r.ruleId && r.category)
+      .sort((a, b) => {
+        const x = ms(a), y = ms(b);
+        return x === y ? 0 : y > x ? 1 : -1;
+      })
+      .forEach((r) => {
+        if (picks.length >= max) return;
+        const cat = cats.find((c) => lc(c.name) === lc(r.category));
+        if (!cat) return;
+        const subs = Array.isArray(cat.subs) ? cat.subs : [];
+        const sub = r.subcategory ? subs.find((x) => lc(x.name) === lc(r.subcategory)) : null;
+        const key = JSON.stringify([cat.name, sub ? sub.name : ""]);
+        if (seen.has(key)) return;
+        seen.add(key);
+        picks.push({ category: cat.name, sub: sub ? sub.name : "" });
+      });
+    return picks;
+  }
+
   /* ---------- Rate service factory ----------
      deps:
        fetch        — fetch implementation
@@ -527,6 +570,6 @@
     iconChoiceFromPicture, migrateIconChoices,
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
     planReconversion, summarizeTotals, summaryAverage, yearsAverage,
-    reconversionMarkupPct, dedupeGetRate, mapLimit,
+    reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks,
   };
 });

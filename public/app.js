@@ -2210,40 +2210,42 @@ function populateDatalists() {
   buildCatMenu();
 }
 
-// Up-to-5 most-used categories of the current type (quick pick)
+// Quick-pick row: the 10 most recently added (category, sub-category) picks
+// of the current type (recentPicks, finance-helpers.js). A main-type chip is
+// the category icon on the category colour; a sub-type chip is the category's
+// icon on the sub-category's own colour, labelled with the sub name.
 function buildFreqCats() {
   const field = $("#freqField");
   const wrap = $("#freqCats");
-  const counts = {};
-  records.forEach((r) => {
-    // strictly this type's own categories (expense/investment kept separate)
-    if (r.type === modalType && r.category && findCat(modalType, r.category))
-      counts[r.category] = (counts[r.category] || 0) + 1;
-  });
-  const top = Object.keys(counts)
-    .sort((a, b) => counts[b] - counts[a])
-    .slice(0, 5);
-  if (!top.length) {
+  const picks =
+    typeof recentPicks === "function" // older cached helpers: no row
+      ? recentPicks(records, modalType, settings[modalType] || [])
+      : [];
+  if (!picks.length) {
     field.classList.add("hidden");
     wrap.innerHTML = "";
     return;
   }
   field.classList.remove("hidden");
-  wrap.innerHTML = top
-    .map(
-      (name) =>
-        `<button type="button" class="freq-chip" data-name="${escapeHtml(
-          name
-        )}"><span class="freq-ic" style="background:${catColor(
-          modalType,
-          name
-        )}">${iconSvg(catIcon(modalType, name))}</span><span class="freq-lbl">${escapeHtml(
-          name
-        )}</span></button>`
-    )
+  wrap.innerHTML = picks
+    .map((p) => {
+      const color = p.sub
+        ? subColor(modalType, p.category, p.sub)
+        : catColor(modalType, p.category);
+      return `<button type="button" class="freq-chip" data-cat="${escapeHtml(
+        p.category
+      )}" data-sub="${escapeHtml(
+        p.sub
+      )}"><span class="freq-ic" style="background:${color}">${iconSvg(
+        catIcon(modalType, p.category)
+      )}</span><span class="freq-lbl">${escapeHtml(p.sub || p.category)}</span></button>`;
+    })
     .join("");
   wrap.querySelectorAll(".freq-chip").forEach((b) =>
-    b.addEventListener("click", () => setCategory(b.dataset.name))
+    b.addEventListener("click", () => {
+      setCategory(b.dataset.cat); // also clears the sub
+      if (b.dataset.sub) setSub(b.dataset.sub);
+    })
   );
 }
 

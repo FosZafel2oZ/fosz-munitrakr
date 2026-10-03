@@ -463,7 +463,7 @@ body.modal-open{overflow:hidden}
   text-align:left;width:100%}
 .picker-opt:active{background:var(--card)}
 .picker-opt.sel{background:var(--accent-soft);color:var(--accent)}
-/* most-frequent quick pick */
+/* recently-added quick pick */
 #freqField{margin-bottom:14px}
 .freq-cats{display:flex;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;
   padding:2px 2px 4px;scrollbar-width:none}

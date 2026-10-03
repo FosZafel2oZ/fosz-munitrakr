@@ -1197,3 +1197,128 @@ test("summarizeTotals: only future-dated records -> firstYear is that year (earl
   assert.equal(t.lastYear, 2028);
   assert.deepEqual(Object.keys(t.years), ["2028"]);
 });
+
+/* ============================================================ */
+/* recentPicks                                                   */
+/* ============================================================ */
+
+const PICK_CATS = [
+  { name: "Food", subs: [{ name: "Coffee" }, { name: "Lunch" }] },
+  { name: "Rent", subs: [] },
+  { name: "Fun", subs: [{ name: "Games" }] },
+];
+function pk(category, subcategory, createdAt, extra) {
+  return Object.assign({ type: "expense", category, subcategory, createdAt, date: "2026-01-01" }, extra);
+}
+
+test("recentPicks: newest createdAt first, ordered by createdAt not date", () => {
+  const recs = [
+    pk("Food", "", 100, { date: "2026-09-30" }),
+    pk("Rent", "", 300, { date: "2020-01-01" }),
+    pk("Fun", "", 200, { date: "2026-12-31" }),
+  ];
+  const out = H.recentPicks(recs, "expense", PICK_CATS);
+  assert.deepEqual(out, [
+    { category: "Rent", sub: "" },
+    { category: "Fun", sub: "" },
+    { category: "Food", sub: "" },
+  ]);
+});
+
+test("recentPicks: a sub record gives a sub pick, no sub gives a main pick", () => {
+  const out = H.recentPicks([pk("Food", "Coffee", 2), pk("Rent", "", 1)], "expense", PICK_CATS);
+  assert.deepEqual(out, [{ category: "Food", sub: "Coffee" }, { category: "Rent", sub: "" }]);
+});
+
+test("recentPicks: records created by recurring rules are skipped", () => {
+  const recs = [pk("Rent", "", 500, { ruleId: "r1" }), pk("Food", "", 100)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [{ category: "Food", sub: "" }]);
+});
+
+test("recentPicks: only records of the requested type count", () => {
+  const recs = [pk("Food", "", 200, { type: "investment" }), pk("Rent", "", 100)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [{ category: "Rent", sub: "" }]);
+  assert.deepEqual(H.recentPicks(recs, "investment", PICK_CATS), [{ category: "Food", sub: "" }]);
+});
+
+test("recentPicks: duplicates collapse, keeping the newest occurrence's position", () => {
+  const recs = [
+    pk("Food", "", 100),
+    pk("Rent", "", 200),
+    pk("Food", "", 300),
+    pk("Rent", "", 150),
+  ];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [
+    { category: "Food", sub: "" },
+    { category: "Rent", sub: "" },
+  ]);
+});
+
+test("recentPicks: main and sub picks of the same category are distinct", () => {
+  const recs = [pk("Food", "", 3), pk("Food", "Coffee", 2), pk("Food", "Lunch", 1)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [
+    { category: "Food", sub: "" },
+    { category: "Food", sub: "Coffee" },
+    { category: "Food", sub: "Lunch" },
+  ]);
+});
+
+test("recentPicks: a deleted category is skipped", () => {
+  const recs = [pk("Gone", "", 300), pk("Gone", "X", 250), pk("Rent", "", 100)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [{ category: "Rent", sub: "" }]);
+});
+
+test("recentPicks: a deleted sub falls back to the main pick", () => {
+  const out = H.recentPicks([pk("Food", "Removed", 200), pk("Rent", "", 100)], "expense", PICK_CATS);
+  assert.deepEqual(out, [{ category: "Food", sub: "" }, { category: "Rent", sub: "" }]);
+});
+
+test("recentPicks: a deleted sub de-dups with an existing main pick", () => {
+  const recs = [pk("Food", "", 100), pk("Food", "Removed", 300), pk("Rent", "", 200)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [
+    { category: "Food", sub: "" },
+    { category: "Rent", sub: "" },
+  ]);
+});
+
+test("recentPicks: limit defaults to 10 and can be overridden", () => {
+  const cats = Array.from({ length: 12 }, (_, i) => ({ name: "C" + i, subs: [] }));
+  const recs = cats.map((c, i) => pk(c.name, "", i + 1));
+  const out = H.recentPicks(recs, "expense", cats);
+  assert.equal(out.length, 10);
+  assert.equal(out[0].category, "C11");
+  assert.equal(out[9].category, "C2");
+  assert.equal(H.recentPicks(recs, "expense", cats, 3).length, 3);
+});
+
+test("recentPicks: records without a numeric createdAt sort last", () => {
+  const recs = [
+    pk("Food", "", undefined),
+    pk("Rent", "", "2026-01-01T00:00:00Z"),
+    pk("Fun", "", 5),
+  ];
+  const out = H.recentPicks(recs, "expense", PICK_CATS);
+  assert.equal(out[0].category, "Fun");
+  assert.equal(out.length, 3);
+});
+
+test("recentPicks: category/sub matching ignores case, result uses the settings spelling", () => {
+  const out = H.recentPicks([pk("food", "coffee", 1)], "expense", PICK_CATS);
+  assert.deepEqual(out, [{ category: "Food", sub: "Coffee" }]);
+});
+
+test("recentPicks: empty / non-array input gives []", () => {
+  assert.deepEqual(H.recentPicks([], "expense", PICK_CATS), []);
+  assert.deepEqual(H.recentPicks(undefined, "expense", PICK_CATS), []);
+  assert.deepEqual(H.recentPicks([pk("Food", "", 1)], "expense", undefined), []);
+  assert.deepEqual(H.recentPicks([null, pk("Food", "", 1)], "expense", PICK_CATS), [{ category: "Food", sub: "" }]);
+});
+
+test("recentPicks: never mutates its inputs", () => {
+  const recs = [pk("Food", "", 1), pk("Rent", "", 2)];
+  const before = JSON.stringify(recs);
+  const catsBefore = JSON.stringify(PICK_CATS);
+  H.recentPicks(recs, "expense", PICK_CATS);
+  assert.equal(JSON.stringify(recs), before);
+  assert.equal(JSON.stringify(PICK_CATS), catsBefore);
+});
