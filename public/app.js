@@ -423,6 +423,11 @@ async function api(path, method = "GET", body) {
     // Renaming a category/sub in settings must rename it on existing records
     // (records store names as strings; categories are matched by id here).
     reconcileRenames(store.settings, body, store.records);
+    // Recurring rules and people are only ever written straight to the store
+    // (never through this route), and the in-memory `settings` copy a caller
+    // sends goes stale after boot — always keep the store's own, current lists.
+    body.recurring = store.settings.recurring;
+    body.people = store.settings.people;
     store.settings = body;
     if (!store.settings.defaultCurrency) store.settings.defaultCurrency = "THB";
     if (!Array.isArray(store.settings.currencies) || !store.settings.currencies.length)
@@ -3617,12 +3622,6 @@ async function persistCategories(type, list) {
   const prev = settings;
   settingsDraft = JSON.parse(JSON.stringify(settings));
   settingsDraft[type] = JSON.parse(JSON.stringify(list));
-  // Recurring rules and people are written straight to the store (never via
-  // `settings`), so the in-memory copies can be stale — send the saved ones,
-  // or this save (run on every drag) would undo those changes.
-  loadStore();
-  settingsDraft.recurring = store.settings.recurring;
-  settingsDraft.people = store.settings.people;
   const want = JSON.stringify(settingsDraft[type]);
   let ok = false;
   try {
