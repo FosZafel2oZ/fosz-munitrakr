@@ -4568,7 +4568,11 @@ function editPending(idx) {
     // Stamp ruleId on the saved record so the badge renders.
     if (savedRecord) {
       const recIdx = store.records.findIndex((r) => r.id === savedRecord.id);
-      if (recIdx >= 0) store.records[recIdx].ruleId = p.ruleId;
+      if (recIdx >= 0) {
+        store.records[recIdx].ruleId = p.ruleId;
+        // Hand-edited, so it still counts as "recently added" (recentPicks).
+        store.records[recIdx].manual = true;
+      }
     }
     saveStore();
     // Remove this pending entry — find by ruleId+dueDate (idx may have drifted).
@@ -4741,7 +4745,12 @@ async function createRuleFromAddRecord(savedRecord) {
   // Stamp ruleId on the just-saved record for provenance.
   loadStore();
   const recIdx = store.records.findIndex((r) => r.id === savedRecord.id);
-  if (recIdx >= 0) store.records[recIdx].ruleId = rule.id;
+  // `manual: true` — the user typed this record, so it still counts as
+  // "recently added" (recentPicks skips rule-linked records without it).
+  if (recIdx >= 0) {
+    store.records[recIdx].ruleId = rule.id;
+    store.records[recIdx].manual = true;
+  }
   store.settings.recurring.push(rule);
   saveStore();
 }

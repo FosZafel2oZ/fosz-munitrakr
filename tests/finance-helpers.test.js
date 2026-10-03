@@ -1235,6 +1235,32 @@ test("recentPicks: records created by recurring rules are skipped", () => {
   assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [{ category: "Food", sub: "" }]);
 });
 
+test("recentPicks: a rule-linked record the user entered by hand (manual: true) counts", () => {
+  const recs = [pk("Rent", "", 500, { ruleId: "r1", manual: true }), pk("Food", "", 100)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [
+    { category: "Rent", sub: "" },
+    { category: "Food", sub: "" },
+  ]);
+});
+
+test("recentPicks: a rule-linked record without manual is skipped (manual must be exactly true)", () => {
+  const recs = [
+    pk("Rent", "", 500, { ruleId: "r1" }),
+    pk("Fun", "", 400, { ruleId: "r1", manual: false }),
+    pk("Food", "Coffee", 300, { ruleId: "r1", manual: "yes" }),
+    pk("Food", "", 100),
+  ];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [{ category: "Food", sub: "" }]);
+});
+
+test("recentPicks: manual without a ruleId counts (unchanged)", () => {
+  const recs = [pk("Rent", "", 500, { manual: true }), pk("Food", "", 100)];
+  assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [
+    { category: "Rent", sub: "" },
+    { category: "Food", sub: "" },
+  ]);
+});
+
 test("recentPicks: only records of the requested type count", () => {
   const recs = [pk("Food", "", 200, { type: "investment" }), pk("Rent", "", 100)];
   assert.deepEqual(H.recentPicks(recs, "expense", PICK_CATS), [{ category: "Rent", sub: "" }]);

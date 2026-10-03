@@ -312,8 +312,10 @@
        - recency is the record's numeric createdAt (not its date), newest
          first; records without a numeric createdAt sort last; ties (equal or
          missing createdAt) go to the later array position (newer record)
-       - records of another type, and records made by a recurring rule
-         (truthy ruleId), are ignored
+       - records of another type are ignored, and so are records made by a
+         recurring rule (truthy ruleId) unless the user entered them by hand
+         (manual === true — stamped when "Make this recurring" was ticked on
+         Add Record, or on a banner Edit & Confirm)
        - each distinct pick appears once, at its newest occurrence; a main
          pick and a sub pick of one category are different picks
        - a category no longer in `cats` is skipped; a sub no longer under its
@@ -330,7 +332,7 @@
     const seen = new Set();
     records
       .map((r, i) => ({ r, i }))
-      .filter(({ r }) => r && r.type === type && !r.ruleId && r.category)
+      .filter(({ r }) => r && r.type === type && (!r.ruleId || r.manual === true) && r.category)
       .sort((a, b) => {
         const x = ms(a.r), y = ms(b.r);
         if (x !== y) return y > x ? 1 : -1;
