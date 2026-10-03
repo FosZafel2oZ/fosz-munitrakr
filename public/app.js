@@ -23,7 +23,8 @@ let pendingNew = null; // [{kind, type, category, name}] awaiting colour pick
 let selected = new Set();
 let settingsDraft = null;
 let catTypeTab = "expense";
-const openCats = new Set(); // category ids whose sub-list is expanded
+// Category Edit page draft: { type, isNew, draft, opened (JSON of the draft as opened) }; null when closed.
+let catEdit = null;
 
 /* ---- DebtTrakr mode state ----
    Not persisted. Every fresh boot starts in MuniTrakr. */
@@ -173,7 +174,7 @@ function savePrefs() {
     localStorage.setItem(
       PREFS_KEY,
       JSON.stringify({
-        view: currentView === "settings" ? "dashboard" : currentView,
+        view: currentView === "settings" || currentView === "catedit" ? "dashboard" : currentView,
         activeType,
         summaryMode,
         range: {
@@ -1468,9 +1469,10 @@ function updateSelUI() {
 function updateFabs() {
   const onRecords = currentView === "records";
   const onDebtRecords = currentView === "debt-records";
-  // Hide the main + FAB on Settings, or while ANY multi-select mode is active.
+  // Hide the main + FAB on Settings (and its category Edit page), or while ANY
+  // multi-select mode is active.
   $("#fab").classList.toggle("hidden",
-    currentView === "settings" || multiSelect || debtMultiSelect);
+    currentView === "settings" || currentView === "catedit" || multiSelect || debtMultiSelect);
   // MuniTrakr multi
   $("#multiBtn").classList.toggle("hidden", !onRecords || multiSelect);
   $("#multiBar").classList.toggle("hidden", !(onRecords && multiSelect));
@@ -1718,9 +1720,14 @@ function showView(v) {
   // since mode is intentionally not persisted) must auto-redirect to the
   // dashboard, otherwise the wrong-mode view renders empty.
   const DEBT_ONLY = new Set(["person-history", "debt-records"]);
-  const FINANCE_ONLY = new Set(["records", "summary"]);
+  const FINANCE_ONLY = new Set(["records", "summary", "catedit"]);
   if (DEBT_ONLY.has(v) && currentMode !== "debt") v = "dashboard";
   else if (FINANCE_ONLY.has(v) && currentMode !== "finance") v = "dashboard";
+  // The category Edit page only exists with a draft (openCatEdit); an older
+  // cached index.html has no such view at all.
+  const catEditView = document.getElementById("view-catedit");
+  if (v === "catedit" && (!catEdit || !catEditView)) v = "dashboard";
+  if (v !== "catedit") catEdit = null; // leaving the Edit page drops its draft
 
   if (v !== "records" && multiSelect) {
     multiSelect = false;
@@ -1738,6 +1745,7 @@ function showView(v) {
   document.getElementById("view-records").classList.toggle("hidden", v !== "records");
   document.getElementById("view-settings").classList.toggle("hidden", v !== "settings");
   document.getElementById("view-summary").classList.toggle("hidden", v !== "summary");
+  if (catEditView) catEditView.classList.toggle("hidden", v !== "catedit");
   const phView = document.getElementById("view-person-history");
   if (phView) phView.classList.toggle("hidden", v !== "person-history");
   const dbtRecView = document.getElementById("view-debt-records");
@@ -1747,8 +1755,8 @@ function showView(v) {
       b.classList.add("collapsed")
     );
   const dockHidden =
-    v === "settings" || v === "summary" || v === "person-history" || v === "debt-records" ||
-    onDebtMode;
+    v === "settings" || v === "catedit" || v === "summary" || v === "person-history" ||
+    v === "debt-records" || onDebtMode;
   document.getElementById("rangeDock").classList.toggle("hidden", dockHidden);
   // No dock → nothing to clear; let the floating buttons sit lower.
   document.body.classList.toggle("no-dock", dockHidden);
@@ -1782,7 +1790,8 @@ const BACK_SVG =
 function updateSettingsBtn() {
   const inSettings = currentView === "settings";
   const inSummary = currentView === "summary";
-  const back = inSettings || inSummary;
+  const inCatEdit = currentView === "catedit";
+  const back = inSettings || inSummary || inCatEdit;
   const btn = $("#settingsBtn");
   $("#settingsIco").innerHTML = back ? BACK_SVG : GEAR_SVG;
   btn.classList.toggle("is-back", back);
@@ -1790,10 +1799,11 @@ function updateSettingsBtn() {
     "aria-label",
     back ? "Back" : "Settings"
   );
-  // Summary (chart) button: MuniTrakr only, never on Settings; lit on its page.
+  // Summary (chart) button: MuniTrakr only, never on Settings (or its category
+  // Edit page); lit on its page.
   const sb = $("#summaryBtn");
   if (sb) {
-    sb.classList.toggle("hidden", currentMode !== "finance" || inSettings);
+    sb.classList.toggle("hidden", currentMode !== "finance" || inSettings || inCatEdit);
     sb.classList.toggle("is-on", inSummary);
     sb.setAttribute("aria-pressed", String(inSummary));
   }
@@ -2182,6 +2192,8 @@ function enterSettings() {
 $("#settingsBtn").addEventListener("click", () => {
   if (currentView === "settings") {
     showView(prevView === "settings" ? "dashboard" : prevView);
+  } else if (currentView === "catedit") {
+    leaveCatEdit();
   } else if (currentView === "summary") {
     leaveSummary();
   } else {
@@ -2584,7 +2596,7 @@ $("#saveCurrencies").addEventListener("click", async () => {
     syncDraftsFromSettings();
     fillCurrencySelects();
     renderCurManager();
-    renderCatManager();
+    renderCatList();
     refresh();
     $("#curMsg").style.color = "var(--in)";
     $("#curMsg").textContent = "Currencies saved.";
@@ -3405,7 +3417,7 @@ $("#duplicateBtn").addEventListener("click", () => {
 /* ---------------- Settings view ---------------- */
 function openSettings() {
   $("#defCurrencyMsg").textContent = "";
-  $("#settingsMsg").textContent = "";
+  if ($("#catListMsg")) $("#catListMsg").textContent = "";
   $("#backupMsg") && ($("#backupMsg").textContent = "");
   $("#curMsg").textContent = "";
   $("#convertMsg").textContent = "";
@@ -3437,7 +3449,7 @@ function openSettings() {
   $$("#catTypeSeg button").forEach((b) =>
     b.classList.toggle("active", b.dataset.t === "expense")
   );
-  renderCatManager();
+  renderCatList();
   renderCurManager();
 }
 
@@ -3525,101 +3537,326 @@ $$("#catTypeSeg button").forEach((b) =>
     $$("#catTypeSeg button").forEach((x) =>
       x.classList.toggle("active", x === b)
     );
-    renderCatManager();
+    setCatListMsg("");
+    renderCatList();
   })
 );
-function renderCatManager() {
-  const list = settingsDraft[catTypeTab] || [];
-  const box = $("#catManager");
-  box.innerHTML = "";
-  list.forEach((cat, ci) => {
-    const row = document.createElement("div");
-    if (!cat.id) cat.id = "c" + Date.now() + ci;
-    row.className = "cat-row" + (openCats.has(cat.id) ? " open" : "");
-    row.dataset.idx = ci;
-    if (!cat.icon) cat.icon = "tag";
-    row.innerHTML = `
-      <div class="cat-main">
-        <button type="button" class="drag-handle cat-drag" aria-label="Reorder">⠿</button>
-        <div class="cat-left">
-          <button type="button" class="icon-pick" title="Choose icon"
-            style="background:${cat.color}">${iconSvg(cat.icon, "ip-svg")}</button>
-          <input type="color" value="${cat.color}" data-ci="${ci}" data-k="catcolor" />
-        </div>
-        <input type="text" value="${escapeHtml(cat.name)}" data-ci="${ci}" data-k="catname" />
-        <button type="button" class="cat-toggle">Subs (${cat.subs.length})</button>
-        <button type="button" class="cat-del">✕</button>
-      </div>
-      <div class="subs"></div>`;
-    const iconBtn = row.querySelector(".icon-pick");
-    iconBtn.addEventListener("click", () => {
-      openCatIconPicker(cat.icon, (next) => {
-        cat.icon = next;
-        iconBtn.innerHTML = iconSvg(cat.icon, "ip-svg");
-      }, list);
-    });
-    const subsBox = row.querySelector(".subs");
-    cat.subs.forEach((s, si) => {
-      const sr = document.createElement("div");
-      sr.className = "sub-row";
-      sr.dataset.idx = si;
-      sr.innerHTML = `
-        <button type="button" class="drag-handle sub-drag" aria-label="Reorder">⠿</button>
-        <input type="color" value="${s.color}" data-ci="${ci}" data-si="${si}" data-k="subcolor" />
-        <input type="text" value="${escapeHtml(s.name)}" data-ci="${ci}" data-si="${si}" data-k="subname" />
-        <button type="button" class="cat-del" data-del-sub="${si}">✕</button>`;
-      subsBox.appendChild(sr);
-    });
-    const addSub = document.createElement("button");
-    addSub.type = "button";
-    addSub.className = "add-sub";
-    addSub.textContent = "+ Add sub-category";
-    addSub.addEventListener("click", () => {
-      cat.subs.push({
-        id: "s" + Date.now(),
-        name: "New sub",
-        color: FALLBACK[cat.subs.length % FALLBACK.length],
-      });
-      openCats.add(cat.id);
-      renderCatManager();
-    });
-    subsBox.appendChild(addSub);
-    makeDraggable(subsBox, ".sub-row", ".sub-drag", cat.subs, renderCatManager);
-    row.querySelector(".cat-toggle").addEventListener("click", () => {
-      if (openCats.has(cat.id)) openCats.delete(cat.id);
-      else openCats.add(cat.id);
-      row.classList.toggle("open");
-    });
-    row.querySelector(".cat-main .cat-del").addEventListener("click", () => {
-      if (confirm(`Delete category "${cat.name}"?`)) {
-        list.splice(ci, 1);
-        renderCatManager();
-      }
-    });
-    subsBox.querySelectorAll("[data-del-sub]").forEach((btn) =>
-      btn.addEventListener("click", () => {
-        cat.subs.splice(+btn.dataset.delSub, 1);
-        renderCatManager();
+
+/* ---- Settings → Categories: view-only list ----
+   One row per category of the selected type, straight from the saved
+   settings: drag handle, icon tile, name, the sub-categories' small icon
+   tiles, and a pencil that opens the Edit page. A drag saves the new order
+   at once (saveCatOrder); everything else is edited on the Edit page. */
+const PENCIL_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+function setCatListMsg(text) {
+  const m = $("#catListMsg");
+  if (!m) return;
+  m.style.color = "";
+  m.textContent = text;
+}
+function renderCatList() {
+  const box = $("#catList");
+  if (!box) return; // older cached index.html
+  const type = catTypeTab;
+  const list = settings[type] || [];
+  box.innerHTML = list
+    .map((cat, i) => {
+      const subs = Array.isArray(cat.subs) ? cat.subs : [];
+      const minis = subs.length
+        ? `<div class="cl-subs">${subs
+            .map(
+              (s) =>
+                `<span class="cl-mini" style="background:${escapeHtml(
+                  s.color
+                )}" title="${escapeHtml(s.name)}">${iconSvg(subIconOf(cat, s))}</span>`
+            )
+            .join("")}</div>`
+        : `<div class="cl-none">No sub-categories</div>`;
+      return `<div class="cl-row" data-idx="${i}">
+        <button type="button" class="drag-handle cl-drag" aria-label="Reorder">⠿</button>
+        <span class="cl-tile" style="background:${escapeHtml(cat.color)}">${iconSvg(
+          cat.icon || "tag"
+        )}</span>
+        <div class="cl-info"><div class="cl-name">${escapeHtml(cat.name)}</div>${minis}</div>
+        <button type="button" class="cl-edit" aria-label="Edit ${escapeHtml(
+          cat.name
+        )}">${PENCIL_SVG}</button>
+      </div>`;
+    })
+    .join("");
+  box.querySelectorAll(".cl-edit").forEach((b) =>
+    b.addEventListener("click", () =>
+      openCatEdit(type, +b.closest(".cl-row").dataset.idx)
+    )
+  );
+  const order = list.slice();
+  makeDraggable(box, ".cl-row", ".cl-drag", order, () => saveCatOrder(type, order));
+}
+// After a drag: save the new order straight away (a tap without a move saves
+// nothing). On failure the list goes back to the saved order and the block's
+// message line says so.
+async function saveCatOrder(type, order) {
+  const saved = settings[type] || [];
+  if (order.length === saved.length && order.every((c, i) => c === saved[i])) {
+    renderCatList();
+    return;
+  }
+  setCatListMsg("");
+  const ok = await persistCategories(type, order);
+  if (!ok) setCatListMsg("Couldn't save the new order — storage may be full.");
+  renderCatList();
+}
+/* Save one type's category list through the same path every settings save
+   uses (PUT /settings, where reconcileRenames renames existing records), then
+   read the store back to confirm it landed — saveStore() swallows storage
+   errors. On failure the in-memory settings go back to the saved copy and
+   nothing else changes. On success the pickers, records and dashboard
+   refresh. Returns true when saved. */
+async function persistCategories(type, list) {
+  const prev = settings;
+  settingsDraft = JSON.parse(JSON.stringify(settings));
+  settingsDraft[type] = JSON.parse(JSON.stringify(list));
+  // Recurring rules and people are written straight to the store (never via
+  // `settings`), so the in-memory copies can be stale — send the saved ones,
+  // or this save (run on every drag) would undo those changes.
+  loadStore();
+  settingsDraft.recurring = store.settings.recurring;
+  settingsDraft.people = store.settings.people;
+  const want = JSON.stringify(settingsDraft[type]);
+  let ok = false;
+  try {
+    settings = await api("/settings", "PUT", buildSettingsPayload());
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    ok = !!(saved && saved.settings && JSON.stringify(saved.settings[type]) === want);
+  } catch {
+    ok = false;
+  }
+  if (!ok) {
+    settings = prev;
+    settingsDraft = JSON.parse(JSON.stringify(settings));
+    loadStore(); // drop the unsaved in-memory changes (renamed records too)
+    return false;
+  }
+  syncDraftsFromSettings();
+  populateDatalists();
+  fillCurrencySelects();
+  renderCurManager();
+  await loadRecords(); // pull renamed records so cards update immediately
+  return true;
+}
+
+/* ---- Category Edit page (#view-catedit) ----
+   Works on a deep copy of one category (or a blank new one); nothing is saved
+   until Save. A sub-category without an icon of its own shows — and keeps
+   following — the main icon; picking an icon for a sub stores it, even when
+   it is the main icon. */
+function openCatEdit(type, idx) {
+  if (!$("#view-catedit")) return; // older cached index.html
+  const list = settings[type] || [];
+  const src = idx == null ? null : list[idx];
+  const draft = src
+    ? JSON.parse(JSON.stringify(src))
+    : {
+        id: "c" + uid(),
+        name: "",
+        color: FALLBACK[list.length % FALLBACK.length],
+        icon: "tag",
+        subs: [],
+      };
+  if (!draft.id) draft.id = "c" + uid();
+  if (!draft.icon) draft.icon = "tag";
+  if (!Array.isArray(draft.subs)) draft.subs = [];
+  catTypeTab = type;
+  catEdit = { type, isNew: !src, idx: src ? idx : -1, draft, opened: JSON.stringify(draft) };
+  $("#catEditTitle").textContent = catEdit.isNew ? "New category" : "Edit category";
+  $("#ceName").value = draft.name;
+  $("#ceDelete").classList.toggle("hidden", catEdit.isNew);
+  setCatEditMsg("");
+  paintCatEditMain();
+  renderCatEditSubs();
+  showView("catedit");
+  window.scrollTo(0, 0);
+}
+function setCatEditMsg(text) {
+  const m = $("#ceMsg");
+  if (m) m.textContent = text;
+}
+function paintCatEditMain() {
+  const d = catEdit.draft;
+  const tile = $("#ceIcon");
+  tile.style.background = d.color;
+  tile.innerHTML = iconSvg(d.icon);
+  $("#ceColor").style.background = d.color;
+}
+// The categories the icon picker marks as in use: the type's other
+// categories plus this draft (so its unsaved picks count too).
+function catEditIconCats() {
+  const list = settings[catEdit.type] || [];
+  return list.filter((_, i) => i !== catEdit.idx).concat([catEdit.draft]);
+}
+function renderCatEditSubs() {
+  const d = catEdit.draft;
+  const box = $("#ceSubs");
+  box.innerHTML = d.subs
+    .map(
+      (s, i) => `<div class="ce-sub" data-idx="${i}">
+        <button type="button" class="drag-handle ce-sub-drag" aria-label="Reorder">⠿</button>
+        <button type="button" class="ce-tile sm ce-sub-icon" aria-label="Choose icon" style="background:${escapeHtml(
+          s.color
+        )}">${iconSvg(subIconOf(d, s))}</button>
+        <button type="button" class="color-swatch sm ce-sub-color" aria-label="Choose colour" style="background:${escapeHtml(
+          s.color
+        )}"></button>
+        <input type="text" class="ce-sub-name" value="${escapeHtml(
+          s.name
+        )}" placeholder="Sub-category name" aria-label="Sub-category name" autocomplete="off" />
+        <button type="button" class="ce-sub-del" aria-label="Remove sub-category">✕</button>
+      </div>`
+    )
+    .join("");
+  box.querySelectorAll(".ce-sub").forEach((row) => {
+    const s = d.subs[+row.dataset.idx];
+    const tile = row.querySelector(".ce-sub-icon");
+    const sw = row.querySelector(".ce-sub-color");
+    tile.addEventListener("click", () =>
+      openCatIconPicker(subIconOf(d, s), (next) => {
+        s.icon = next; // an explicit pick is stored, even the main icon
+        tile.innerHTML = iconSvg(next);
+      }, catEditIconCats())
+    );
+    // Fires on every live colour change: paint + draft only, nothing saved.
+    sw.addEventListener("click", () =>
+      openColorSheet(s.color, (hex) => {
+        s.color = hex;
+        sw.style.background = hex;
+        tile.style.background = hex;
       })
     );
-    box.appendChild(row);
+    row.querySelector(".ce-sub-name").addEventListener("input", (e) => {
+      s.name = e.target.value;
+    });
+    row.querySelector(".ce-sub-del").addEventListener("click", () => {
+      d.subs.splice(d.subs.indexOf(s), 1);
+      renderCatEditSubs();
+    });
   });
-  makeDraggable(box, ".cat-row", ".cat-drag", list, renderCatManager);
-  box.querySelectorAll("input").forEach((inp) =>
-    inp.addEventListener("input", () => {
-      const ci = +inp.dataset.ci;
-      const k = inp.dataset.k;
-      if (k === "catcolor") {
-        list[ci].color = inp.value;
-        const ip = inp.closest(".cat-row").querySelector(".icon-pick");
-        if (ip) ip.style.background = inp.value;
-      }
-      if (k === "catname") list[ci].name = inp.value;
-      if (k === "subcolor") list[ci].subs[+inp.dataset.si].color = inp.value;
-      if (k === "subname") list[ci].subs[+inp.dataset.si].name = inp.value;
-    })
-  );
+  makeDraggable(box, ".ce-sub", ".ce-sub-drag", d.subs, renderCatEditSubs);
 }
+function catEditDirty() {
+  return !!catEdit && JSON.stringify(catEdit.draft) !== catEdit.opened;
+}
+// True when the Edit page may be left: no unsaved changes, or the user
+// agreed to drop them.
+function catEditMayLeave() {
+  return !catEditDirty() || confirm("Discard your changes?");
+}
+function leaveCatEdit() {
+  if (!catEditMayLeave()) return;
+  backToCatList(catEdit && !catEdit.isNew ? catEdit.idx : null);
+}
+// Back to Settings with the Categories block open on the same type tab,
+// scrolled so the category's row (rowIdx, when given) is in view.
+function backToCatList(rowIdx) {
+  showView("settings"); // also drops the draft
+  const block = $("#catBlock");
+  if (block) block.classList.remove("collapsed");
+  $$("#catTypeSeg button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.t === catTypeTab)
+  );
+  setCatListMsg("");
+  renderCatList();
+  if (block) block.scrollIntoView({ block: "start" });
+  const list = $("#catList");
+  const row = rowIdx != null && list ? list.children[rowIdx] : null;
+  if (row) row.scrollIntoView({ block: "nearest" });
+}
+let _catEditBusy = false; // a Save / Delete is in flight
+async function saveCatEdit() {
+  if (!catEdit || _catEditBusy) return;
+  const { type, isNew, idx, draft } = catEdit;
+  const list = settings[type] || [];
+  const others = list.filter((_, i) => i !== idx);
+  const err =
+    typeof categoryDraftError === "function" // older cached helpers: name only
+      ? categoryDraftError(draft, others)
+      : String(draft.name || "").trim() ? "" : "Enter a category name.";
+  if (err) return setCatEditMsg(err);
+  setCatEditMsg("");
+  const clean = JSON.parse(JSON.stringify(draft));
+  clean.name = String(clean.name).trim();
+  clean.subs.forEach((s) => {
+    s.name = String(s.name).trim();
+  });
+  const next = list.slice();
+  if (isNew) next.push(clean);
+  else next[idx] = clean;
+  _catEditBusy = true;
+  let ok = false;
+  try {
+    ok = await persistCategories(type, next);
+  } finally {
+    _catEditBusy = false;
+  }
+  if (!ok) return setCatEditMsg("Couldn't save — storage may be full.");
+  backToCatList(isNew ? next.length - 1 : idx);
+}
+async function deleteCatEdit() {
+  if (!catEdit || catEdit.isNew || _catEditBusy) return;
+  const { type, idx } = catEdit;
+  const list = settings[type] || [];
+  const cat = list[idx];
+  if (!cat || !confirm(`Delete category "${cat.name}"?`)) return;
+  setCatEditMsg("");
+  _catEditBusy = true;
+  let ok = false;
+  try {
+    ok = await persistCategories(type, list.filter((_, i) => i !== idx));
+  } finally {
+    _catEditBusy = false;
+  }
+  if (!ok) return setCatEditMsg("Couldn't save — storage may be full.");
+  backToCatList();
+}
+// New in v88: guarded so a newer app.js on an older cached index.html still boots.
+const catAddBtnEl = $("#catAddBtn");
+if (catAddBtnEl) catAddBtnEl.addEventListener("click", () => openCatEdit(catTypeTab, null));
+const ceIconEl = $("#ceIcon");
+if (ceIconEl) ceIconEl.addEventListener("click", () => {
+  if (!catEdit) return;
+  const d = catEdit.draft;
+  openCatIconPicker(d.icon, (next) => {
+    d.icon = next;
+    paintCatEditMain();
+    renderCatEditSubs(); // subs without their own icon follow the main one
+  }, catEditIconCats());
+});
+const ceColorEl = $("#ceColor");
+if (ceColorEl) ceColorEl.addEventListener("click", () => {
+  if (!catEdit) return;
+  const d = catEdit.draft;
+  // Fires on every live colour change: paint + draft only, nothing saved.
+  openColorSheet(d.color, (hex) => {
+    d.color = hex;
+    paintCatEditMain();
+  });
+});
+const ceNameEl = $("#ceName");
+if (ceNameEl) ceNameEl.addEventListener("input", () => {
+  if (catEdit) catEdit.draft.name = ceNameEl.value;
+});
+const ceAddSubEl = $("#ceAddSub");
+if (ceAddSubEl) ceAddSubEl.addEventListener("click", () => {
+  if (!catEdit) return;
+  const subs = catEdit.draft.subs;
+  // No icon of its own: it shows (and follows) the main icon until one is picked.
+  subs.push({ id: "s" + uid(), name: "New sub", color: FALLBACK[subs.length % FALLBACK.length] });
+  renderCatEditSubs();
+});
+const ceSaveEl = $("#ceSave");
+if (ceSaveEl) ceSaveEl.addEventListener("click", saveCatEdit);
+const ceDeleteEl = $("#ceDelete");
+if (ceDeleteEl) ceDeleteEl.addEventListener("click", deleteCatEdit);
 // Category icon-picker modal — reusable. Two groups (Games, then General); a
 // dot marks every icon already used by a category or sub-category of `cats`
 // (the caller's type's category list). Used icons stay pickable; the current
@@ -3734,47 +3971,6 @@ document.getElementById("colorSheetModal")?.addEventListener("click", (e) => {
   if (e.target.id === "colorSheetModal") closeColorSheet();
 });
 
-// Icon picker state for the "Add a new category" row.
-let _newCatIconId = "tag";
-function _paintNewCatIconTile() {
-  const tile = document.getElementById("newCatIcon");
-  if (!tile) return;
-  tile.innerHTML = iconSvg(_newCatIconId, "ip-svg");
-  const color = document.getElementById("newCatColor");
-  if (color) tile.style.background = color.value || "#7c5cff";
-}
-(function wireNewCatIcon() {
-  const tile = document.getElementById("newCatIcon");
-  if (!tile) return;
-  _paintNewCatIconTile();
-  tile.addEventListener("click", () => {
-    openCatIconPicker(_newCatIconId, (next) => {
-      _newCatIconId = next;
-      _paintNewCatIconTile();
-    }, settingsDraft[catTypeTab]);
-  });
-  const colorInp = document.getElementById("newCatColor");
-  if (colorInp) {
-    colorInp.addEventListener("input", () => {
-      tile.style.background = colorInp.value;
-    });
-  }
-})();
-$("#addCatBtn").addEventListener("click", () => {
-  const name = $("#newCatName").value.trim();
-  if (!name) return;
-  settingsDraft[catTypeTab].push({
-    id: "c" + Date.now(),
-    name,
-    color: $("#newCatColor").value,
-    icon: _newCatIconId,
-    subs: [],
-  });
-  $("#newCatName").value = "";
-  _newCatIconId = "tag";
-  _paintNewCatIconTile();
-  renderCatManager();
-});
 $("#saveUserName")?.addEventListener("click", async () => {
   const msg = $("#userNameMsg");
   if (msg) msg.textContent = "";
@@ -4059,24 +4255,6 @@ const convertModalEl = $("#convertModal");
 if (convertModalEl) convertModalEl.addEventListener("click", (e) => {
   if (e.target.id === "convertModal") closeConvertModal();
 });
-$("#saveSettings").addEventListener("click", async () => {
-  $("#settingsMsg").textContent = "";
-  try {
-    settings = await api("/settings", "PUT", buildSettingsPayload());
-    syncDraftsFromSettings();
-    populateDatalists();
-    fillCurrencySelects();
-    await loadRecords(); // pull renamed records so cards update immediately
-    renderCatManager();
-    renderCurManager();
-    $("#settingsMsg").style.color = "var(--in)";
-    $("#settingsMsg").textContent = "Categories saved.";
-  } catch (err) {
-    $("#settingsMsg").style.color = "";
-    $("#settingsMsg").textContent = err.message;
-  }
-});
-
 /* ---------------- Boot ---------------- */
 (async function boot() {
   loadStore();
@@ -4902,6 +5080,8 @@ async function createRuleFromAddRecord(savedRecord, isRecreate) {
   if (!btn) return;
   const toggle = (e) => {
     e.stopPropagation();
+    // Switching mode leaves the category Edit page: ask before dropping changes.
+    if (currentView === "catedit" && !catEditMayLeave()) return;
     setMode(currentMode === "debt" ? "finance" : "debt");
   };
   btn.addEventListener("click", toggle);

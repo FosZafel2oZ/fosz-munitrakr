@@ -259,23 +259,17 @@
       <button class="btn-primary" id="addRecurringBtn">+ Add rule</button>
     </div>
 
-    <div class="settings-block" data-mode="finance">
+    <div class="settings-block" data-mode="finance" id="catBlock">
       <div class="block-title">Categories</div>
       <div class="seg" id="catTypeSeg">
         <button data-t="expense" class="active">Expense</button>
         <button data-t="investment">Investment</button>
       </div>
-      <div id="catManager"></div>
-      <div class="add-cat-label">Add a new category</div>
-      <div class="add-cat">
-        <button type="button" class="icon-pick" id="newCatIcon"
-          style="background:#7c5cff" aria-label="Choose icon"></button>
-        <input id="newCatColor" type="color" value="#7c5cff" />
-        <input id="newCatName" type="text" placeholder="Category name" />
-        <button class="btn-mini" id="addCatBtn">Add</button>
-      </div>
-      <button class="btn-primary" id="saveSettings">Save Categories</button>
-      <div id="settingsMsg" class="form-error"></div>
+      <!-- view-only list; the pencil opens the Edit page (#view-catedit) -->
+      <div id="catList" class="cat-list"></div>
+      <button type="button" class="btn-secondary cat-add-btn" id="catAddBtn">+ Add category</button>
+      <div class="cat-hint">Drag ⠿ to reorder — the order is saved automatically.</div>
+      <div id="catListMsg" class="form-error"></div>
     </div>
 
     <div class="settings-block" data-mode="any">
@@ -471,6 +465,29 @@
       <button class="btn-primary" id="checkUpdateBtn">Check for updates</button>
       <div id="updateMsg" class="form-error"></div>
     </div>
+  </main>
+
+  <!-- CATEGORY EDIT VIEW (MuniTrakr: Settings → Categories → pencil / + Add category).
+       Works on a draft; nothing is saved until Save. -->
+  <main id="view-catedit" class="view hidden">
+    <div class="records-head"><h2 id="catEditTitle">Edit category</h2></div>
+    <div class="settings-block ce-card">
+      <div class="block-title">Main category</div>
+      <div class="ce-main">
+        <button type="button" class="ce-tile lg" id="ceIcon" aria-label="Choose icon"></button>
+        <button type="button" class="color-swatch" id="ceColor" aria-label="Choose colour"></button>
+        <input id="ceName" type="text" placeholder="Category name"
+          aria-label="Category name" autocomplete="off" />
+      </div>
+    </div>
+    <div class="settings-block ce-card">
+      <div class="block-title">Sub-categories</div>
+      <div id="ceSubs" class="ce-subs"></div>
+      <button type="button" class="btn-secondary cat-add-btn" id="ceAddSub">+ Add sub-category</button>
+    </div>
+    <div id="ceMsg" class="form-error" role="alert"></div>
+    <button type="button" class="btn-primary" id="ceSave">Save</button>
+    <button type="button" class="ce-delete" id="ceDelete">Delete category</button>
   </main>
 
   <!-- FLOATING ADD BUTTON -->

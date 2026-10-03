@@ -310,7 +310,7 @@ body.no-dock .multi-bar{bottom:calc(28px + var(--safe-b))}
 .nc-warn .nc-link{color:var(--accent);text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
 #view-person-history .ph-meta .nc-warn{margin:3px 0 0;padding:0}
 /* the warning scrolls Settings → Currencies into view: clear the fixed topbar */
-#currencyBlock{scroll-margin-top:calc(88px + var(--safe-t))}
+#currencyBlock,#catBlock{scroll-margin-top:calc(88px + var(--safe-t))}
 
 .chart-card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px}
 .chart-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
@@ -487,7 +487,7 @@ body.modal-open{overflow:hidden}
   justify-content:center;color:var(--muted);font-size:17px;cursor:grab;
   touch-action:none;border-radius:8px;letter-spacing:-1px}
 .drag-handle:active{cursor:grabbing;background:var(--card);color:var(--text)}
-.cat-row.dragging,.sub-row.dragging,.cur-row.dragging{
+.cl-row.dragging,.ce-sub.dragging,.cur-row.dragging{
   opacity:.92;background:var(--card-2);
   box-shadow:0 12px 28px rgba(0,0,0,.5);position:relative;z-index:5}
 
@@ -623,18 +623,11 @@ input[type=color]{-webkit-appearance:none;appearance:none;border:none;
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
 
-.cat-row{display:flex;flex-direction:column;border:1px solid var(--line);
-  border-radius:16px;margin-bottom:10px;overflow:hidden;background:var(--bg-2);
-  transition:border-color .15s}
-.cat-row.open{border-color:var(--accent)}
-.cat-main{display:flex;align-items:center;gap:11px;padding:12px 13px}
-.cat-left{display:flex;flex-direction:column;align-items:center;gap:7px;flex-shrink:0}
 .icon-pick{width:38px;height:38px;border-radius:11px;display:flex;
   align-items:center;justify-content:center;
   box-shadow:0 0 0 2px var(--line),0 4px 10px rgba(0,0,0,.35)}
 .icon-pick:active{transform:scale(.94)}
 .ip-svg{width:21px;height:21px;color:#fff}
-.cat-main input[type=color]{width:32px;height:32px;flex-shrink:0}
 .icon-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;
   padding:6px 13px 14px}
 .icon-opt{aspect-ratio:1;border-radius:10px;background:var(--card);
@@ -644,21 +637,9 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
 .icon-opt:active{transform:scale(.92)}
 .icon-opt.active{color:#fff;background:var(--accent);border-color:var(--accent);
   box-shadow:0 6px 16px var(--accent-glow)}
-.cat-main input[type=text]{flex:1;margin-top:0;padding:11px 12px;
-  border-radius:11px;font-weight:600}
-.cat-toggle{color:var(--accent);font-size:12px;font-weight:800;padding:8px 11px;
-  flex-shrink:0;background:var(--accent-soft);border-radius:9px}
 .cat-del{color:var(--out);font-size:15px;padding:7px 9px;flex-shrink:0;
   border-radius:9px}
 .cat-del:active{background:rgba(255,107,129,.16)}
-.subs{padding:2px 13px 14px 44px;display:none;flex-direction:column;gap:9px}
-.cat-row.open .subs{display:flex}
-.sub-row{display:flex;align-items:center;gap:9px}
-.sub-row input[type=color]{width:26px;height:26px;flex-shrink:0}
-.sub-row input[type=text]{flex:1;margin-top:0;padding:9px 11px;font-size:14px;
-  border-radius:10px}
-.add-sub{font-size:12px;color:var(--accent-2);font-weight:800;padding:8px 0;
-  text-align:left;letter-spacing:.2px}
 .add-cat-label{font-size:11px;font-weight:800;letter-spacing:.5px;
   text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
 .add-cat{display:flex;gap:9px;align-items:center;margin:0 0 16px}
@@ -666,6 +647,63 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
 .add-cat input[type=color]{width:46px;height:46px;flex-shrink:0}
 .add-cat .btn-mini{flex-shrink:0;height:46px;padding:0 18px}
 .settings-block .btn-primary{margin-top:6px}
+/* Settings → Categories: view-only list (renderCatList) */
+.cl-row{display:flex;align-items:center;gap:11px;padding:9px 0;
+  border-bottom:1px solid var(--line)}
+.cl-row:last-child{border-bottom:none}
+.cl-row .drag-handle,.ce-sub .drag-handle{width:24px;margin-right:-3px}
+.cl-tile{flex:none;width:40px;height:40px;border-radius:12px;display:flex;
+  align-items:center;justify-content:center}
+.cl-tile svg{width:22px;height:22px;color:#fff}
+.cl-info{flex:1;min-width:0}
+.cl-name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.cl-subs{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.cl-mini{flex:none;width:18px;height:18px;border-radius:6px;display:flex;
+  align-items:center;justify-content:center}
+.cl-mini svg{width:11px;height:11px;color:#fff}
+.cl-none{font-size:12px;color:var(--muted);margin-top:1px}
+.cl-edit{flex:none;width:36px;height:36px;border-radius:11px;
+  border:1px solid var(--line);display:flex;align-items:center;
+  justify-content:center;color:var(--muted);-webkit-tap-highlight-color:transparent}
+.cl-edit svg{width:17px;height:17px}
+.cl-edit:active{background:var(--accent-soft);color:var(--accent)}
+.cat-add-btn{width:100%;display:flex;align-items:center;justify-content:center;
+  gap:8px;padding:12px;margin-top:12px;font-size:15px}
+.cat-hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4}
+#catListMsg{margin:8px 0 0}
+#catListMsg:empty{display:none}
+
+/* Category Edit page (#view-catedit): Main category + Sub-categories cards */
+#view-catedit .records-head h2{font-size:22px;letter-spacing:-.4px}
+.ce-card{margin-bottom:12px}
+.ce-card .block-title{cursor:default}
+.ce-main{display:flex;align-items:center;gap:12px}
+.ce-tile{flex:none;display:flex;align-items:center;justify-content:center;
+  padding:0;-webkit-tap-highlight-color:transparent}
+.ce-tile svg{color:#fff}
+.ce-tile:active{transform:scale(.94)}
+.ce-tile.lg{width:60px;height:60px;border-radius:17px}
+.ce-tile.lg svg{width:32px;height:32px}
+.ce-tile.sm{width:34px;height:34px;border-radius:10px}
+.ce-tile.sm svg{width:19px;height:19px}
+.settings-block .ce-main input[type=text]{flex:1;min-width:0;width:auto;
+  margin-top:0;padding:11px 12px;border-radius:12px}
+.ce-sub{display:flex;align-items:center;gap:9px;padding:8px 0;
+  border-bottom:1px solid var(--line)}
+.ce-sub:last-child{border-bottom:none}
+.settings-block .ce-sub input[type=text]{flex:1;min-width:0;width:auto;
+  margin-top:0;padding:8px 10px;font-size:14px;border-radius:12px}
+.ce-sub-del{flex:none;width:26px;height:34px;display:flex;align-items:center;
+  justify-content:center;color:var(--muted);font-size:15px;border-radius:9px}
+.ce-sub-del:active{color:var(--out);background:rgba(255,107,129,.16)}
+.ce-subs:empty + .cat-add-btn{margin-top:0}
+#ceMsg{margin:2px 0 10px}
+#ceMsg:empty{display:none}
+#view-catedit > .btn-primary{margin-top:2px}
+.ce-delete{display:block;width:100%;padding:12px;margin-top:4px;text-align:center;
+  color:var(--out);font-weight:700;font-size:15px}
+.ce-delete:active{opacity:.7}
 /* Settings → Currencies: "N records aren't in USD…" + Convert now + message */
 .convert-notice{background:var(--bg-2);border:1px solid var(--line);
   border-radius:16px;padding:14px;margin-bottom:16px}
