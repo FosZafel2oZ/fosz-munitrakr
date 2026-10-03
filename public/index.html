@@ -1058,6 +1058,21 @@
   </div>
 </div>
 
+<!-- TRANSITION STUB — delete after v88. Hidden and inert. A v87 app.js still
+     in the service-worker cache next to this index.html binds these removed
+     Settings → Categories elements at top level ($("#addCatBtn"),
+     $("#saveSettings")) and in openSettings / renderCatManager, and would
+     throw without them. The current app.js never uses these ids. -->
+<div id="v87CatStub" hidden aria-hidden="true" style="display:none">
+  <div id="catManager"></div>
+  <button type="button" id="newCatIcon" tabindex="-1"></button>
+  <input id="newCatColor" type="color" value="#7c5cff" tabindex="-1" />
+  <input id="newCatName" type="text" tabindex="-1" />
+  <button type="button" id="addCatBtn" tabindex="-1"></button>
+  <button type="button" id="saveSettings" tabindex="-1"></button>
+  <div id="settingsMsg"></div>
+</div>
+
 <script src="./recurring.js"></script>
 <script src="./finance-helpers.js"></script>
 <script src="./debts.js"></script>
