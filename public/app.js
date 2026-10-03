@@ -102,10 +102,12 @@ const ICONS = {
   crown: '<ellipse cx="12" cy="15" rx="8.6" ry="3.4"/><path d="M12 2.2l1.7 2.9L12 8l-1.7-2.9z"/><path d="M12 8v12.3"/><path d="M8.6 10.2h6.8"/>',
   tacet: '<g fill="currentColor" stroke-width=".9" transform="rotate(90 12 12)"><path d="M12 1.8v20.4"/><path d="M9.6 4.6l1.7-.5.7-1.3.7 1.3 1.7.5-1.7.5-.7 1.3-.7-1.3z"/><path d="M7.2 8.2l3.9-.6.9-1.5.9 1.5 3.9.6-3.9.6-.9 1.5-.9-1.5z"/><path d="M3 12l7.9-.8L12 9.6l1.1 1.6 7.9.8-7.9.8-1.1 1.6-1.1-1.6z"/><path d="M7.2 15.8l3.9-.6.9-1.5.9 1.5 3.9.6-3.9.6-.9 1.5-.9-1.5z"/><path d="M9.6 19.4l1.7-.5.7-1.3.7 1.3 1.7.5-1.7.5-.7 1.3-.7-1.3z"/></g>',
   slug: '<path d="M3 18.5c0-3.2 2.6-5.5 6.2-5.5h4.6c3.7 0 6.3 1.8 7.2 5.5z"/><path d="M7 13l1.6-5 1.9 4.4M10.6 12.6L12.7 6l2.1 6.6M14.9 12.9l1.2-3.4 1.4 3.7"/><path d="M19 14.4l1.3-3M17.2 13.5l.3-2.7"/>',
+  steam: '<circle cx="12" cy="12" r="9.6"/><circle cx="15.3" cy="9.2" r="2.7"/><circle cx="9" cy="15.6" r="2"/><path d="M13.3 11.2l-2.7 3.1M2.7 12.4l4.5 2.2"/>',
+  apex: '<path d="M12 1.8L22.6 18.9l-3 2.9-6.2-4h3.6L12 9.6 7 17.8h3.6l-6.2 4-3-2.9z" fill="currentColor" stroke-width=".6"/>',
 };
 // Game icons, listed so pickers can show them as their own "Games" group.
-const GAME_ICON_IDS = ["crown", "tacet", "slug"];
-// Every id above (the 29 originals, the 21 new general icons, the 3 game icons).
+const GAME_ICON_IDS = ["crown", "tacet", "slug", "steam", "apex"];
+// Every id above (the 29 originals, the 21 new general icons, the 5 game icons).
 const ICON_IDS = Object.keys(ICONS);
 function iconSvg(id, cls) {
   return (
