@@ -2677,7 +2677,7 @@ function openSumDetail(type, year, month) {
       iconSvg(icon)}</span>`;
   list.innerHTML = b.categories.map((c) =>
     `<div class="sd-cat"><div class="sd-row">${tile(catIcon(type, c.name), catColor(type, c.name))}` +
-    `<div class="sd-name"><b>${escapeHtml(c.name)}</b><small>${c.pct}%</small></div>` +
+    `<div class="sd-name"><b>${c.name ? escapeHtml(c.name) : "(no category)"}</b><small>${c.pct}%</small></div>` +
     `<span class="sd-amt">${escapeHtml(fmt(c.amount))}</span></div>` +
     c.subs.map((s) => {
       // "" = this category's records with no sub-category (category's icon + colour)
@@ -4383,7 +4383,7 @@ function openCatIconPicker(currentIconId, onPick, cats) {
     '<div class="icon-group">' +
     ids.map((id) => {
       const isUsed = used.includes(id);
-      return '<button type="button" data-id="' + id + '" aria-label="' + id + (isUsed ? " (already in use)" : "") +
+      return '<button type="button" data-id="' + id + '" aria-label="' + id.replace(/-/g, " ") + (isUsed ? " (already in use)" : "") +
         '" class="' + (id === currentIconId ? "active" : "") + (isUsed ? " used" : "") + '">' +
         iconSvg(id) +
       '</button>';
@@ -4393,10 +4393,17 @@ function openCatIconPicker(currentIconId, onPick, cats) {
   catIconOnPick = onPick;
   const note = document.getElementById("catIconNote");
   if (note) note.classList.toggle("hidden", !used.length);
-  const box = m.querySelector(".modal");
-  if (box) box.scrollTop = 0;
   m.classList.remove("hidden");
   document.body.classList.add("modal-open");
+  // After un-hiding (a hidden grid ignores scrollTop): top, then centre the current icon.
+  // Only the grid scrolls (scrollTop, not scrollIntoView, so the page behind stays put).
+  grid.scrollTop = 0;
+  const cur = grid.querySelector("button.active");
+  if (cur) {
+    const g = grid.getBoundingClientRect();
+    const t = cur.getBoundingClientRect();
+    grid.scrollTop += t.top - g.top - (grid.clientHeight - t.height) / 2;
+  }
 }
 document.getElementById("catIconGrid")?.addEventListener("click", (e) => {
   const b = e.target.closest("button[data-id]");

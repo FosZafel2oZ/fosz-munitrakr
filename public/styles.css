@@ -1496,6 +1496,12 @@ body.theme-yoimiya .rn-menu{
 .icon-group button.active { border-color: var(--accent); background: var(--accent-soft); }
 .icon-group button.used::after { content: ""; position: absolute; top: 4px; right: 4px; }
 
+/* the sheet keeps its title + note put; only the icon grid scrolls (like #sumDetailModal) */
+#catIconModal .modal{display:flex;flex-direction:column;overflow:hidden;max-height:82dvh}
+#catIconModal .modal-head,#catIconNote{flex-shrink:0}
+#catIconGrid{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;touch-action:pan-y;margin-right:-8px;padding-right:8px}
+
 /* Colour sheet (openColorSheet) + the square swatch buttons that open it */
 .color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
   justify-items: center; padding: 2px 0 4px; }
