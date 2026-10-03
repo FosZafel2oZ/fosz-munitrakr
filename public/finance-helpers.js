@@ -412,6 +412,16 @@
     return Math.max(minScale, Math.floor((maxPx / widestWordPx) * 100) / 100);
   }
 
+  /* ---------- labelWords ----------
+     The words of a "Recently added" chip label, for measuring the widest one:
+     the text trimmed and split on runs of whitespace, empty pieces dropped
+     ("Taxi / Ride" -> ["Taxi", "/", "Ride"]). null / undefined / "" -> [].
+     Pure.
+  */
+  function labelWords(text) {
+    return String(text == null ? "" : text).trim().split(/\s+/).filter(Boolean);
+  }
+
   /* ---------- recentPicks ----------
      The Add-Record quick-pick row: the most recently added (category,
      subcategory) picks of one type. `cats` is that type's settings category
@@ -739,7 +749,7 @@
     iconChoiceFromPicture, migrateIconChoices,
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
     planReconversion, summarizeTotals, summaryAverage, yearsAverage, categoryBreakdown, summaryBreakdown,
-    reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks, labelSqueeze,
+    reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks, labelSqueeze, labelWords,
     iconsInUse, categoryDraftError, COLOR_PRESETS,
   };
 });

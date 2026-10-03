@@ -1913,3 +1913,26 @@ test("labelSqueeze: bad inputs give 1 (no squeeze)", () => {
   assert.equal(H.labelSqueeze("70", 62, 0.84), 1);
   assert.equal(H.labelSqueeze(undefined, undefined, undefined), 1);
 });
+
+/* ============================================================ */
+/* labelWords                                                    */
+/* ============================================================ */
+
+test("labelWords: splits on whitespace, keeping words whole", () => {
+  assert.deepEqual(H.labelWords("Eating out"), ["Eating", "out"]);
+  assert.deepEqual(H.labelWords("Subscriptions"), ["Subscriptions"]);
+  assert.deepEqual(H.labelWords("Groceries"), ["Groceries"]);
+  assert.deepEqual(H.labelWords("Taxi / Ride"), ["Taxi", "/", "Ride"]);
+});
+
+test("labelWords: trims and collapses runs of whitespace (tabs, newlines too)", () => {
+  assert.deepEqual(H.labelWords("  Food  &  Dining "), ["Food", "&", "Dining"]);
+  assert.deepEqual(H.labelWords("a\tb\nc"), ["a", "b", "c"]);
+});
+
+test("labelWords: empty, blank or missing text gives no words", () => {
+  assert.deepEqual(H.labelWords(""), []);
+  assert.deepEqual(H.labelWords("   "), []);
+  assert.deepEqual(H.labelWords(null), []);
+  assert.deepEqual(H.labelWords(undefined), []);
+});

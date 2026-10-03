@@ -2835,7 +2835,8 @@ const FREQ_LBL_SLACK_PX = 0.5;
 // carrying the label's computed font, i.e. by the same text engine that lays
 // the label out; the span is always removed again.
 function squeezeFreqLabels(wrap) {
-  if (typeof labelSqueeze !== "function") return; // older cached helpers: no squeeze
+  // older cached helpers (no labelSqueeze / labelWords): no squeeze
+  if (typeof labelSqueeze !== "function" || typeof labelWords !== "function") return;
   const ruler = document.createElement("span");
   ruler.style.cssText =
     "position:absolute;visibility:hidden;white-space:nowrap;left:-9999px;top:0;pointer-events:none";
@@ -2850,8 +2851,7 @@ function squeezeFreqLabels(wrap) {
       ruler.style.fontStyle = cs.fontStyle;
       ruler.style.letterSpacing = cs.letterSpacing;
       let widest = 0;
-      (lbl.textContent || "").split(/s+/).forEach((word) => {
-        if (!word) return;
+      labelWords(lbl.textContent).forEach((word) => {
         ruler.textContent = word;
         widest = Math.max(widest, ruler.getBoundingClientRect().width);
       });
