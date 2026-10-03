@@ -4517,8 +4517,13 @@ function populateRuleCategorySelects(rule) {
   // If existing rule.category is no longer valid after a type-switch, clear it.
   const cats = (rule.type === "expense" ? store.settings.expense : store.settings.investment) || [];
   if (rule.category && !cats.find((c) => c.name === rule.category)) rule.category = "";
+  // ruleSetCategory resets the sub (ruleSetSub(rule, "")), so remember the
+  // rule's own sub first and put it back when it still exists under that
+  // category (otherwise the editor would show "None" yet save a stale sub).
+  const sub = rule.subcategory || "";
   ruleSetCategory(rule, rule.category || "");
-  if (rule.category && rule.subcategory) ruleSetSub(rule, rule.subcategory);
+  const cat = rule.category ? cats.find((c) => c.name === rule.category) : null;
+  if (cat && sub && (cat.subs || []).some((s) => s.name === sub)) ruleSetSub(rule, sub);
 }
 
 function ruleBuildCatMenu(rule) {
