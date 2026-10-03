@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v90"; // keep in step with sw.js CACHE
+const APP_VERSION = "v91"; // keep in step with sw.js CACHE
 // Label used as both the donut slice AND the list-filter key for records
 // without a subcategory — single constant so the two can't drift apart.
 const NO_SUB_LABEL = "No Sub-category";
@@ -4054,10 +4054,16 @@ $$("#catTypeSeg button").forEach((b) =>
 /* ---- Settings → Categories: view-only list ----
    One row per category of the selected type, straight from the saved
    settings: drag handle, icon tile, name, the sub-categories' small icon
-   tiles, and a pencil that opens the Edit page. A drag saves the new order
-   at once (saveCatOrder); everything else is edited on the Edit page. */
+   tiles, a chevron (only when it has sub-categories) that shows or hides the
+   sub-category names under the row, and a pencil that opens the Edit page.
+   A drag saves the new order at once (saveCatOrder); everything else is
+   edited on the Edit page. */
 const PENCIL_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+const CHEVRON_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+// Ids of the categories whose sub-category list is open (this session only).
+const catListOpen = new Set();
 function setCatListMsg(text) {
   const m = $("#catListMsg");
   if (!m) return;
@@ -4084,25 +4090,53 @@ function renderCatList() {
             )
             .join("")}</div>`
         : `<div class="cl-none">No sub-categories</div>`;
-      return `<div class="cl-row" data-idx="${i}">
+      const open = subs.length > 0 && catListOpen.has(cat.id);
+      const toggle = subs.length
+        ? `<button type="button" class="cl-toggle" aria-expanded="${open}" aria-label="${
+            open ? "Hide" : "Show"
+          } sub-categories of ${escapeHtml(cat.name)}">${CHEVRON_SVG}</button>`
+        : "";
+      const subList = open
+        ? `<div class="cl-sublist">${subs
+            .map(
+              (s) =>
+                `<div class="cl-subrow">${subTileHTML(cat, s)}<span class="cl-subname">${escapeHtml(
+                  s.name
+                )}</span></div>`
+            )
+            .join("")}</div>`
+        : "";
+      return `<div class="cl-item" data-idx="${i}"><div class="cl-row">
         <button type="button" class="drag-handle cl-drag" aria-label="Reorder">⠿</button>
         <span class="cl-tile" style="background:${escapeHtml(cat.color)}">${iconSvg(
           cat.icon || "tag"
         )}</span>
         <div class="cl-info"><div class="cl-name">${escapeHtml(cat.name)}</div>${minis}</div>
-        <button type="button" class="cl-edit" aria-label="Edit ${escapeHtml(
+        ${toggle}<button type="button" class="cl-edit" aria-label="Edit ${escapeHtml(
           cat.name
         )}">${PENCIL_SVG}</button>
-      </div>`;
+      </div>${subList}</div>`;
     })
     .join("");
   box.querySelectorAll(".cl-edit").forEach((b) =>
     b.addEventListener("click", () =>
-      openCatEdit(type, +b.closest(".cl-row").dataset.idx)
+      openCatEdit(type, +b.closest(".cl-item").dataset.idx)
     )
   );
+  box.querySelectorAll(".cl-toggle").forEach((b) =>
+    b.addEventListener("click", () => {
+      const idx = +b.closest(".cl-item").dataset.idx;
+      const id = list[idx] && list[idx].id;
+      if (catListOpen.has(id)) catListOpen.delete(id);
+      else catListOpen.add(id);
+      renderCatList();
+      const again = $("#catList").children[idx];
+      const nb = again && again.querySelector(".cl-toggle");
+      if (nb) nb.focus({ preventScroll: true }); // keep keyboard focus on the toggle
+    })
+  );
   const order = list.slice();
-  makeDraggable(box, ".cl-row", ".cl-drag", order, () => saveCatOrder(type, order));
+  makeDraggable(box, ".cl-item", ".cl-drag", order, () => saveCatOrder(type, order));
 }
 // After a drag: save the new order straight away (a tap without a move saves
 // nothing). On failure the list goes back to the saved order and the block's

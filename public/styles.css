@@ -523,7 +523,7 @@ body.modal-open{overflow:hidden}
   justify-content:center;color:var(--muted);font-size:17px;cursor:grab;
   touch-action:none;border-radius:8px;letter-spacing:-1px}
 .drag-handle:active{cursor:grabbing;background:var(--card);color:var(--text)}
-.cl-row.dragging,.ce-sub.dragging,.cur-row.dragging{
+.cl-item.dragging,.ce-sub.dragging,.cur-row.dragging{
   opacity:.92;background:var(--card-2);
   box-shadow:0 12px 28px rgba(0,0,0,.5);position:relative;z-index:5}
 
@@ -684,9 +684,9 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
 .add-cat .btn-mini{flex-shrink:0;height:46px;padding:0 18px}
 .settings-block .btn-primary{margin-top:6px}
 /* Settings → Categories: view-only list (renderCatList) */
-.cl-row{display:flex;align-items:center;gap:11px;padding:9px 0;
-  border-bottom:1px solid var(--line)}
-.cl-row:last-child{border-bottom:none}
+.cl-item{border-bottom:1px solid var(--line)}
+.cl-item:last-child{border-bottom:none}
+.cl-row{display:flex;align-items:center;gap:11px;padding:9px 0}
 .cl-row .drag-handle,.ce-sub .drag-handle{width:24px;margin-right:-3px}
 .cl-tile{flex:none;width:40px;height:40px;border-radius:12px;display:flex;
   align-items:center;justify-content:center}
@@ -699,11 +699,18 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
   align-items:center;justify-content:center}
 .cl-mini svg{width:11px;height:11px;color:#fff}
 .cl-none{font-size:12px;color:var(--muted);margin-top:1px}
-.cl-edit{flex:none;width:36px;height:36px;border-radius:11px;
+.cl-edit,.cl-toggle{flex:none;width:36px;height:36px;border-radius:11px;
   border:1px solid var(--line);display:flex;align-items:center;
   justify-content:center;color:var(--muted);-webkit-tap-highlight-color:transparent}
-.cl-edit svg{width:17px;height:17px}
-.cl-edit:active{background:var(--accent-soft);color:var(--accent)}
+.cl-edit svg,.cl-toggle svg{width:17px;height:17px}
+.cl-edit:active,.cl-toggle:active{background:var(--accent-soft);color:var(--accent)}
+.cl-toggle{margin-right:-5px}
+.cl-toggle svg{transition:transform .15s}
+.cl-toggle[aria-expanded="true"] svg{transform:rotate(180deg)}
+.cl-sublist{padding:0 0 10px 39px}
+.cl-subrow{display:flex;align-items:center;gap:10px;padding:4px 0;min-width:0}
+.cl-subname{font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
 .cat-add-btn{width:100%;display:flex;align-items:center;justify-content:center;
   gap:8px;padding:12px;margin-top:12px;font-size:15px}
 .cat-hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4}
