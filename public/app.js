@@ -16,6 +16,9 @@ let range = { type: "month", offset: 0, start: null, end: null };
 let drillCategory = null;
 let selectedSlice = null; // first-tap selected category/sub on the donut
 let lastDrillable = {}; // categories that have sub-categories (for 2nd-tap drill)
+// The records behind the donut's centre number (renderDashboard) — the
+// centre-tap breakdown pop-up groups exactly these.
+let centreRecords = [];
 let chart = null;
 let editingId = null;
 let modalType = "expense";
@@ -1263,11 +1266,14 @@ document.addEventListener("click", (e) => {
     $("#recFilterMenu") && $("#recFilterMenu").classList.add("hidden");
   // Tapping anywhere outside the donut clears the selected slice — except the
   // recent-records list, which is filtered BY that selection (tapping a result
-  // shouldn't clear the filter it came from).
+  // shouldn't clear the filter it came from), and the donut's centre button and
+  // its breakdown pop-up (the slice stays selected behind it, and after closing).
   if (
     selectedSlice &&
     !e.target.closest("#donut") &&
-    !e.target.closest("#dashRecordsList")
+    !e.target.closest("#dashRecordsList") &&
+    !e.target.closest("#chartHole") &&
+    !e.target.closest("#sumDetailModal")
   ) {
     selectedSlice = null;
     refresh();
@@ -1603,7 +1609,7 @@ function renderDashboard(list) {
       if (v !== null) groups[r.category] = (groups[r.category] || 0) + v;
     });
     $("#chartTitle").textContent = label + "s by Category";
-    $("#chartSub").textContent = "Tap a category, tap again to drill in";
+    $("#chartSub").textContent = "Tap a category, tap again to drill in · tap the total for details";
     $("#chartBack").classList.add("hidden");
   } else {
     typed
@@ -1615,7 +1621,7 @@ function renderDashboard(list) {
         groups[k] = (groups[k] || 0) + v;
       });
     $("#chartTitle").textContent = drillCategory;
-    $("#chartSub").textContent = "Sub-category breakdown";
+    $("#chartSub").textContent = "Sub-category breakdown · tap the total for details";
     $("#chartBack").classList.remove("hidden");
   }
 
@@ -1679,6 +1685,11 @@ function renderDashboard(list) {
     listFiltered = typed.filter((r) => r.category === selectedSlice);
     listTitle = "Recent: " + selectedSlice;
   }
+  // The same selection is what the centre number sums (its counted records),
+  // so the centre-tap pop-up groups listFiltered. Empty chart: no centre tap.
+  centreRecords = listFiltered;
+  const hole = document.getElementById("chartHole"); // older cached index.html: none
+  if (hole) hole.classList.toggle("hidden", labels.length === 0);
   const recent = listFiltered.slice(0, 10);
   $("#dashListTitle").textContent = listTitle;
   $("#dashRecordCount").textContent =
@@ -1812,6 +1823,13 @@ $("#chartBack").addEventListener("click", () => {
   drillCategory = null;
   selectedSlice = null;
   refresh();
+});
+// Centre tap (new in v90): the breakdown pop-up of the records behind the
+// centre number (centreRecords) — the chart's state is left as it is. The
+// button covers only the donut's hole, so slice taps still reach the canvas.
+document.getElementById("chartHole")?.addEventListener("click", () => {
+  if (typeof categoryBreakdown !== "function") return; // older cached helpers
+  openBreakdown(rangeBounds().label, activeType, categoryBreakdown(centreRecords, defCur()));
 });
 
 /* ---------------- Records page + multi-select ---------------- */
@@ -2656,19 +2674,18 @@ if (sumYearNextEl) sumYearNextEl.addEventListener("click", () => {
   summaryYear = summaryShownYear + 1;
   renderSummary();
 });
-// Summary breakdown pop-up (new in v89): a tapped spent / invested number →
-// that period's categories (largest first, with their share of the total) and,
-// under each, its sub-categories. summaryBreakdown (finance-helpers.js) counts
-// through amountInDefault like summarizeTotals, so the pop-up total equals the
-// tapped number. month = 0-11, or null for a whole year (Years view).
-function openSumDetail(type, year, month) {
+// Breakdown pop-up (#sumDetailModal, new in v89; shared since v90): a
+// categoryBreakdown result (finance-helpers.js) → its categories (largest
+// first, with their share of the total) and, under each, its sub-categories,
+// titled `title`. type = "expense" (Spent) or "investment" (Invested). Opened by
+// the Summary page's numbers (openSumDetail) and the dashboard donut's centre.
+function openBreakdown(title, type, b) {
   const m = document.getElementById("sumDetailModal");
   const list = document.getElementById("sumDetailList");
-  if (!m || !list || typeof summaryBreakdown !== "function") return;
+  if (!m || !list || !b) return;
   const def = defCur();
-  const b = summaryBreakdown(records, def, { type, year, month });
   const spent = type === "expense";
-  $("#sumDetailTitle").textContent = month == null ? String(year) : SUM_MONTHS_FULL[month] + " " + year;
+  $("#sumDetailTitle").textContent = title;
   const tot = $("#sumDetailTotal");
   tot.className = "sd-total " + (spent ? "amt-out" : "amt-in");
   tot.innerHTML = `<span>${spent ? "Spent" : "Invested"}</span><strong>${escapeHtml(fmt(b.total, def))}</strong>`;
@@ -2690,6 +2707,15 @@ function openSumDetail(type, year, month) {
   m.classList.remove("hidden");
   list.scrollTop = 0; // after un-hiding: a hidden list ignores (and keeps) its scroll position
   document.body.classList.add("modal-open");
+}
+// Summary page: a tapped spent / invested number → that period's breakdown.
+// summaryBreakdown counts through amountInDefault like summarizeTotals, so the
+// pop-up total equals the tapped number. month = 0-11, or null for a whole
+// year (Years view).
+function openSumDetail(type, year, month) {
+  if (typeof summaryBreakdown !== "function") return;
+  openBreakdown(month == null ? String(year) : SUM_MONTHS_FULL[month] + " " + year, type,
+    summaryBreakdown(records, defCur(), { type, year, month }));
 }
 function closeSumDetail() {
   const m = document.getElementById("sumDetailModal");

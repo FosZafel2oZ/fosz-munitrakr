@@ -327,13 +327,12 @@
     return Math.round((sum / totals.length) * 100) / 100;
   }
 
-  /* ---------- summaryBreakdown ----------
-     The Summary page's pop-up: one period's spending (or investments) by
-     category and sub-category. opts = { type: "expense" | "investment", year,
-     month } — month 0-11, or null/undefined for the whole year. Same record
-     filter as summarizeTotals (YYYY-MM-DD date with month 01-12, matching type,
-     amountInDefault(r, def) a finite Number), so `total` equals that period's
-     summarizeTotals cell. Grouped by r.category, then r.subcategory (blank or
+  /* ---------- categoryBreakdown ----------
+     The breakdown pop-up's data (Summary page and dashboard donut): ALL the
+     records given, by category and sub-category — no date or type filter (the
+     caller picks the records). Only records whose amountInDefault(r, def) is
+     not a finite Number (not counted, non-numeric, null/junk) are skipped.
+     Grouped by r.category (missing = ""), then r.subcategory (blank or
      missing = ""). Returns { total, categories: [{ name, amount, pct, subs:
      [{ name, amount }] }] }:
        - amounts (and total) are rounded to cents at the end
@@ -343,20 +342,12 @@
          has a sub-category, otherwise the no-sub records appear as
          { name: "" } (only when their amount > 0)
   */
-  function summaryBreakdown(records, def, opts) {
-    const { type, year, month } = opts || {};
-    const wholeYear = month === null || month === undefined;
+  function categoryBreakdown(records, def) {
     const cents = (x) => Math.round(x * 100) / 100;
     const byName = (a, b) => b.amount - a.amount || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     const cats = new Map(); // category name -> { amount, subs: Map(sub name -> amount), hasSub }
     let total = 0;
     (Array.isArray(records) ? records : []).forEach((r) => {
-      if (!r || (r.type !== "expense" && r.type !== "investment") || r.type !== type) return;
-      const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(r.date);
-      if (!m) return;
-      const mo = Number(m[2]);
-      if (mo < 1 || mo > 12) return;
-      if (Number(m[1]) !== year || (!wholeYear && mo - 1 !== month)) return;
       const amt = amountInDefault(r, def);
       if (amt === null || !Number.isFinite(amt)) return;
       const catName = r.category || "";
@@ -378,6 +369,29 @@
     });
     categories.sort(byName);
     return { total, categories };
+  }
+
+  /* ---------- summaryBreakdown ----------
+     The Summary page's pop-up: one period's spending (or investments) by
+     category and sub-category. opts = { type: "expense" | "investment", year,
+     month } — month 0-11, or null/undefined for the whole year. Same record
+     filter as summarizeTotals (YYYY-MM-DD date with month 01-12, matching type,
+     amountInDefault(r, def) a finite Number), so `total` equals that period's
+     summarizeTotals cell. The grouping, sorting and sub rules are
+     categoryBreakdown's (same return shape).
+  */
+  function summaryBreakdown(records, def, opts) {
+    const { type, year, month } = opts || {};
+    const wholeYear = month === null || month === undefined;
+    const inPeriod = (Array.isArray(records) ? records : []).filter((r) => {
+      if (!r || (r.type !== "expense" && r.type !== "investment") || r.type !== type) return false;
+      const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(r.date);
+      if (!m) return false;
+      const mo = Number(m[2]);
+      if (mo < 1 || mo > 12) return false;
+      return Number(m[1]) === year && (wholeYear || mo - 1 === month);
+    });
+    return categoryBreakdown(inPeriod, def);
   }
 
   /* ---------- recentPicks ----------
@@ -706,7 +720,7 @@
     iconHref, homeIconHref, effectiveIconChoice, headerIconHref,
     iconChoiceFromPicture, migrateIconChoices,
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
-    planReconversion, summarizeTotals, summaryAverage, yearsAverage, summaryBreakdown,
+    planReconversion, summarizeTotals, summaryAverage, yearsAverage, categoryBreakdown, summaryBreakdown,
     reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks,
     iconsInUse, categoryDraftError, COLOR_PRESETS,
   };

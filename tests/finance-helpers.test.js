@@ -1490,6 +1490,123 @@ test("summaryBreakdown: pct is 0 when the total is 0", () => {
 });
 
 /* ============================================================ */
+/* categoryBreakdown                                             */
+/* ============================================================ */
+
+test("categoryBreakdown: groups every record given — no date or type filter", () => {
+  const b = H.categoryBreakdown([
+    brk("expense", "2026-06-01", 10, "Food", "Lunch"),
+    brk("investment", "2025-01-01", 5, "Food", "Lunch"), // other type + year: still counted
+    brk("expense", "2031-12-31", 20, "Rent"),
+    brk("transfer", "2026-06-02", 1, "Fun"),
+  ], "USD");
+  assert.equal(b.total, 36);
+  assert.deepEqual(b.categories, [
+    { name: "Rent", amount: 20, pct: 56, subs: [] },
+    { name: "Food", amount: 15, pct: 42, subs: [{ name: "Lunch", amount: 15 }] },
+    { name: "Fun", amount: 1, pct: 3, subs: [] },
+  ]);
+});
+
+test("categoryBreakdown: a record with a malformed or missing date is still counted", () => {
+  const b = H.categoryBreakdown([
+    brk("expense", "2026-6-01", 1, "Food"),
+    brk("expense", "2026-13-01", 2, "Food"),
+    brk("expense", "", 3, "Food"),
+    brk("expense", undefined, 4, "Food"),
+  ], "USD");
+  assert.deepEqual(b, { total: 10, categories: [{ name: "Food", amount: 10, pct: 100, subs: [] }] });
+});
+
+test("categoryBreakdown: not-counted, non-numeric and junk records are skipped", () => {
+  const b = H.categoryBreakdown([
+    brk("expense", "2026-06-01", 40, "Food", "", { currency: "EUR" }), // not counted
+    brk("expense", "2026-06-01", 40, "Food", "", { currency: "EUR", convertedAmount: 44, convertedCurrency: "GBP" }), // stale
+    brk("expense", "2026-06-01", 50, "Fun", "", { currency: "EUR", convertedAmount: 55, convertedCurrency: "USD" }), // counted
+    brk("expense", "2026-06-02", "abc", "Food"),
+    null,
+    "junk",
+    brk("expense", "2026-06-03", 6, "Food"),
+  ], "USD");
+  assert.equal(b.total, 61);
+  assert.deepEqual(b.categories.map((c) => [c.name, c.amount]), [["Fun", 55], ["Food", 6]]);
+});
+
+test("categoryBreakdown: sub rules — none, a \"\" sub for no-sub records, \"\" dropped at 0", () => {
+  const b = H.categoryBreakdown([
+    brk("expense", "2026-06-01", 10, "Rent"),
+    brk("expense", "2026-06-02", 5, "Rent", ""),
+    brk("expense", "2026-06-01", 30, "Games", "Genshin"),
+    brk("expense", "2026-06-02", 12, "Games"),
+    brk("expense", "2026-06-04", 5, "Games", "Steam"),
+    brk("expense", "2026-06-01", 3, "Food", "Coffee"),
+    brk("expense", "2026-06-02", 0, "Food"),
+  ], "USD");
+  const byName = Object.fromEntries(b.categories.map((c) => [c.name, c]));
+  assert.deepEqual(byName.Rent.subs, []);
+  assert.deepEqual(byName.Games.subs,
+    [{ name: "Genshin", amount: 30 }, { name: "", amount: 12 }, { name: "Steam", amount: 5 }]);
+  assert.deepEqual(byName.Food.subs, [{ name: "Coffee", amount: 3 }]);
+});
+
+test("categoryBreakdown: categories and subs sort by amount desc, ties by name", () => {
+  const b = H.categoryBreakdown([
+    brk("expense", "2026-06-01", 10, "Bills"),
+    brk("expense", "2026-06-01", 25, "Travel"),
+    brk("expense", "2026-06-01", 10, "Alpha"),
+    brk("expense", "2026-06-01", 4, "Food", "Lunch"),
+    brk("expense", "2026-06-01", 4, "Food", "Coffee"),
+    brk("expense", "2026-06-01", 7, "Food", "Snacks"),
+  ], "USD");
+  assert.deepEqual(b.categories.map((c) => c.name), ["Travel", "Food", "Alpha", "Bills"]);
+  assert.deepEqual(b.categories[1].subs.map((s) => s.name), ["Snacks", "Coffee", "Lunch"]);
+});
+
+test("categoryBreakdown: rounds to cents at the end; pct a whole number; 0 when total is 0", () => {
+  const b = H.categoryBreakdown([
+    brk("expense", "2026-06-01", 0.1, "A", "x"),
+    brk("expense", "2026-06-02", 0.2, "A", "x"),
+    brk("expense", "2026-06-03", 1.005, "B"),
+    brk("expense", "2026-06-04", 1.234, "C"),
+  ], "USD");
+  assert.equal(b.total, 2.54); // raw 2.539
+  const byName = Object.fromEntries(b.categories.map((c) => [c.name, c]));
+  assert.equal(byName.A.amount, 0.3);
+  assert.deepEqual(byName.A.subs, [{ name: "x", amount: 0.3 }]);
+  assert.equal(byName.C.amount, 1.23);
+  assert.equal(byName.A.pct, 12);
+  assert.equal(byName.C.pct, 48);
+  const z = H.categoryBreakdown([brk("expense", "2026-06-01", 0, "A")], "USD");
+  assert.deepEqual(z, { total: 0, categories: [{ name: "A", amount: 0, pct: 0, subs: [] }] });
+});
+
+test("categoryBreakdown: a missing category is grouped under \"\"", () => {
+  const b = H.categoryBreakdown([brk("expense", "2026-06-01", 4, undefined)], "USD");
+  assert.deepEqual(b.categories, [{ name: "", amount: 4, pct: 100, subs: [] }]);
+});
+
+test("categoryBreakdown: empty result (no records, bad input, nothing counted)", () => {
+  for (const input of [[], null, undefined, "junk", {}]) {
+    assert.deepEqual(H.categoryBreakdown(input, "USD"), { total: 0, categories: [] });
+  }
+  assert.deepEqual(H.categoryBreakdown([brk("expense", "2026-01-01", 5, "A", "", { currency: "EUR" })], "USD"),
+    { total: 0, categories: [] });
+});
+
+test("categoryBreakdown: equals summaryBreakdown on the same period's records", () => {
+  const list = [
+    brk("expense", "2026-03-01", 0.1, "A"),
+    brk("expense", "2026-03-02", 0.2, "B", "y"),
+    brk("expense", "2026-03-09", 10.005, "B"),
+    brk("expense", "2026-08-09", 3.333, "A"),
+    brk("investment", "2026-03-04", 1.234, "S"),
+  ];
+  const march = list.filter((r) => r.type === "expense" && r.date.startsWith("2026-03"));
+  assert.deepEqual(H.categoryBreakdown(march, "USD"),
+    H.summaryBreakdown(list, "USD", { type: "expense", year: 2026, month: 2 }));
+});
+
+/* ============================================================ */
 /* recentPicks                                                   */
 /* ============================================================ */
 
