@@ -75,7 +75,36 @@ const ICONS = {
   droplet: '<path d="M12 3S6 9.5 6 14a6 6 0 0 0 12 0c0-4.5-6-11-6-11z"/>',
   star: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
   receipt: '<path d="M5 3h14v18l-2.5-1.5L14 21l-2.5-1.5L9 21l-2.5-1.5L5 21z"/><path d="M9 8h6M9 12h6"/>',
+  // General icons added with the category editor (v88)
+  bag: '<path d="M5 8h14l1 13H4z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  shirt: '<path d="M8 3l4 2 4-2 5 4-3 3-2-1v12H8V9l-2 1-3-3z"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',
+  paw: '<circle cx="7" cy="9" r="1.8"/><circle cx="12" cy="6.5" r="1.8"/><circle cx="17" cy="9" r="1.8"/><path d="M12 12c-3 0-5 2.5-5 4.8 0 1.5 1.2 2.2 2.5 2.2 1 0 1.6-.5 2.5-.5s1.5.5 2.5.5c1.3 0 2.5-.7 2.5-2.2 0-2.3-2-4.8-5-4.8z"/>',
+  bus: '<rect x="4" y="3" width="16" height="15" rx="2"/><path d="M4 11h16M8 18v3M16 18v3M8 14.5h.1M16 14.5h.1"/>',
+  bike: '<circle cx="6" cy="17" r="3.5"/><circle cx="18" cy="17" r="3.5"/><path d="M6 17l4-8h5l3 8M10 9l4 8M9 6h3"/>',
+  fuel: '<path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M4 10h10M14 13h2a2 2 0 0 1 2 2v2a1.5 1.5 0 0 0 3 0V9l-3-3"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  cap: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6"/>',
+  medical: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/>',
+  glass: '<path d="M5 4h14l-7 8zM12 12v8M8 20h8"/>',
+  camera: '<path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>',
+  laptop: '<rect x="5" y="5" width="14" height="10" rx="1"/><path d="M2 19h20"/>',
+  tv: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 21h8M9 3l3 3 3-3"/>',
+  ticket: '<path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 7v2M14 11v2M14 15v2"/>',
+  gem: '<path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20M9 3l-2 6 5 12 5-12-2-6"/>',
+  sparkles: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8zM5 3v3M3.5 4.5h3"/>',
+  dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h.1M15 9h.1M12 12h.1M9 15h.1M15 15h.1"/>',
+  umbrella: '<path d="M12 3a9 9 0 0 1 9 9H3a9 9 0 0 1 9-9zM12 12v7a2 2 0 0 0 4 0"/>',
+  bank: '<path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  // Game icons (grouped under "Games" in the icon picker — see GAME_ICON_IDS)
+  crown: '<ellipse cx="12" cy="15" rx="8.6" ry="3.4"/><path d="M12 2.2l1.7 2.9L12 8l-1.7-2.9z"/><path d="M12 8v12.3"/><path d="M8.6 10.2h6.8"/>',
+  tacet: '<g fill="currentColor" stroke-width=".9" transform="rotate(90 12 12)"><path d="M12 1.8v20.4"/><path d="M9.6 4.6l1.7-.5.7-1.3.7 1.3 1.7.5-1.7.5-.7 1.3-.7-1.3z"/><path d="M7.2 8.2l3.9-.6.9-1.5.9 1.5 3.9.6-3.9.6-.9 1.5-.9-1.5z"/><path d="M3 12l7.9-.8L12 9.6l1.1 1.6 7.9.8-7.9.8-1.1 1.6-1.1-1.6z"/><path d="M7.2 15.8l3.9-.6.9-1.5.9 1.5 3.9.6-3.9.6-.9 1.5-.9-1.5z"/><path d="M9.6 19.4l1.7-.5.7-1.3.7 1.3 1.7.5-1.7.5-.7 1.3-.7-1.3z"/></g>',
+  slug: '<path d="M3 18.5c0-3.2 2.6-5.5 6.2-5.5h4.6c3.7 0 6.3 1.8 7.2 5.5z"/><path d="M7 13l1.6-5 1.9 4.4M10.6 12.6L12.7 6l2.1 6.6M14.9 12.9l1.2-3.4 1.4 3.7"/><path d="M19 14.4l1.3-3M17.2 13.5l.3-2.7"/>',
 };
+// Game icons, listed so pickers can show them as their own "Games" group.
+const GAME_ICON_IDS = ["crown", "tacet", "slug"];
+// Every id above (the 29 originals, the 21 new general icons, the 3 game icons).
 const ICON_IDS = Object.keys(ICONS);
 function iconSvg(id, cls) {
   return (
@@ -491,6 +520,25 @@ function subColor(type, catName, subName) {
   if (s) return s.color;
   if (subName === NO_SUB_LABEL) return "#3a4152";
   return catColor(type, catName);
+}
+// Icon of a sub-category: its own (when set and known), else its category's,
+// else "tag". `cat` / `sub` are the settings objects (either may be missing).
+function subIconOf(cat, sub) {
+  if (sub && ICONS.hasOwnProperty(sub.icon)) return sub.icon;
+  return (cat && cat.icon) || "tag";
+}
+function subIcon(type, catName, subName) {
+  const c = findCat(type, catName);
+  const s = c && c.subs.find(
+    (x) => x.name.toLowerCase() === String(subName).toLowerCase()
+  );
+  return subIconOf(c, s);
+}
+// The round-cornered icon tile a sub-category shows in pickers: its icon on its colour.
+function subTileHTML(cat, sub) {
+  return `<span class="pick-ico" style="background:${sub.color}">${iconSvg(
+    subIconOf(cat, sub)
+  )}</span>`;
 }
 function detectNew(type, category, subcategory) {
   const out = [];
@@ -1043,11 +1091,17 @@ $$(".summary-card:not(.sum-card)").forEach((card) =>
 function recordCardHTML(r) {
   const sign = r.type === "investment" ? "+" : "-";
   const cls = r.type === "investment" ? "amt-in" : "amt-out";
-  const color = catColor(r.type, r.category);
+  // A record with a sub-category shows the sub's icon on the sub's colour.
+  const color = r.subcategory
+    ? subColor(r.type, r.category, r.subcategory)
+    : catColor(r.type, r.category);
+  const icon = r.subcategory
+    ? subIcon(r.type, r.category, r.subcategory)
+    : catIcon(r.type, r.category);
   const amt = rowAmount(r, "rec-orig");
   return `
     <div class="rec-ico" style="background:${color}">
-      ${iconSvg(catIcon(r.type, r.category), "rec-ico-svg")}
+      ${iconSvg(icon, "rec-ico-svg")}
     </div>
     <div class="rec-body">
       <div class="rec-cat">${escapeHtml(r.category)}</div>
@@ -1589,9 +1643,7 @@ function buildBulkSubMenu(catName) {
         (s) =>
           `<button type="button" class="picker-opt" data-name="${escapeHtml(
             s.name
-          )}"><span class="pick-dot" style="background:${s.color}"></span><span>${escapeHtml(
-            s.name
-          )}</span></button>`
+          )}">${subTileHTML(c, s)}<span>${escapeHtml(s.name)}</span></button>`
       )
       .join("");
   menu.querySelectorAll(".picker-opt").forEach((b) =>
@@ -1607,10 +1659,7 @@ function bulkSetSub(name) {
   const s = c && c.subs.find((x) => x.name === name);
   const val = $("#bulkSubVal");
   if (s)
-    val.innerHTML =
-      `<span class="pick-dot" style="background:${s.color}"></span><span>${escapeHtml(
-        s.name
-      )}</span>`;
+    val.innerHTML = `${subTileHTML(c, s)}<span>${escapeHtml(s.name)}</span>`;
   else val.textContent = "None";
 }
 $("#bulkCatBtn").addEventListener("click", (e) => {
@@ -2213,7 +2262,7 @@ function populateDatalists() {
 // Quick-pick row: the 10 most recently added (category, sub-category) picks
 // of the current type (recentPicks, finance-helpers.js). A main-type chip is
 // the category icon on the category colour; a sub-type chip is the category's
-// icon on the sub-category's own colour, labelled with the sub name.
+// icon (or its own, if set) on the sub-category's own colour, labelled with the sub name.
 function buildFreqCats() {
   const field = $("#freqField");
   const wrap = $("#freqCats");
@@ -2239,7 +2288,9 @@ function buildFreqCats() {
           ? ` aria-label="${escapeHtml(p.category + ", " + p.sub)}"`
           : ""
       }><span class="freq-ic" style="background:${color}">${iconSvg(
-        catIcon(modalType, p.category)
+        p.sub
+          ? subIcon(modalType, p.category, p.sub)
+          : catIcon(modalType, p.category)
       )}</span><span class="freq-lbl">${escapeHtml(p.sub || p.category)}</span></button>`;
     })
     .join("");
@@ -2290,9 +2341,7 @@ function buildSubMenu(catName) {
         (s) =>
           `<button type="button" class="picker-opt" data-name="${escapeHtml(
             s.name
-          )}"><span class="pick-dot" style="background:${s.color}"></span><span>${escapeHtml(
-            s.name
-          )}</span></button>`
+          )}">${subTileHTML(c, s)}<span>${escapeHtml(s.name)}</span></button>`
       )
       .join("");
   menu.querySelectorAll(".picker-opt").forEach((b) =>
@@ -2313,10 +2362,7 @@ function setSub(name) {
   const s = c && c.subs.find((x) => x.name === name);
   const val = $("#subPickVal");
   if (s) {
-    val.innerHTML =
-      `<span class="pick-dot" style="background:${s.color}"></span><span>${escapeHtml(
-        s.name
-      )}</span>`;
+    val.innerHTML = `${subTileHTML(c, s)}<span>${escapeHtml(s.name)}</span>`;
   } else {
     val.textContent = "None";
   }
@@ -4222,7 +4268,7 @@ function ruleBuildSubMenu(rule, catName) {
      </button>` +
     subs.map((s) =>
       `<button type="button" class="picker-opt" data-name="${escapeHtml(s.name)}">
-         <span class="pick-dot" style="background:${s.color}"></span><span>${escapeHtml(s.name)}</span>
+         ${subTileHTML(c, s)}<span>${escapeHtml(s.name)}</span>
        </button>`
     ).join("");
   menu.querySelectorAll(".picker-opt").forEach((b) => {
@@ -4242,7 +4288,7 @@ function ruleSetSub(rule, name) {
   const val = document.getElementById("rulSubPickVal");
   if (!val) return;
   if (s) {
-    val.innerHTML = `<span class="pick-dot" style="background:${s.color}"></span><span>${escapeHtml(s.name)}</span>`;
+    val.innerHTML = `${subTileHTML(c, s)}<span>${escapeHtml(s.name)}</span>`;
   } else {
     val.textContent = "None";
   }

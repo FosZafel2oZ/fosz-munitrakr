@@ -1370,3 +1370,106 @@ test("recentPicks: never mutates its inputs", () => {
   assert.equal(JSON.stringify(recs), before);
   assert.equal(JSON.stringify(PICK_CATS), catsBefore);
 });
+
+/* ============================================================ */
+/* Category editor helpers: iconsInUse, categoryDraftError,      */
+/* COLOR_PRESETS                                                 */
+/* ============================================================ */
+
+test("iconsInUse: distinct icons of categories and of subs that have their own icon", () => {
+  const cats = [
+    { id: "c1", name: "Food", icon: "food", subs: [{ id: "s1", name: "Coffee", icon: "coffee" }, { id: "s2", name: "Bar" }] },
+    { id: "c2", name: "Fun", icon: "gamepad", subs: [{ id: "s3", name: "Games", icon: "crown" }, { id: "s4", name: "Dup", icon: "food" }] },
+    { id: "c3", name: "Misc", icon: "food", subs: [] },
+  ];
+  assert.deepEqual(H.iconsInUse(cats).slice().sort(), ["coffee", "crown", "food", "gamepad"]);
+});
+
+test("iconsInUse: a sub without its own icon adds nothing; blank/missing icons are skipped", () => {
+  const cats = [
+    { id: "c1", name: "A", subs: [{ id: "s1", name: "x" }, { id: "s2", name: "y", icon: "" }] },
+    { id: "c2", name: "B", icon: "tag", subs: undefined },
+  ];
+  assert.deepEqual(H.iconsInUse(cats), ["tag"]);
+});
+
+test("iconsInUse: empty / non-array input gives [] and inputs are not mutated", () => {
+  assert.deepEqual(H.iconsInUse([]), []);
+  assert.deepEqual(H.iconsInUse(undefined), []);
+  assert.deepEqual(H.iconsInUse(null), []);
+  const cats = [{ id: "c1", name: "A", icon: "home", subs: [{ name: "x", icon: "bolt" }] }];
+  const before = JSON.stringify(cats);
+  H.iconsInUse(cats);
+  assert.equal(JSON.stringify(cats), before);
+});
+
+const DRAFT_CATS = [
+  { id: "c1", name: "Food", subs: [{ id: "s1", name: "Coffee" }] },
+  { id: "c2", name: "Rent", subs: [] },
+];
+
+test("categoryDraftError: a valid draft gives an empty string", () => {
+  assert.equal(H.categoryDraftError({ id: "c1", name: "Food", subs: [{ name: "Coffee" }, { name: "Tea" }] }, DRAFT_CATS), "");
+  assert.equal(H.categoryDraftError({ id: "new", name: "Fun", subs: [] }, DRAFT_CATS), "");
+});
+
+test("categoryDraftError: blank category name", () => {
+  assert.equal(H.categoryDraftError({ id: "c1", name: "   ", subs: [] }, DRAFT_CATS), "Enter a category name.");
+  assert.equal(H.categoryDraftError({ id: "c1", subs: [] }, DRAFT_CATS), "Enter a category name.");
+});
+
+test("categoryDraftError: duplicate of ANOTHER category, trimmed and case-insensitive", () => {
+  assert.equal(
+    H.categoryDraftError({ id: "c1", name: "  rent ", subs: [] }, DRAFT_CATS),
+    'A category named "rent" already exists.'
+  );
+  assert.equal(
+    H.categoryDraftError({ id: "new", name: "FOOD", subs: [] }, DRAFT_CATS),
+    'A category named "FOOD" already exists.'
+  );
+});
+
+test("categoryDraftError: keeping (or re-casing) the category's own name is fine", () => {
+  assert.equal(H.categoryDraftError({ id: "c2", name: " RENT", subs: [] }, DRAFT_CATS), "");
+});
+
+test("categoryDraftError: blank sub-category name", () => {
+  assert.equal(
+    H.categoryDraftError({ id: "c1", name: "Food", subs: [{ name: "Tea" }, { name: "  " }] }, DRAFT_CATS),
+    "Enter a name for every sub-category."
+  );
+});
+
+test("categoryDraftError: two subs with the same name, trimmed and case-insensitive", () => {
+  assert.equal(
+    H.categoryDraftError({ id: "c1", name: "Food", subs: [{ name: "Tea" }, { name: " tea " }] }, DRAFT_CATS),
+    'Two sub-categories are both named "tea".'
+  );
+});
+
+test("categoryDraftError: reports the first problem (category name before subs; blank sub before duplicate sub)", () => {
+  assert.equal(
+    H.categoryDraftError({ id: "c1", name: "", subs: [{ name: "" }] }, DRAFT_CATS),
+    "Enter a category name."
+  );
+  assert.equal(
+    H.categoryDraftError({ id: "c1", name: "Food", subs: [{ name: "a" }, { name: "a" }, { name: "" }] }, DRAFT_CATS),
+    "Enter a name for every sub-category."
+  );
+});
+
+test("categoryDraftError: tolerates missing subs / cats and never mutates", () => {
+  assert.equal(H.categoryDraftError({ id: "x", name: "Fun" }, undefined), "");
+  const draft = { id: "c1", name: "Food", subs: [{ name: "Tea" }] };
+  const before = JSON.stringify(draft) + JSON.stringify(DRAFT_CATS);
+  H.categoryDraftError(draft, DRAFT_CATS);
+  assert.equal(JSON.stringify(draft) + JSON.stringify(DRAFT_CATS), before);
+});
+
+test("COLOR_PRESETS: the 18 approved colours in the approved order", () => {
+  assert.deepEqual(H.COLOR_PRESETS, [
+    "#7c5cff", "#9d7dff", "#b06bff", "#ff6b81", "#ff8fa3", "#ff5a5a",
+    "#ff8a3d", "#ffb066", "#ffd166", "#3ddc97", "#00c2a8", "#00d2b4",
+    "#5cd0ff", "#2f93ff", "#3b7dd8", "#2b2f45", "#5a6072", "#8b93a7",
+  ]);
+});

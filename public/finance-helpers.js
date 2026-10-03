@@ -352,6 +352,62 @@
     return picks;
   }
 
+  /* ---------- Category editor helpers ----------
+     iconsInUse(cats): the distinct icon ids used by one type's categories
+     ([{ icon, subs: [{ icon? }] }]) and by their sub-categories that have an
+     icon of their own (a sub with none follows its category, so adds nothing).
+     Blank / non-string icons are skipped; first-seen order. Pure.
+  */
+  function iconsInUse(cats) {
+    if (!Array.isArray(cats)) return [];
+    const out = [];
+    const add = (id) => {
+      if (typeof id === "string" && id && !out.includes(id)) out.push(id);
+    };
+    cats.forEach((c) => {
+      if (!c) return;
+      add(c.icon);
+      (Array.isArray(c.subs) ? c.subs : []).forEach((s) => s && add(s.icon));
+    });
+    return out;
+  }
+
+  /* categoryDraftError(draft, cats): "" when the Edit-category draft
+     ({ id, name, subs: [{ name }] }) can be saved, else the first problem, as
+     the message to show. `cats` is that type's category list. Checked in
+     order:
+       1. category name blank (trimmed)
+       2. another category (different id) has the same name — trimmed,
+          case-insensitive; re-casing the category's own name is fine
+       3. any sub-category name blank
+       4. two sub-categories share a name — trimmed, case-insensitive
+     Messages quote the trimmed name as typed. Pure.
+  */
+  function categoryDraftError(draft, cats) {
+    const name = String((draft && draft.name) || "").trim();
+    if (!name) return "Enter a category name.";
+    const lc = (x) => String(x).trim().toLowerCase();
+    const others = Array.isArray(cats) ? cats : [];
+    if (others.some((c) => c && c.id !== draft.id && lc(c.name) === lc(name)))
+      return `A category named "${name}" already exists.`;
+    const subs = Array.isArray(draft.subs) ? draft.subs : [];
+    const names = subs.map((s) => String((s && s.name) || "").trim());
+    if (names.some((n) => !n)) return "Enter a name for every sub-category.";
+    const seen = new Set();
+    for (const n of names) {
+      if (seen.has(n.toLowerCase())) return `Two sub-categories are both named "${n}".`;
+      seen.add(n.toLowerCase());
+    }
+    return "";
+  }
+
+  // The colour sheet's preset swatches, in display order (6 per row).
+  const COLOR_PRESETS = [
+    "#7c5cff", "#9d7dff", "#b06bff", "#ff6b81", "#ff8fa3", "#ff5a5a",
+    "#ff8a3d", "#ffb066", "#ffd166", "#3ddc97", "#00c2a8", "#00d2b4",
+    "#5cd0ff", "#2f93ff", "#3b7dd8", "#2b2f45", "#5a6072", "#8b93a7",
+  ];
+
   /* ---------- Rate service factory ----------
      deps:
        fetch        — fetch implementation
@@ -576,5 +632,6 @@
     amountInDefault, countNotCounted, applyMarkup, clearConversionFields,
     planReconversion, summarizeTotals, summaryAverage, yearsAverage,
     reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks,
+    iconsInUse, categoryDraftError, COLOR_PRESETS,
   };
 });
