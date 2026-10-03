@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v89"; // keep in step with sw.js CACHE
+const APP_VERSION = "v90"; // keep in step with sw.js CACHE
 // Label used as both the donut slice AND the list-filter key for records
 // without a subcategory — single constant so the two can't drift apart.
 const NO_SUB_LABEL = "No Sub-category";
@@ -4426,11 +4426,13 @@ document.getElementById("catIconModal")?.addEventListener("click", (e) => {
 
 // Colour sheet — reusable. `currentColor` is ringed (on its preset, or on the
 // "+" circle when it isn't one); picking a preset calls onPick(hex) and closes
-// the sheet. The system picker behind the "+" applies live: every `input`
-// calls onPick(hex) (sheet stays open, "+" shows the colour) and `change`
-// (picker dismissed) calls it once more and closes. The "+" is a <label>
-// around a visually-hidden colour input so iOS opens the system picker from a
-// real tap.
+// the sheet. The system picker behind the "+" applies live: WebKit fires
+// `change` every time a colour is chosen (not only when the picker is
+// dismissed, and iOS has no event for that), so `input` and `change` are
+// treated alike — each calls onPick(hex) and repaints the "+" as the selected
+// custom colour, and neither closes the sheet. Only a preset, the ✕ or the
+// backdrop closes it. The "+" is a <label> around a visually-hidden colour
+// input so iOS opens the system picker from a real tap.
 let _colorSheetToken = 0; // each open owns its own handlers; reopening voids the old ones
 function openColorSheet(currentColor, onPick) {
   const m = document.getElementById("colorSheetModal");
@@ -4464,16 +4466,18 @@ function openColorSheet(currentColor, onPick) {
     '<span aria-hidden="true">+</span>' +
     '<input type="color" class="visually-hidden" value="' + (hex6 ? cur : "#7c5cff") + '" />';
   const inp = plus.querySelector("input");
-  inp.addEventListener("input", () => {
+  const applyCustom = () => {
     if (token !== _colorSheetToken) return;
+    grid.querySelectorAll("button.color-dot.sel").forEach((b) => {
+      b.classList.remove("sel");
+      b.setAttribute("aria-pressed", "false");
+    });
     plus.classList.add("sel", "custom");
     plus.style.background = inp.value;
     onPick(inp.value);
-  });
-  inp.addEventListener("change", () => {
-    if (token !== _colorSheetToken) return;
-    pick(inp.value);
-  });
+  };
+  inp.addEventListener("input", applyCustom);
+  inp.addEventListener("change", applyCustom);
   grid.appendChild(plus);
   m.classList.remove("hidden");
   document.body.classList.add("modal-open");
