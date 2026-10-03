@@ -3615,17 +3615,21 @@ async function saveCatOrder(type, order) {
 /* Save one type's category list through the same path every settings save
    uses (PUT /settings, where reconcileRenames renames existing records), then
    read the store back to confirm it landed — saveStore() swallows storage
-   errors. On failure the in-memory settings go back to the saved copy and
-   nothing else changes. On success the pickers, records and dashboard
+   errors. The payload is the SAVED settings with only this type's list
+   replaced — never buildSettingsPayload(), whose DOM drafts (currency list,
+   FX markup, share language…) would commit other sections' unsaved edits.
+   On failure the in-memory settings go back to the saved copy and nothing
+   else changes. On success only this type's draft is resynced (other
+   sections' drafts stay as typed) and the pickers, records and dashboard
    refresh. Returns true when saved. */
 async function persistCategories(type, list) {
   const prev = settings;
-  settingsDraft = JSON.parse(JSON.stringify(settings));
-  settingsDraft[type] = JSON.parse(JSON.stringify(list));
-  const want = JSON.stringify(settingsDraft[type]);
+  const payload = JSON.parse(JSON.stringify(settings));
+  payload[type] = JSON.parse(JSON.stringify(list));
+  const want = JSON.stringify(payload[type]);
   let ok = false;
   try {
-    settings = await api("/settings", "PUT", buildSettingsPayload());
+    settings = await api("/settings", "PUT", payload);
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     ok = !!(saved && saved.settings && JSON.stringify(saved.settings[type]) === want);
   } catch {
@@ -3633,14 +3637,11 @@ async function persistCategories(type, list) {
   }
   if (!ok) {
     settings = prev;
-    settingsDraft = JSON.parse(JSON.stringify(settings));
     loadStore(); // drop the unsaved in-memory changes (renamed records too)
     return false;
   }
-  syncDraftsFromSettings();
+  if (settingsDraft) settingsDraft[type] = JSON.parse(JSON.stringify(settings[type]));
   populateDatalists();
-  fillCurrencySelects();
-  renderCurManager();
   await loadRecords(); // pull renamed records so cards update immediately
   return true;
 }
@@ -3732,11 +3733,14 @@ function renderCatEditSubs() {
         tile.style.background = hex;
       })
     );
+    // Editing a name or the sub list clears a stale validation message.
     row.querySelector(".ce-sub-name").addEventListener("input", (e) => {
       s.name = e.target.value;
+      setCatEditMsg("");
     });
     row.querySelector(".ce-sub-del").addEventListener("click", () => {
       d.subs.splice(d.subs.indexOf(s), 1);
+      setCatEditMsg("");
       renderCatEditSubs();
     });
   });
@@ -3842,7 +3846,9 @@ if (ceColorEl) ceColorEl.addEventListener("click", () => {
 });
 const ceNameEl = $("#ceName");
 if (ceNameEl) ceNameEl.addEventListener("input", () => {
-  if (catEdit) catEdit.draft.name = ceNameEl.value;
+  if (!catEdit) return;
+  catEdit.draft.name = ceNameEl.value;
+  setCatEditMsg("");
 });
 const ceAddSubEl = $("#ceAddSub");
 if (ceAddSubEl) ceAddSubEl.addEventListener("click", () => {
@@ -3850,6 +3856,7 @@ if (ceAddSubEl) ceAddSubEl.addEventListener("click", () => {
   const subs = catEdit.draft.subs;
   // No icon of its own: it shows (and follows) the main icon until one is picked.
   subs.push({ id: "s" + uid(), name: "New sub", color: FALLBACK[subs.length % FALLBACK.length] });
+  setCatEditMsg("");
   renderCatEditSubs();
 });
 const ceSaveEl = $("#ceSave");
