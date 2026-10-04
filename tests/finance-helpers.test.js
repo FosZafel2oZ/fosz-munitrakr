@@ -2293,3 +2293,76 @@ test("recFilterMatch: category filter and notes query must both pass", () => {
   assert.equal(H.recFilterMatch(r, f, "alex"), false);
   assert.equal(H.recFilterMatch(rfRec("Food", "Lunch", "with Sam"), f, "sam"), false);
 });
+
+/* ============================================================ */
+/* Card accent: normalizeCardAccent / cardAccentParts            */
+/* ============================================================ */
+
+test("normalizeCardAccent: each known value is kept", () => {
+  assert.equal(H.normalizeCardAccent("none"), "none");
+  assert.equal(H.normalizeCardAccent("stripe"), "stripe");
+  assert.equal(H.normalizeCardAccent("badge"), "badge");
+  assert.equal(H.normalizeCardAccent("ring"), "ring");
+});
+
+test("normalizeCardAccent: missing or unknown values become \"none\"", () => {
+  assert.equal(H.normalizeCardAccent(undefined), "none");
+  assert.equal(H.normalizeCardAccent(null), "none");
+  assert.equal(H.normalizeCardAccent(""), "none");
+  assert.equal(H.normalizeCardAccent("RING"), "none");
+  assert.equal(H.normalizeCardAccent(" ring"), "none");
+  assert.equal(H.normalizeCardAccent("zebra"), "none");
+  assert.equal(H.normalizeCardAccent(5), "none");
+  assert.equal(H.normalizeCardAccent({}), "none");
+  assert.equal(H.normalizeCardAccent(["ring"]), "none");
+});
+
+const CA_OFF = { stripe: false, badge: false, ring: false, namePill: false, subTint: false };
+
+test("cardAccentParts: none — nothing, with or without a sub", () => {
+  assert.deepEqual(H.cardAccentParts("none", true), CA_OFF);
+  assert.deepEqual(H.cardAccentParts("none", false), CA_OFF);
+});
+
+test("cardAccentParts: stripe — the stripe only, with or without a sub", () => {
+  const want = { ...CA_OFF, stripe: true };
+  assert.deepEqual(H.cardAccentParts("stripe", true), want);
+  assert.deepEqual(H.cardAccentParts("stripe", false), want);
+});
+
+test("cardAccentParts: badge — the badge only, and only with a sub", () => {
+  assert.deepEqual(H.cardAccentParts("badge", true), { ...CA_OFF, badge: true });
+  assert.deepEqual(H.cardAccentParts("badge", false), CA_OFF);
+});
+
+test("cardAccentParts: ring — ring and sub tint with a sub, the name pill always", () => {
+  assert.deepEqual(H.cardAccentParts("ring", true),
+    { stripe: false, badge: false, ring: true, namePill: true, subTint: true });
+  assert.deepEqual(H.cardAccentParts("ring", false),
+    { stripe: false, badge: false, ring: false, namePill: true, subTint: false });
+});
+
+test("cardAccentParts: hasSub is truthiness (a sub name counts, \"\" / null / undefined don't)", () => {
+  assert.deepEqual(H.cardAccentParts("badge", "Coffee"), { ...CA_OFF, badge: true });
+  assert.deepEqual(H.cardAccentParts("badge", ""), CA_OFF);
+  assert.deepEqual(H.cardAccentParts("badge", null), CA_OFF);
+  assert.deepEqual(H.cardAccentParts("badge", undefined), CA_OFF);
+  assert.equal(H.cardAccentParts("ring", "Coffee").ring, true);
+});
+
+test("cardAccentParts: an invalid or missing mode behaves as none", () => {
+  assert.deepEqual(H.cardAccentParts("zebra", true), CA_OFF);
+  assert.deepEqual(H.cardAccentParts("RING", true), CA_OFF);
+  assert.deepEqual(H.cardAccentParts(undefined, true), CA_OFF);
+  assert.deepEqual(H.cardAccentParts(null, false), CA_OFF);
+});
+
+test("cardAccentParts: every value is a real boolean", () => {
+  ["none", "stripe", "badge", "ring", "zebra"].forEach((m) =>
+    [true, false, "Coffee", ""].forEach((s) => {
+      const p = H.cardAccentParts(m, s);
+      assert.deepEqual(Object.keys(p).sort(), ["badge", "namePill", "ring", "stripe", "subTint"]);
+      Object.values(p).forEach((v) => assert.equal(typeof v, "boolean"));
+    })
+  );
+});

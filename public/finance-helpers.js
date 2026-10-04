@@ -587,6 +587,37 @@
     return !q || String(record.notes || "").toLowerCase().includes(q);
   }
 
+  /* ---------- Card accent (main category colour on record cards) ----------
+     normalizeCardAccent(v): the stored settings.cardAccent value — v when it
+     is exactly "none", "stripe", "badge" or "ring", else "none" (missing,
+     unknown, other case, non-string). Pure.
+  */
+  const CARD_ACCENTS = ["none", "stripe", "badge", "ring"];
+  function normalizeCardAccent(v) {
+    return CARD_ACCENTS.includes(v) ? v : "none";
+  }
+
+  /* cardAccentParts(mode, hasSub): which decorations a record card gets, as
+     { stripe, badge, ring, namePill, subTint } (all booleans). `mode` goes
+     through normalizeCardAccent; `hasSub` is truthiness (the record's
+     subcategory).
+       none   -> nothing
+       stripe -> stripe (every card)
+       badge  -> badge, only with a sub
+       ring   -> ring and subTint only with a sub; namePill on every card
+  */
+  function cardAccentParts(mode, hasSub) {
+    const m = normalizeCardAccent(mode);
+    const sub = !!hasSub;
+    return {
+      stripe: m === "stripe",
+      badge: m === "badge" && sub,
+      ring: m === "ring" && sub,
+      namePill: m === "ring",
+      subTint: m === "ring" && sub,
+    };
+  }
+
   /* ---------- Category editor helpers ----------
      iconsInUse(cats): the distinct icon ids used by one type's categories
      ([{ icon, subs: [{ icon? }] }]) and by their sub-categories that have an
@@ -869,5 +900,6 @@
     reconversionMarkupPct, dedupeGetRate, mapLimit, recentPicks, labelSqueeze, labelWords,
     recFilterKey, recFilterRows, recFilterToggle, recFilterMatch,
     iconsInUse, categoryDraftError, COLOR_PRESETS,
+    normalizeCardAccent, cardAccentParts,
   };
 });

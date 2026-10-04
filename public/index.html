@@ -361,6 +361,8 @@
 
     <div class="settings-block" data-mode="any">
       <div class="block-title">Theme</div>
+      <!-- each .theme-sec is one section; a thin divider sits between sections -->
+      <div class="theme-sec">
       <label>App theme
         <div class="inline-edit">
           <select id="setTheme">
@@ -373,8 +375,47 @@
       <div class="muted" style="margin-top:8px">
         Transform your interface. New look applies instantly.
       </div>
+      </div>
 
-      <label style="display:block;margin-top:18px;margin-bottom:8px">Home-screen icon</label>
+      <div class="theme-sec">
+      <label style="display:block;margin-bottom:8px">Main category colour on records</label>
+      <!-- fixed sample cards (Food › Drinks), not the user's data -->
+      <div id="accentPick" class="accpick" role="radiogroup" aria-label="Main category colour on records">
+        <button type="button" role="radio" class="accpick-tile" data-accent="none" aria-checked="false">
+          <span class="accpick-mini" aria-hidden="true">
+            <span class="accpick-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9l1.2 11.2a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8L17 9"/><path d="M5.5 9h13"/><path d="M7.5 9a4.5 4.5 0 0 1 9 0"/><path d="M13 9l1.4-7"/><path d="M10.2 18.6h.01M12.4 19.3h.01M14 17.6h.01M11.4 16.6h.01"/></svg></span>
+            <span class="accpick-txt"><span class="accpick-cat"><span>Food</span></span><span class="accpick-sub">Drinks</span></span>
+          </span>
+          <span class="accpick-cap">Off</span>
+        </button>
+        <button type="button" role="radio" class="accpick-tile" data-accent="stripe" aria-checked="false">
+          <span class="accpick-mini stripe" aria-hidden="true">
+            <span class="accpick-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9l1.2 11.2a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8L17 9"/><path d="M5.5 9h13"/><path d="M7.5 9a4.5 4.5 0 0 1 9 0"/><path d="M13 9l1.4-7"/><path d="M10.2 18.6h.01M12.4 19.3h.01M14 17.6h.01M11.4 16.6h.01"/></svg></span>
+            <span class="accpick-txt"><span class="accpick-cat"><span>Food</span></span><span class="accpick-sub">Drinks</span></span>
+          </span>
+          <span class="accpick-cap">Stripe</span>
+        </button>
+        <button type="button" role="radio" class="accpick-tile" data-accent="badge" aria-checked="false">
+          <span class="accpick-mini badge" aria-hidden="true">
+            <span class="accpick-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9l1.2 11.2a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8L17 9"/><path d="M5.5 9h13"/><path d="M7.5 9a4.5 4.5 0 0 1 9 0"/><path d="M13 9l1.4-7"/><path d="M10.2 18.6h.01M12.4 19.3h.01M14 17.6h.01M11.4 16.6h.01"/></svg><span class="accpick-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 11v10M17 3c-1.7 0-3 2.2-3 5s1.3 4 3 4v9"/></svg></span></span>
+            <span class="accpick-txt"><span class="accpick-cat"><span>Food</span></span><span class="accpick-sub">Drinks</span></span>
+          </span>
+          <span class="accpick-cap">Badge</span>
+        </button>
+        <button type="button" role="radio" class="accpick-tile" data-accent="ring" aria-checked="false">
+          <span class="accpick-mini ring" aria-hidden="true">
+            <span class="accpick-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9l1.2 11.2a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8L17 9"/><path d="M5.5 9h13"/><path d="M7.5 9a4.5 4.5 0 0 1 9 0"/><path d="M13 9l1.4-7"/><path d="M10.2 18.6h.01M12.4 19.3h.01M14 17.6h.01M11.4 16.6h.01"/></svg></span>
+            <span class="accpick-txt"><span class="accpick-cat"><span>Food</span></span><span class="accpick-sub">Drinks</span></span>
+          </span>
+          <span class="accpick-cap">Ring + names</span>
+        </button>
+      </div>
+      <div class="muted">Adds a record's main category colour to its card.</div>
+      <div id="accentMsg" class="form-error" role="status"></div>
+      </div>
+
+      <div class="theme-sec">
+      <label style="display:block;margin-bottom:8px">Home-screen icon</label>
       <div id="iconPickHome" class="iconpick">
         <div class="iconpick-row" role="radiogroup" aria-label="Home-screen icon">
           <button type="button" role="radio" class="iconpick-tile" data-icon="wallet" aria-checked="false">
@@ -397,8 +438,10 @@
       </div>
       <div class="muted" id="homeIconHint"></div>
       <div id="homeIconMsg" class="form-error" role="status"></div>
+      </div>
 
-      <label style="display:block;margin-top:18px;margin-bottom:8px">Header icon (MuniTrakr)</label>
+      <div class="theme-sec">
+      <label style="display:block;margin-bottom:8px">Header icon (MuniTrakr)</label>
       <div id="iconPickFinance" class="iconpick">
         <div class="iconpick-row" role="radiogroup" aria-label="Header icon (MuniTrakr)">
           <button type="button" role="radio" class="iconpick-tile" data-icon="wallet" aria-checked="false">
@@ -420,8 +463,10 @@
           class="visually-hidden iconpick-input" tabindex="-1" aria-hidden="true" />
       </div>
       <div id="hiFinanceMsg" class="form-error" role="status"></div>
+      </div>
 
-      <label style="display:block;margin-top:18px;margin-bottom:8px">Header icon (DebtTrakr)</label>
+      <div class="theme-sec">
+      <label style="display:block;margin-bottom:8px">Header icon (DebtTrakr)</label>
       <div id="iconPickDebt" class="iconpick">
         <div class="iconpick-row" role="radiogroup" aria-label="Header icon (DebtTrakr)">
           <button type="button" role="radio" class="iconpick-tile" data-icon="wallet" aria-checked="false">
@@ -443,6 +488,7 @@
           class="visually-hidden iconpick-input" tabindex="-1" aria-hidden="true" />
       </div>
       <div id="hiDebtMsg" class="form-error" role="status"></div>
+      </div>
     </div>
 
     <div class="settings-block" data-mode="any">

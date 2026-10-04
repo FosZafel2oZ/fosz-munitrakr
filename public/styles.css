@@ -16,6 +16,7 @@
   --out-bar:rgba(255,107,129,.24); /* translucent --out / --in: Summary bars */
   --in-bar:rgba(61,220,151,.22);
   --ring-empty:#3a4258;
+  --acc-edge:#161a24; /* solid card surface: the card-accent badge's edge */
   --radius:18px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
@@ -143,6 +144,49 @@ label.btn-primary{cursor:pointer;box-sizing:border-box;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .iconpick-tile.selected .iconpick-cap{color:var(--text)}
 .iconpick:not([hidden]) + .muted{margin-top:10px}
+/* Card-accent picker (Settings → Theme, #accentPick): 2×2 radio tiles, each a
+   fixed sample card (Food › Drinks) drawn in that style; selected like an
+   icon-picker tile */
+.accpick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:6px}
+.accpick-tile{display:flex;flex-direction:column;align-items:stretch;gap:7px;
+  padding:8px 8px 9px;border:2px solid transparent;border-radius:16px;
+  background:transparent;min-width:0;text-align:left;
+  transition:border-color .15s,background .15s}
+.accpick-tile:active{transform:scale(.96)}
+.accpick-tile.selected{border-color:var(--accent);background:var(--accent-soft)}
+.accpick-cap{font-size:12px;font-weight:600;color:var(--muted);text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.accpick-tile.selected .accpick-cap{color:var(--text)}
+.accpick + .muted{margin-top:10px}
+.accpick-mini{--acc-m:#2fbf5a;--acc-s:#4f8ef7;position:relative;overflow:hidden;
+  display:flex;align-items:center;gap:9px;padding:9px 10px;
+  background:var(--card-2);border:1px solid var(--line);border-radius:12px}
+.accpick-ico{position:relative;flex-shrink:0;width:30px;height:30px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;background:var(--acc-s)}
+.accpick-ico svg{width:16px;height:16px;color:#fff}
+.accpick-txt{display:block;min-width:0}
+.accpick-cat{display:block;font-size:12.5px;font-weight:700;line-height:1.25;color:var(--text)}
+.accpick-cat span{display:inline-block}
+.accpick-sub{display:block;font-size:10.5px;font-weight:600;line-height:1.25;
+  color:var(--muted);margin-top:1px}
+.accpick-mini.stripe::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:var(--acc-m)}
+.accpick-badge{position:absolute;right:-5px;bottom:-5px;width:16px;height:16px;
+  border-radius:50%;border:2px solid var(--acc-edge);background:var(--acc-m);
+  display:flex;align-items:center;justify-content:center}
+.accpick-badge svg{width:8px;height:8px;color:#fff}
+.accpick-mini.ring .accpick-ico{outline:2px solid var(--acc-m);outline-offset:1.5px}
+.accpick-mini.ring .accpick-cat span{padding:0 7px 1px;border-radius:999px;margin-left:-2px}
+@supports (color:color-mix(in srgb,red 50%,blue)){
+  .accpick-mini.ring .accpick-cat span{background:color-mix(in srgb,var(--acc-m) 24%,transparent);
+    color:color-mix(in srgb,var(--acc-m) 78%,var(--text))}
+  .accpick-mini.ring .accpick-sub{color:color-mix(in srgb,var(--acc-s) 72%,var(--text))}
+}
+/* Settings → Theme: one thin divider between sections, the same room above and
+   below it. A section ends with its message line (.form-error: an empty 18px
+   line + its 10px margin = 28px) or, for App theme, with its hint (given 28px). */
+.theme-sec + .theme-sec{border-top:1px solid var(--line);padding-top:28px}
+.theme-sec > .muted:last-child{margin-bottom:28px}
 .hello{font-size:20px;font-weight:700;letter-spacing:-.3px}
 .topbar-sub{font-size:13px;color:var(--muted);margin-top:2px}
 .ghost-btn{color:var(--muted);font-size:13px;font-weight:600;padding:8px 12px;
@@ -469,6 +513,37 @@ button.sum-c:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .rec-orig{color:var(--muted);font-size:11px;margin-top:3px;font-weight:600}
 .rec-orig.warn{color:var(--out);max-width:92px;margin-left:auto} /* "not counted · not in USD" on 2 lines */
 .rec-date{color:var(--muted);font-size:11px;margin-top:6px}
+
+/* Card accent — Settings → Theme "Main category colour on records"
+   (settings.cardAccent; Off adds none of these classes). --acc-m = the main
+   category's colour, --acc-s = the sub's, --acc-edge = the card's surface.
+   Stripe: an ::after (aero's gloss strip is .rec::before), clipped by the
+   card's rounded corners. */
+.rec.acc-stripe{position:relative;overflow:hidden;isolation:isolate}
+.rec.acc-stripe::after{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+  background:var(--acc-m);pointer-events:none;z-index:2}
+/* Ring: an outline — it follows the tile's corners and takes no space, so the
+   tile and text don't move, and aero's own tile border / gloss / shadow stay */
+.rec-ico.acc-ring{outline:2.5px solid var(--acc-m);outline-offset:2px}
+/* Badge: the main icon on the main colour, over the tile's bottom-right corner */
+.rec-ico.acc-badge{position:relative}
+.rec-badge{position:absolute;right:-6px;bottom:-6px;width:20px;height:20px;
+  border-radius:50%;border:2px solid var(--acc-edge);
+  display:flex;align-items:center;justify-content:center}
+.rec-badge-svg{width:11px;height:11px;color:#fff}
+body.theme-aero .rec-badge{right:-7px;bottom:-7px} /* aero's tile has a 1px border */
+/* Name pill and sub name: colours mixed towards the theme's text colour so
+   they read on dark and on light cards; without color-mix() they keep the
+   normal text colours and the pill has no background */
+.rec-cat.acc-pillrow{overflow:visible}
+.rec-pill{display:inline-block;vertical-align:top;max-width:calc(100% + 2px);
+  margin-left:-2px;padding:1px 9px 2px;border-radius:999px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@supports (color:color-mix(in srgb,red 50%,blue)){
+  .rec-pill{background:color-mix(in srgb,var(--acc-m) 24%,transparent);
+    color:color-mix(in srgb,var(--acc-m) 78%,var(--text))}
+  .rec-sub.acc-subtint{color:color-mix(in srgb,var(--acc-s) 72%,var(--text))}
+}
 
 /* ---------- MODAL ---------- */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);
@@ -832,6 +907,7 @@ body.theme-aero{
   --out-bar:rgba(255,90,106,.24);
   --in-bar:rgba(15,174,94,.22);
   --ring-empty:rgba(120,170,200,.35);
+  --acc-edge:#f2f9ff;
   color:var(--text);
 }
 
@@ -1171,6 +1247,7 @@ body.theme-yoimiya{
   --out-bar:rgba(255,90,106,.24);
   --in-bar:rgba(255,178,77,.24);
   --ring-empty:#5a3a26;
+  --acc-edge:#2a1830;
   color:var(--text);
 }
 body.theme-yoimiya #bgLayer{

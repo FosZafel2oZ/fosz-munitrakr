@@ -691,6 +691,11 @@ function loadStore() {
   // Normalizes headerIconFinanceChoice/headerIconDebtChoice/homeIcon/homeIconCustom
   // in place (missing/invalid header choice inferred from the stored picture).
   migrateIconChoices(store.settings);
+  // Main category colour on record cards: a missing / unknown value is "none".
+  // (An older cached finance-helpers.js has no normalizeCardAccent: leave the
+  // stored value alone — the cards then show nothing anyway.)
+  if (typeof normalizeCardAccent === "function")
+    store.settings.cardAccent = normalizeCardAccent(store.settings.cardAccent);
 
   // Migration: createdAt / updatedAt on records must be numeric ms — the
   // records-list sort tiebreaker uses (b.createdAt - a.createdAt). Records
@@ -842,6 +847,11 @@ async function api(path, method = "GET", body) {
     // sends goes stale after boot — always keep the store's own, current lists.
     body.recurring = store.settings.recurring;
     body.people = store.settings.people;
+    // The card-accent choice is set only by its Settings → Theme picker: a
+    // payload without it keeps the stored one; anything sent is normalised.
+    if (body.cardAccent === undefined) body.cardAccent = store.settings.cardAccent;
+    if (typeof normalizeCardAccent === "function")
+      body.cardAccent = normalizeCardAccent(body.cardAccent);
     store.settings = body;
     if (!store.settings.defaultCurrency) store.settings.defaultCurrency = "THB";
     if (!Array.isArray(store.settings.currencies) || !store.settings.currencies.length)
@@ -1018,6 +1028,7 @@ async function enterApp() {
   applyHeaderIcon();
   applyHomeIcon();
   renderIconPickers();
+  renderAccentPicker();
   $("#helloName").textContent = "MuniTrakr";
   loadPrefs();
   if (range.type === "custom" && range.start && range.end) {
@@ -1523,6 +1534,22 @@ $$(".summary-card:not(.sum-card)").forEach((card) =>
   })
 );
 
+/* Main category colour on record cards (Settings → Theme, settings.cardAccent).
+   Which decorations a card gets is cardAccentParts (finance-helpers.js); an
+   older cached finance-helpers.js without it means none (the cards as Off). */
+const NO_CARD_ACCENT = { stripe: false, badge: false, ring: false, namePill: false, subTint: false };
+function recAccentParts(r) {
+  if (typeof cardAccentParts !== "function") return NO_CARD_ACCENT;
+  return cardAccentParts(settings.cardAccent, r.subcategory);
+}
+// The card-level part (the stripe down the left edge) goes on the .rec element
+// itself, so both call sites of recordCardHTML() call this too. Off: untouched.
+function decorateRecCard(el, r) {
+  if (!recAccentParts(r).stripe) return;
+  el.classList.add("acc-stripe");
+  el.style.setProperty("--acc-m", catColor(r.type, r.category));
+}
+
 function recordCardHTML(r) {
   const sign = r.type === "investment" ? "+" : "-";
   const cls = r.type === "investment" ? "amt-in" : "amt-out";
@@ -1534,15 +1561,33 @@ function recordCardHTML(r) {
     ? subIcon(r.type, r.category, r.subcategory)
     : catIcon(r.type, r.category);
   const amt = rowAmount(r, "rec-orig");
+  // Card accent (none of it in Off mode — the markup is then exactly as before):
+  // ring around the tile / badge on its corner in the main colour, the
+  // category name in a main-colour pill, the sub name in the sub's colour.
+  const acc = recAccentParts(r);
+  const main = escapeHtml(catColor(r.type, r.category));
+  const icoCls = acc.ring ? " acc-ring" : acc.badge ? " acc-badge" : "";
+  const icoVar = acc.ring || acc.badge ? `;--acc-m:${main}` : "";
+  const badge = acc.badge
+    ? `<span class="rec-badge" style="background:${main}">${iconSvg(
+        catIcon(r.type, r.category), "rec-badge-svg")}</span>`
+    : "";
+  const catName = acc.namePill
+    ? `<span class="rec-pill" style="--acc-m:${main}">${escapeHtml(r.category)}</span>`
+    : escapeHtml(r.category);
+  const subCls = acc.subTint ? " acc-subtint" : "";
+  const subVar = acc.subTint
+    ? ` style="--acc-s:${escapeHtml(subColor(r.type, r.category, r.subcategory))}"`
+    : "";
   return `
-    <div class="rec-ico" style="background:${color}">
-      ${iconSvg(icon, "rec-ico-svg")}
+    <div class="rec-ico${icoCls}" style="background:${color}${icoVar}">
+      ${iconSvg(icon, "rec-ico-svg")}${badge}
     </div>
     <div class="rec-body">
-      <div class="rec-cat">${escapeHtml(r.category)}</div>
+      <div class="rec-cat${acc.namePill ? " acc-pillrow" : ""}">${catName}</div>
       ${
         r.subcategory
-          ? `<div class="rec-sub">${escapeHtml(r.subcategory)}</div>`
+          ? `<div class="rec-sub${subCls}"${subVar}>${escapeHtml(r.subcategory)}</div>`
           : ""
       }
       ${r.notes ? `<div class="rec-notes">${escapeHtml(r.notes)}</div>` : ""}
@@ -1702,6 +1747,7 @@ function renderDashboard(list) {
   recent.forEach((r) => {
     const el = document.createElement("div");
     el.className = "rec";
+    decorateRecCard(el, r);
     el.innerHTML = recordCardHTML(r);
     el.addEventListener("click", () => openModal(r));
     bindRuleBadge(el, r);
@@ -1890,6 +1936,7 @@ function renderBulk(list) {
   typed.forEach((r) => {
     const el = document.createElement("div");
     el.className = "rec" + (multiSelect && selected.has(r.id) ? " selected" : "");
+    decorateRecCard(el, r);
     if (multiSelect) {
       const chk = document.createElement("input");
       chk.type = "checkbox";
@@ -2602,6 +2649,68 @@ ICON_PICKERS.forEach((p) => {
   }
 });
 
+/* ---- Card accent picker (Settings → Theme): main category colour on records ----
+   Four radio tiles (#accentPick); a tap applies at once like the theme: it
+   saves through PUT /settings and re-renders the lists. If the save fails
+   (it throws, or the read-back shows it didn't land — saveStore() swallows
+   storage errors) the previous choice comes back and #accentMsg says so.
+   With an older cached finance-helpers.js the tiles show Off and do nothing. */
+function cardAccentHelpersOk() {
+  return typeof normalizeCardAccent === "function" && typeof cardAccentParts === "function";
+}
+function renderAccentPicker() {
+  const wrap = document.getElementById("accentPick"); // older cached index.html: none
+  if (!wrap) return;
+  const cur = cardAccentHelpersOk() ? normalizeCardAccent(settings.cardAccent) : "none";
+  wrap.querySelectorAll(".accpick-tile").forEach((b) => {
+    const on = b.dataset.accent === cur;
+    b.classList.toggle("selected", on);
+    b.setAttribute("aria-checked", on ? "true" : "false");
+  });
+}
+function _cardAccentSaved(mode) {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    return !!(s && s.settings && s.settings.cardAccent === mode);
+  } catch {
+    return false;
+  }
+}
+async function setCardAccent(mode) {
+  const msg = document.getElementById("accentMsg");
+  if (msg) msg.textContent = "";
+  const prev = settings.cardAccent;
+  settings.cardAccent = mode;
+  renderAccentPicker();
+  let ok = false;
+  try {
+    settings = await api("/settings", "PUT", buildSettingsPayload());
+    syncDraftsFromSettings();
+    ok = _cardAccentSaved(mode);
+  } catch {
+    ok = false;
+  }
+  if (!ok) {
+    settings.cardAccent = prev;
+    loadStore(); // drop the unsaved in-memory store change
+    renderAccentPicker();
+    if (msg) msg.textContent = "Couldn't save your choice — storage may be full.";
+  }
+  refresh();
+}
+(() => {
+  const wrap = document.getElementById("accentPick");
+  if (!wrap) return;
+  wrap.querySelectorAll(".accpick-tile").forEach((b) => {
+    b.addEventListener("click", () => {
+      if (!cardAccentHelpersOk()) return;
+      const mode = normalizeCardAccent(b.dataset.accent);
+      if (mode === normalizeCardAccent(settings.cardAccent)) return;
+      setCardAccent(mode);
+    });
+  });
+})();
+
 /* ---- Fireworks backdrop (Yoimiya) — 3–6 random bursts at a time ---- */
 const Fireworks = (() => {
   const cv = document.getElementById("fxCanvas");
@@ -3172,6 +3281,9 @@ function buildSettingsPayload(withDefCurrency) {
   p.homeIcon = settings.homeIcon === undefined ? "wallet" : settings.homeIcon;
   p.homeIconCustom =
     settings.homeIconCustom === undefined ? null : settings.homeIconCustom;
+  // Saved value, never the draft (the picker saves at once, so the draft
+  // taken when Settings opened can be behind).
+  p.cardAccent = settings.cardAccent;
   return p;
 }
 function syncDraftsFromSettings() {
@@ -4136,6 +4248,8 @@ function openSettings() {
   });
   applyHeaderIcon();
   renderIconPickers();
+  if ($("#accentMsg")) $("#accentMsg").textContent = "";
+  renderAccentPicker();
   settingsDraft = JSON.parse(JSON.stringify(settings));
   curDraft = (settings.currencies || []).slice();
   catTypeTab = "expense";
