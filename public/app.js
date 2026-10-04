@@ -2653,7 +2653,10 @@ ICON_PICKERS.forEach((p) => {
    Four radio tiles (#accentPick); a tap applies at once like the theme: it
    saves through PUT /settings and re-renders the lists. If the save fails
    (it throws, or the read-back shows it didn't land — saveStore() swallows
-   storage errors) the previous choice comes back and #accentMsg says so.
+   storage errors) the whole in-memory settings go back to the copy from
+   before the tap (like persistCategories) — not only the choice: the payload
+   also carried unsaved page edits (currency list, FX markup, share language)
+   that must not linger in `settings` — and #accentMsg says so.
    With an older cached finance-helpers.js the tiles show Off and do nothing. */
 function cardAccentHelpersOk() {
   return typeof normalizeCardAccent === "function" && typeof cardAccentParts === "function";
@@ -2679,18 +2682,24 @@ function _cardAccentSaved(mode) {
 async function setCardAccent(mode) {
   const msg = document.getElementById("accentMsg");
   if (msg) msg.textContent = "";
+  const prevSettings = settings;
   const prev = settings.cardAccent;
   settings.cardAccent = mode;
   renderAccentPicker();
   let ok = false;
   try {
     settings = await api("/settings", "PUT", buildSettingsPayload());
-    syncDraftsFromSettings();
     ok = _cardAccentSaved(mode);
   } catch {
     ok = false;
   }
-  if (!ok) {
+  if (ok) {
+    syncDraftsFromSettings();
+  } else {
+    // Back to the settings from before the tap. The drafts were never synced
+    // from the failed payload, so they (and the Settings inputs) still hold
+    // the saved values plus the user's own unsaved typing, as before the tap.
+    settings = prevSettings;
     settings.cardAccent = prev;
     loadStore(); // drop the unsaved in-memory store change
     renderAccentPicker();
