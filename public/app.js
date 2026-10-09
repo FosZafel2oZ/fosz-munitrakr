@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v97"; // keep in step with sw.js CACHE
+const APP_VERSION = "v98"; // keep in step with sw.js CACHE
 // Label used as both the donut slice AND the list-filter key for records
 // without a subcategory — single constant so the two can't drift apart.
 const NO_SUB_LABEL = "No Sub-category";
@@ -3028,6 +3028,8 @@ function populateDatalists() {
 // squeezed to fit (squeezeFreqLabels, below). A main-type chip is
 // the category icon on the category colour; a sub-type chip is the category's
 // icon (or its own, if set) on the sub-category's own colour, labelled with the sub name.
+// A sub-type chip's tile can also carry the main category's colour, like the
+// record cards (settings.cardAccent, freqAccentParts below).
 function buildFreqCats() {
   const field = $("#freqField");
   const wrap = $("#freqCats");
@@ -3046,17 +3048,37 @@ function buildFreqCats() {
       const color = p.sub
         ? subColor(modalType, p.category, p.sub)
         : catColor(modalType, p.category);
+      // Main category colour on a sub-type chip's tile: a stripe down its left
+      // edge, a ring around it or a badge on its corner. Off, and every
+      // main-type chip: no class, style or element is added (the v97 markup).
+      const acc = freqAccentParts(p);
+      const accCls = acc.stripe
+        ? " acc-stripe"
+        : acc.ring
+          ? " acc-ring"
+          : acc.badge
+            ? " acc-badge"
+            : "";
+      const accVar = accCls
+        ? `;--acc-m:${escapeHtml(catColor(modalType, p.category))}`
+        : "";
+      // `hidden` until styles.css shows it (.freq-badge's display:flex), so an
+      // older cached styles.css draws no badge rather than a second icon.
+      const badge = acc.badge
+        ? `<span class="freq-badge" hidden>${iconSvg(
+            catIcon(modalType, p.category), "freq-badge-svg")}</span>`
+        : "";
       return `<button type="button" class="freq-chip" data-cat="${escapeHtml(
         p.category
       )}" data-sub="${escapeHtml(p.sub)}"${
         p.sub
           ? ` aria-label="${escapeHtml(p.category + ", " + p.sub)}"`
           : ""
-      }><span class="freq-ic" style="background:${color}">${iconSvg(
+      }><span class="freq-ic${accCls}" style="background:${color}${accVar}">${iconSvg(
         p.sub
           ? subIcon(modalType, p.category, p.sub)
           : catIcon(modalType, p.category)
-      )}</span><span class="freq-lbl">${escapeHtml(p.sub || p.category)}</span></button>`;
+      )}${badge}</span><span class="freq-lbl">${escapeHtml(p.sub || p.category)}</span></button>`;
     })
     .join("");
   wrap.querySelectorAll(".freq-chip").forEach((b) =>
@@ -3067,6 +3089,16 @@ function buildFreqCats() {
   );
   squeezeFreqLabels(wrap);
   wrap.scrollLeft = 0; // newest picks in view
+}
+
+// Which main-colour decorations a "Recently added" chip gets: the cards' rule
+// (cardAccentParts) for a sub-type chip, of which chips use stripe, badge and
+// ring (not namePill / subTint). A main-type chip is already on the main
+// colour, so it gets none; so does every chip when an older cached
+// finance-helpers.js has no cardAccentParts (the chips as Off).
+function freqAccentParts(p) {
+  if (!p.sub || typeof cardAccentParts !== "function") return NO_CARD_ACCENT;
+  return cardAccentParts(settings.cardAccent, true);
 }
 
 // Narrowest a "Recently added" label may be squeezed (84% of its natural width).

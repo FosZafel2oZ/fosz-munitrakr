@@ -653,8 +653,10 @@ body.modal-open{overflow:hidden}
 .picker-opt.sel{background:var(--accent-soft);color:var(--accent)}
 /* recently-added quick pick */
 #freqField{margin-bottom:14px}
+/* 7px top padding: the row scrolls sideways, so it also clips vertically, and
+   a chip's ring (.freq-ic.acc-ring) reaches 4.5px above its tile. */
 .freq-cats{display:flex;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;
-  padding:2px 2px 4px;scrollbar-width:none}
+  padding:7px 2px 4px;scrollbar-width:none}
 .freq-cats::-webkit-scrollbar{display:none}
 .freq-chip{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;
   gap:6px;width:62px}
@@ -663,6 +665,21 @@ body.modal-open{overflow:hidden}
 .freq-ic svg{width:24px;height:24px;color:#fff}
 .freq-chip:active .freq-ic{transform:scale(.92)}
 .freq-ic{transition:transform .12s ease}
+/* Main category colour on a sub-type chip (settings.cardAccent, like the
+   record cards' acc-* rules; Off adds none of these classes). --acc-m = the
+   main colour. Stripe: an ::after clipped by the tile's rounded corners.
+   Ring: an outline, so the tile doesn't move (4.5px out: see .freq-cats).
+   Badge: inside the chip's own box (8px each side of the tile, label below),
+   so the row never clips it. */
+.freq-ic.acc-stripe{position:relative;overflow:hidden}
+.freq-ic.acc-stripe::after{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+  background:var(--acc-m);pointer-events:none}
+.freq-ic.acc-ring{outline:2.5px solid var(--acc-m);outline-offset:2px}
+.freq-ic.acc-badge{position:relative}
+.freq-badge{position:absolute;right:-5px;bottom:-5px;width:18px;height:18px;
+  border-radius:50%;border:2px solid var(--acc-edge);background:var(--acc-m);
+  display:flex;align-items:center;justify-content:center}
+.freq-ic .freq-badge-svg{width:10px;height:10px;color:#fff}
 .freq-lbl{font-size:11px;font-weight:600;color:var(--muted);max-width:62px;line-height:1.2;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
   overflow:hidden;overflow-wrap:anywhere;white-space:normal;text-align:center}
