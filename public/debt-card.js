@@ -165,9 +165,11 @@
     }
 
     let netCents = 0;
-    let sameSign = true;
-    let firstSign = null;
     let allCounted = true;
+    // Each side's counted amounts in whole cents, in row (chronological)
+    // order — the terms of the subtotal equation.
+    const outTerms = [];
+    const inTerms = [];
 
     const rows = debts.map((d) => {
       const amt = amountInDefault(d, defaultCurrency);
@@ -175,16 +177,22 @@
       // A not-counted row shows its original amount + currency and is left
       // out of the net (and suppresses the subtotal, which would no longer be
       // the sum of the rows shown).
-      if (amt === null) allCounted = false;
-      else netCents += sign * Math.round(amt * 100);
-      if (firstSign === null) firstSign = sign;
-      else if (sign !== firstSign) sameSign = false;
+      if (amt === null) {
+        allCounted = false;
+      } else {
+        const cents = Math.round(amt * 100);
+        netCents += sign * cents;
+        (sign > 0 ? outTerms : inTerms).push(cents);
+      }
 
       const rawNotes = d.notes ? String(d.notes).replace(/\s+/g, " ").trim() : "";
       return {
         dateText: shortDate(d.date),
         kindText: kindText(d.type),
         direction: sign > 0 ? "out" : "in",
+        // The renderer colours a counted row's amount by direction; a
+        // not-counted one (original amount + currency) stays plain.
+        counted: amt !== null,
         notesText: rawNotes || null,
         amountText: amt === null ? (fmtNum(d.amount) + " " + (d.currency || "")).trim() : fmtNum(amt),
       };
@@ -207,13 +215,32 @@
       }
     }
 
-    // Subtotal only reads as a true sum when every row points the same way.
-    const hasSubtotal = debts.length > 0 && sameSign && allCounted;
+    // Subtotal = the selection's net, as a magnitude, whenever every row is
+    // counted; subtotalDirection says which way it points (null at exactly 0).
+    const hasSubtotal = debts.length > 0 && allCounted;
     const subtotalText = hasSubtotal ? fmtNum(Math.abs(netCents) / 100) : null;
     const subtotalLabel = hasSubtotal
       ? (lang === "th" ? "รวม " + debts.length + " รายการ"
                         : "Total of " + debts.length + " records")
       : null;
+    const subtotalDirection = hasSubtotal && netCents !== 0
+      ? (netCents > 0 ? "out" : "in")
+      : null;
+
+    // A mixed selection's net isn't a plain sum, so it gets an equation that
+    // lists every record, magnitudes only like the footer's mathText: the
+    // larger side's terms first (joined with " + "), then each term of the
+    // smaller side after " − "; chronological within a side, and the "out"
+    // side first when the two are equal. Same-direction stays sum-only.
+    let subtotalMathText = null;
+    if (hasSubtotal && outTerms.length && inTerms.length) {
+      const outFirst = netCents >= 0;
+      const plus = outFirst ? outTerms : inTerms;
+      const minus = outFirst ? inTerms : outTerms;
+      subtotalMathText =
+        plus.map((c) => fmtNum(c / 100)).join(" + ") +
+        minus.map((c) => " − " + fmtNum(c / 100)).join("");
+    }
 
     // "Previous" is defined backwards from the caller-supplied balanceAfter so
     // the footer's math always adds up: previous + selected net = after.
@@ -239,6 +266,8 @@
       rows,
       subtotalLabel,
       subtotalText,
+      subtotalDirection,
+      subtotalMathText,
       outstandingLabel: lang === "th" ? "ยอดคงค้าง" : "Outstanding",
       mathText,
       totalText: fmtNum(Math.abs(afterCents) / 100),
@@ -590,7 +619,8 @@
   // line advance and the gap from a row's kind line down to its first note
   // line, so a row's reserved height and its drawn content always agree.
   const ROW_PAD = 22, ROW_DATE_W = 104, ROW_GAP = 24, ROW_LINE = 34, ROW_NOTE_MAX_LINES = 2;
-  const SUBTOTAL_H = 72;
+  // A mixed selection's subtotal row grows by one line for its equation.
+  const SUBTOTAL_H = 72, SUBTOTAL_MATH_LINE = 32;
 
   // Draws the multi-record statement and resolves with a PNG Blob.
   // opts: { debts, person: {name, color}, personIconSvg, balanceAfter,
@@ -635,7 +665,10 @@
       const contentH = layout.noteLines.length ? ROW_LINE * (1 + layout.noteLines.length) : ROW_LINE;
       layout.rowH = ROW_PAD * 2 + contentH;
     });
-    const rowsCardH = rowLayouts.reduce((sum, r) => sum + r.rowH, 0) + (m.subtotalText ? SUBTOTAL_H : 0);
+    const subtotalH = m.subtotalText
+      ? SUBTOTAL_H + (m.subtotalMathText ? SUBTOTAL_MATH_LINE : 0)
+      : 0;
+    const rowsCardH = rowLayouts.reduce((sum, r) => sum + r.rowH, 0) + subtotalH;
 
     const HEIGHT = TOP + headerH + GAP + rowsCardH + NOTE_GAP + OUT_H + BOTTOM;
 
@@ -759,7 +792,8 @@
         layout.noteLines.forEach((ln, li) => ctx.fillText(ln, midX, contentTop + ROW_LINE * (li + 1)));
       }
 
-      ctx.fillStyle = P.text;
+      // Counted amounts take their direction's colour, like the kind text.
+      ctx.fillStyle = row.counted ? (row.direction === "out" ? P.out : P.in) : P.text;
       ctx.font = FONT(800, 30);
       const amtX = rowsRightEdge - layout.amtW - layout.curW;
       ctx.fillText(row.amountText, amtX, contentTop);
@@ -780,7 +814,8 @@
       }
     });
 
-    // ---- Subtotal row: only when every selected record points one way ----
+    // ---- Subtotal row: every all-counted selection; mixed ones add the
+    // equation under the label ----
     if (m.subtotalText) {
       ctx.strokeStyle = P.line;
       ctx.lineWidth = 3;
@@ -799,16 +834,28 @@
       ctx.font = FONT(700, 22);
       const subCurW = m.totalCurrency ? ctx.measureText(m.totalCurrency).width + 8 : 0;
       const subX = rowsRightEdge - subW - subCurW;
-      ctx.fillStyle = P.text;
+      // The net sits vertically centred on the (possibly two-line) row.
+      ctx.fillStyle = m.subtotalDirection === "out" ? P.out
+        : m.subtotalDirection === "in" ? P.in : P.text;
       ctx.font = FONT(800, 32);
-      ctx.fillText(m.subtotalText, subX, rowY + SUBTOTAL_H / 2);
+      ctx.fillText(m.subtotalText, subX, rowY + subtotalH / 2);
       if (m.totalCurrency) {
         ctx.font = FONT(700, 22);
         ctx.fillStyle = P.muted;
-        ctx.fillText(m.totalCurrency, subX + subW + 8, rowY + SUBTOTAL_H / 2 + 2);
+        ctx.fillText(m.totalCurrency, subX + subW + 8, rowY + subtotalH / 2 + 2);
+      }
+
+      // One line only: clipped with an ellipsis short of the net column,
+      // never wrapping or running under the net.
+      if (m.subtotalMathText) {
+        ctx.fillStyle = P.faint;
+        ctx.font = FONT(500, 22);
+        const mathMaxW = subX - ROW_GAP - rowsPadX;
+        ctx.fillText(clipText(ctx, m.subtotalMathText, mathMaxW), rowsPadX,
+          rowY + SUBTOTAL_H / 2 + SUBTOTAL_MATH_LINE + 2);
       }
       ctx.textBaseline = "top";
-      rowY += SUBTOTAL_H;
+      rowY += subtotalH;
     }
 
     y = rowsY + rowsCardH + NOTE_GAP;

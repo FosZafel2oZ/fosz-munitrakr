@@ -248,7 +248,7 @@ test("statementModel: TH row date, same-month range, pill and countText", () => 
   assert.equal(seven.countText, "7 รายการ");
 });
 
-test("statementModel: subtotal appears only when every row shares a direction", () => {
+test("statementModel: subtotal appears for every all-counted selection, mixed directions included", () => {
   const allLend = stmt({
     debts: [
       { type: "lend", amount: 100, currency: "THB", date: "2026-09-01" },
@@ -264,8 +264,130 @@ test("statementModel: subtotal appears only when every row shares a direction", 
       { type: "paid-back", amount: 50, currency: "THB", date: "2026-09-02" },
     ],
   });
-  assert.equal(mixed.subtotalText, null);
-  assert.equal(mixed.subtotalLabel, null);
+  assert.equal(mixed.subtotalText, "50");
+  assert.equal(mixed.subtotalLabel, "Total of 2 records");
+  assert.equal(mixed.subtotalMathText, "100 − 50");
+  assert.equal(mixed.subtotalDirection, "out");
+});
+
+test("statementModel: Bill's example — lend 399.50, paid back 342.50 (Thai)", () => {
+  const m = stmt({
+    language: "th",
+    debts: [
+      { type: "lend", amount: 399.5, currency: "THB", date: "2026-10-09", createdAt: 1 },
+      { type: "paid-back", amount: 342.5, currency: "THB", date: "2026-10-09", createdAt: 2 },
+    ],
+    balanceAfter: 3596.43,
+  });
+  assert.equal(m.subtotalLabel, "รวม 2 รายการ");
+  assert.equal(m.subtotalMathText, "399.50 − 342.50");
+  assert.equal(m.subtotalText, "57");
+  assert.equal(m.subtotalDirection, "out");
+  assert.equal(m.mathText, "3,539.43 + 57");
+});
+
+test("statementModel: three records — larger side first, chronological within a side", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 399.5, currency: "THB", date: "2026-10-09" },
+      { type: "lend", amount: 1200, currency: "THB", date: "2026-10-02" },
+      { type: "paid-back", amount: 500, currency: "THB", date: "2026-10-05" },
+    ],
+    balanceAfter: 3596.43,
+  });
+  assert.equal(m.subtotalMathText, "1,200 + 399.50 − 500");
+  assert.equal(m.subtotalText, "1,099.50");
+  assert.equal(m.subtotalDirection, "out");
+  assert.equal(m.subtotalLabel, "Total of 3 records");
+});
+
+test("statementModel: net negative — the larger \"in\" side goes first and the direction is in", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-10-01" },
+      { type: "borrow", amount: 300, currency: "THB", date: "2026-10-02" },
+      { type: "pay-back", amount: 50, currency: "THB", date: "2026-10-03" },
+      { type: "paid-back", amount: 20, currency: "THB", date: "2026-10-04" },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "300 + 20 − 100 − 50");
+  assert.equal(m.subtotalText, "170");
+  assert.equal(m.subtotalDirection, "in");
+});
+
+test("statementModel: net exactly 0 — no direction, the \"out\" side goes first", () => {
+  const m = stmt({
+    debts: [
+      { type: "paid-back", amount: 250, currency: "THB", date: "2026-10-01" },
+      { type: "lend", amount: 250, currency: "THB", date: "2026-10-02" },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "250 − 250");
+  assert.equal(m.subtotalText, "0");
+  assert.equal(m.subtotalDirection, null);
+});
+
+test("statementModel: same-direction selection keeps the sum-only subtotal (no equation)", () => {
+  const out = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-10-01" },
+      { type: "pay-back", amount: 50.25, currency: "THB", date: "2026-10-02" },
+    ],
+  });
+  assert.equal(out.subtotalText, "150.25");
+  assert.equal(out.subtotalMathText, null);
+  assert.equal(out.subtotalDirection, "out");
+
+  const inn = stmt({
+    debts: [
+      { type: "borrow", amount: 100, currency: "THB", date: "2026-10-01" },
+      { type: "paid-back", amount: 40, currency: "THB", date: "2026-10-02" },
+    ],
+  });
+  assert.equal(inn.subtotalText, "140");
+  assert.equal(inn.subtotalMathText, null);
+  assert.equal(inn.subtotalDirection, "in");
+});
+
+test("statementModel: a not-counted row means no subtotal, no equation and no direction", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-10-01" },
+      { type: "paid-back", amount: 9, currency: "JPY", date: "2026-10-02", rateUnavailable: true },
+    ],
+  });
+  assert.equal(m.subtotalText, null);
+  assert.equal(m.subtotalLabel, null);
+  assert.equal(m.subtotalMathText, null);
+  assert.equal(m.subtotalDirection, null);
+  assert.deepEqual(m.rows.map((r) => r.counted), [true, false]);
+});
+
+test("statementModel: equation terms use a converted row's default-currency amount", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 450, currency: "USD", date: "2026-10-01",
+        convertedAmount: 15750, convertedCurrency: "THB" },
+      { type: "paid-back", amount: 5000, currency: "THB", date: "2026-10-02" },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "15,750 − 5,000");
+  assert.equal(m.subtotalText, "10,750");
+  assert.equal(m.subtotalDirection, "out");
+  assert.deepEqual(m.rows.map((r) => r.counted), [true, true]);
+});
+
+test("statementModel: subtotal settles in whole cents (14.6 − 0.15 − 14.45 = 0)", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 14.6, currency: "THB", date: "2026-10-01" },
+      { type: "paid-back", amount: 0.15, currency: "THB", date: "2026-10-02" },
+      { type: "paid-back", amount: 14.45, currency: "THB", date: "2026-10-03" },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "14.60 − 0.15 − 14.45");
+  assert.equal(m.subtotalText, "0");
+  assert.equal(m.subtotalDirection, null);
 });
 
 test("statementModel: approved mock — seven lends, previous math and total", () => {
