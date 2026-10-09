@@ -116,8 +116,9 @@
   }
 
   // Content model for the multi-record statement image: several selected
-  // debts with one person, rolled into oldest-first rows plus a
-  // running-balance footer that mirrors debtCardModel's. Pure: no DOM,
+  // debts with one person, rolled into oldest-first rows, a subtotal (the
+  // net, with an equation listing every record) when every row is counted,
+  // and a running-balance footer that mirrors debtCardModel's. Pure: no DOM,
   // canvas or store access, and never `new Date(str)`.
   function statementModel(o) {
     const opts = o || {};
@@ -227,14 +228,15 @@
       ? (netCents > 0 ? "out" : "in")
       : null;
 
-    // A mixed selection's net isn't a plain sum, so it gets an equation that
-    // lists every record, magnitudes only like the footer's mathText: the
-    // larger side's terms first (joined with " + "), then each term of the
-    // smaller side after " − "; chronological within a side, and the "out"
-    // side first when the two are equal. Same-direction stays sum-only.
+    // Every subtotal gets an equation that lists every record, magnitudes
+    // only like the footer's mathText: the larger side's terms first (joined
+    // with " + "), then each term of the smaller side after " − ";
+    // chronological within a side, and the "out" side first when the two are
+    // equal. A same-direction selection has one side, so it reads as a plain
+    // " + " list.
     let subtotalMathText = null;
-    if (hasSubtotal && outTerms.length && inTerms.length) {
-      const outFirst = netCents >= 0;
+    if (hasSubtotal) {
+      const outFirst = !inTerms.length || (outTerms.length > 0 && netCents >= 0);
       const plus = outFirst ? outTerms : inTerms;
       const minus = outFirst ? inTerms : outTerms;
       subtotalMathText =
@@ -647,8 +649,8 @@
   // line advance and the gap from a row's kind line down to its first note
   // line, so a row's reserved height and its drawn content always agree.
   const ROW_PAD = 22, ROW_DATE_W = 104, ROW_GAP = 24, ROW_LINE = 34, ROW_NOTE_MAX_LINES = 2;
-  // A mixed selection's subtotal row grows by one SUBTOTAL_MATH_LINE per
-  // equation line, up to SUBTOTAL_MATH_MAX_LINES.
+  // The subtotal row grows by one SUBTOTAL_MATH_LINE per equation line, up to
+  // SUBTOTAL_MATH_MAX_LINES.
   const SUBTOTAL_H = 72, SUBTOTAL_MATH_LINE = 32, SUBTOTAL_MATH_MAX_LINES = 3;
 
   // Draws the multi-record statement and resolves with a PNG Blob.
@@ -855,8 +857,8 @@
       }
     });
 
-    // ---- Subtotal row: every all-counted selection; mixed ones add the
-    // equation under the label ----
+    // ---- Subtotal row: every all-counted selection, with the equation
+    // under the label ----
     if (m.subtotalText) {
       ctx.strokeStyle = P.line;
       ctx.lineWidth = 3;

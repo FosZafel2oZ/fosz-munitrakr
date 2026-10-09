@@ -257,6 +257,8 @@ test("statementModel: subtotal appears for every all-counted selection, mixed di
   });
   assert.equal(allLend.subtotalText, "150");
   assert.equal(allLend.subtotalLabel, "Total of 2 records");
+  assert.equal(allLend.subtotalMathText, "100 + 50");
+  assert.equal(allLend.subtotalDirection, "out");
 
   const mixed = stmt({
     debts: [
@@ -365,7 +367,7 @@ test("statementModel: net exactly 0 — no direction, the \"out\" side goes firs
   assert.equal(m.subtotalDirection, null);
 });
 
-test("statementModel: same-direction selection keeps the sum-only subtotal (no equation)", () => {
+test("statementModel: same-direction selection shows its equation as a \" + \" list", () => {
   const out = stmt({
     debts: [
       { type: "lend", amount: 100, currency: "THB", date: "2026-10-01" },
@@ -373,7 +375,7 @@ test("statementModel: same-direction selection keeps the sum-only subtotal (no e
     ],
   });
   assert.equal(out.subtotalText, "150.25");
-  assert.equal(out.subtotalMathText, null);
+  assert.equal(out.subtotalMathText, "100 + 50.25");
   assert.equal(out.subtotalDirection, "out");
 
   const inn = stmt({
@@ -383,8 +385,21 @@ test("statementModel: same-direction selection keeps the sum-only subtotal (no e
     ],
   });
   assert.equal(inn.subtotalText, "140");
-  assert.equal(inn.subtotalMathText, null);
+  assert.equal(inn.subtotalMathText, "100 + 40");
   assert.equal(inn.subtotalDirection, "in");
+});
+
+test("statementModel: same-direction equation terms follow row order, not size", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 300, currency: "THB", date: "2026-10-03" },
+      { type: "lend", amount: 50, currency: "THB", date: "2026-10-01" },
+      { type: "lend", amount: 1200, currency: "THB", date: "2026-10-02" },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "50 + 1,200 + 300");
+  assert.equal(m.subtotalText, "1,550");
+  assert.equal(m.subtotalDirection, "out");
 });
 
 test("statementModel: a not-counted row means no subtotal, no equation and no direction", () => {
