@@ -403,6 +403,34 @@
     return lines;
   }
 
+  // Wraps an equation ("1,200 + 399.50 − 500") into at most maxLines, breaking
+  // only between terms: a continuation line starts with its operator
+  // ("− 500"), so a number is never split from its sign or cut in half. If
+  // terms remain, the last line ends in " …" after the last whole term that
+  // fits. (wrapText would break at any space and clip mid-number.)
+  // ctx.font must already be set.
+  function wrapTerms(ctx, str, maxW, maxLines) {
+    const terms = String(str).split(/ (?=[+−] )/);
+    const fits = (s) => ctx.measureText(s).width <= maxW;
+    const lines = [];
+    let i = 0;
+    while (i < terms.length && lines.length < maxLines) {
+      let line = terms[i++];
+      while (i < terms.length && fits(line + " " + terms[i])) line += " " + terms[i++];
+      lines.push(line);
+    }
+    if (i < terms.length) {
+      // Rebuild the last line from its terms, dropping whole terms from the
+      // end until "<terms> …" fits.
+      const last = lines[lines.length - 1].split(/ (?=[+−] )/);
+      while (last.length > 1 && !fits(last.join(" ") + " …")) last.pop();
+      lines[lines.length - 1] = last.join(" ") + " …";
+    }
+    // A single term wider than the column (not reachable with real amounts)
+    // still never runs under the net.
+    return lines.map((ln) => clipText(ctx, ln, maxW));
+  }
+
   // Rasterizes an SVG string into an Image at the given pixel size.
   function loadImageFromSvg(svgStr, sizePx) {
     return new Promise((resolve, reject) => {
@@ -619,8 +647,9 @@
   // line advance and the gap from a row's kind line down to its first note
   // line, so a row's reserved height and its drawn content always agree.
   const ROW_PAD = 22, ROW_DATE_W = 104, ROW_GAP = 24, ROW_LINE = 34, ROW_NOTE_MAX_LINES = 2;
-  // A mixed selection's subtotal row grows by one line for its equation.
-  const SUBTOTAL_H = 72, SUBTOTAL_MATH_LINE = 32;
+  // A mixed selection's subtotal row grows by one SUBTOTAL_MATH_LINE per
+  // equation line, up to SUBTOTAL_MATH_MAX_LINES.
+  const SUBTOTAL_H = 72, SUBTOTAL_MATH_LINE = 32, SUBTOTAL_MATH_MAX_LINES = 3;
 
   // Draws the multi-record statement and resolves with a PNG Blob.
   // opts: { debts, person: {name, color}, personIconSvg, balanceAfter,
@@ -665,9 +694,21 @@
       const contentH = layout.noteLines.length ? ROW_LINE * (1 + layout.noteLines.length) : ROW_LINE;
       layout.rowH = ROW_PAD * 2 + contentH;
     });
-    const subtotalH = m.subtotalText
-      ? SUBTOTAL_H + (m.subtotalMathText ? SUBTOTAL_MATH_LINE : 0)
-      : 0;
+    // Subtotal row: the net column's x bounds the equation, whose wrapped
+    // lines set the row's height — measured here, drawn from the same values.
+    let subW = 0, subCurW = 0, subX = 0, mathLines = [];
+    if (m.subtotalText) {
+      measure.font = FONT(800, 32);
+      subW = measure.measureText(m.subtotalText).width;
+      measure.font = FONT(700, 22);
+      subCurW = m.totalCurrency ? measure.measureText(m.totalCurrency).width + 8 : 0;
+      subX = rowsRightEdge - subW - subCurW;
+      if (m.subtotalMathText) {
+        measure.font = FONT(500, 22);
+        mathLines = wrapTerms(measure, m.subtotalMathText, subX - ROW_GAP - rowsPadX, SUBTOTAL_MATH_MAX_LINES);
+      }
+    }
+    const subtotalH = m.subtotalText ? SUBTOTAL_H + mathLines.length * SUBTOTAL_MATH_LINE : 0;
     const rowsCardH = rowLayouts.reduce((sum, r) => sum + r.rowH, 0) + subtotalH;
 
     const HEIGHT = TOP + headerH + GAP + rowsCardH + NOTE_GAP + OUT_H + BOTTOM;
@@ -829,12 +870,8 @@
       ctx.font = FONT(700, 26);
       ctx.fillText(m.subtotalLabel, rowsPadX, rowY + SUBTOTAL_H / 2);
 
-      ctx.font = FONT(800, 32);
-      const subW = ctx.measureText(m.subtotalText).width;
-      ctx.font = FONT(700, 22);
-      const subCurW = m.totalCurrency ? ctx.measureText(m.totalCurrency).width + 8 : 0;
-      const subX = rowsRightEdge - subW - subCurW;
-      // The net sits vertically centred on the (possibly two-line) row.
+      // subW / subCurW / subX / mathLines come from the measuring pass.
+      // The net sits vertically centred on the whole (possibly taller) row.
       ctx.fillStyle = m.subtotalDirection === "out" ? P.out
         : m.subtotalDirection === "in" ? P.in : P.text;
       ctx.font = FONT(800, 32);
@@ -845,14 +882,13 @@
         ctx.fillText(m.totalCurrency, subX + subW + 8, rowY + subtotalH / 2 + 2);
       }
 
-      // One line only: clipped with an ellipsis short of the net column,
-      // never wrapping or running under the net.
-      if (m.subtotalMathText) {
+      // The equation's wrapped lines (term-boundary breaks, ROW_GAP short of
+      // the net column), one SUBTOTAL_MATH_LINE apart under the label.
+      if (mathLines.length) {
         ctx.fillStyle = P.faint;
         ctx.font = FONT(500, 22);
-        const mathMaxW = subX - ROW_GAP - rowsPadX;
-        ctx.fillText(clipText(ctx, m.subtotalMathText, mathMaxW), rowsPadX,
-          rowY + SUBTOTAL_H / 2 + SUBTOTAL_MATH_LINE + 2);
+        mathLines.forEach((ln, li) => ctx.fillText(ln, rowsPadX,
+          rowY + SUBTOTAL_H / 2 + SUBTOTAL_MATH_LINE * (li + 1) + 2));
       }
       ctx.textBaseline = "top";
       rowY += subtotalH;

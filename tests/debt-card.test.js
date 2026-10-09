@@ -301,6 +301,44 @@ test("statementModel: three records — larger side first, chronological within 
   assert.equal(m.subtotalLabel, "Total of 3 records");
 });
 
+test("statementModel: equation terms follow row order, not size (ascending plus side)", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 100, currency: "THB", date: "2026-10-01" },
+      { type: "lend", amount: 900, currency: "THB", date: "2026-10-02" },
+      { type: "paid-back", amount: 50, currency: "THB", date: "2026-10-03" },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "100 + 900 − 50");
+  assert.equal(m.subtotalText, "950");
+});
+
+test("statementModel: same-date terms within a side follow createdAt", () => {
+  const m = stmt({
+    debts: [
+      { type: "lend", amount: 700, currency: "THB", date: "2026-10-04", createdAt: 30 },
+      { type: "paid-back", amount: 60, currency: "THB", date: "2026-10-04", createdAt: 20 },
+      { type: "lend", amount: 5, currency: "THB", date: "2026-10-04", createdAt: 10 },
+      { type: "paid-back", amount: 40, currency: "THB", date: "2026-10-04", createdAt: 40 },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "5 + 700 − 60 − 40");
+  assert.equal(m.subtotalText, "605");
+});
+
+test("statementModel: equal sides with different terms — the \"out\" side first, no direction", () => {
+  const m = stmt({
+    debts: [
+      { type: "paid-back", amount: 50, currency: "THB", date: "2026-10-01" },
+      { type: "lend", amount: 20, currency: "THB", date: "2026-10-02" },
+      { type: "lend", amount: 30, currency: "THB", date: "2026-10-03" },
+    ],
+  });
+  assert.equal(m.subtotalMathText, "20 + 30 − 50");
+  assert.equal(m.subtotalText, "0");
+  assert.equal(m.subtotalDirection, null);
+});
+
 test("statementModel: net negative — the larger \"in\" side goes first and the direction is in", () => {
   const m = stmt({
     debts: [
