@@ -708,6 +708,17 @@ test("planSplitDebts: payer \"me\" (or missing) -> same lends as payer null", ()
   assert.deepEqual(D.planSplitDebts({ mine: 333.34, parts: splitParts() }), want);
 });
 
+test("planSplitDebts: blank or non-string payer (\"\", \"  \", 0, false) -> lends like null", () => {
+  const want = { lends: [
+    { personId: "b", amount: 333.33 },
+    { personId: "p", amount: 333.33 },
+  ] };
+  assert.deepEqual(D.planSplitDebts({ payerId: "", mine: 333.34, parts: splitParts() }), want);
+  assert.deepEqual(D.planSplitDebts({ payerId: "  ", mine: 333.34, parts: splitParts() }), want);
+  assert.deepEqual(D.planSplitDebts({ payerId: 0, mine: 333.34, parts: splitParts() }), want);
+  assert.deepEqual(D.planSplitDebts({ payerId: false, mine: 333.34, parts: splitParts() }), want);
+});
+
 test("planSplitDebts: payer is a participant -> owe that person my share, no lends", () => {
   const out = D.planSplitDebts({ payerId: "b", mine: 333.34, parts: splitParts() });
   assert.deepEqual(out, { owe: { personId: "b", amount: 333.34 } });

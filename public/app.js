@@ -3742,17 +3742,23 @@ function renderSplitRows() {
 }
 
 // The "Paid by" chip row (#splitPayer): you first, then each participant in
-// the split's order. A tap updates state and the DOM directly (chips + the
-// share rows' "paid" tag) — no re-render. Stale-file guards: an older cached
-// index.html (no row) or debts.js (no planSplitDebts) keeps the payer as you,
-// and the row is hidden when the helper is missing.
+// the split's order — shown only once at least one participant is added (a
+// lone "you" chip would be noise); with none the payer is you. A tap updates
+// state and the DOM directly (chips + the share rows' "paid" tag) — no
+// re-render. Stale-file guards: an older cached index.html (no row) or
+// debts.js (no planSplitDebts) keeps the payer as you, and the row stays
+// hidden when the helper is missing (it is hidden in the markup by default).
 function renderSplitPayer(peopleById, myName) {
   const row = document.getElementById("splitPayer");
   const chips = document.getElementById("splitPayerChips");
   const usable = !!(row && chips) && typeof planSplitDebts === "function";
-  if (row) row.classList.toggle("hidden", !usable);
-  if (!usable || !splitPeople.some((r) => r.personId === splitPayerId)) splitPayerId = null;
-  if (!usable) return;
+  const show = usable && splitPeople.length > 0;
+  if (row) row.classList.toggle("hidden", !show);
+  if (!show || !splitPeople.some((r) => r.personId === splitPayerId)) splitPayerId = null;
+  if (!show) {
+    if (chips) chips.innerHTML = "";
+    return;
+  }
   const chip = (key, color, iconId, name) =>
     '<button type="button" role="radio" class="split-payer-chip" data-payer="' + escapeHtml(key) + '">' +
       '<span class="pick-ico" style="background:' + color + '">' + personIconSvg(iconId) + '</span>' +
@@ -3818,6 +3824,9 @@ function buildSplitPersonMenu() {
       if (b.dataset.new) {
         document.getElementById("splitNewPersonForm").classList.remove("hidden");
         document.getElementById("splitNewPersonName").focus();
+        // The inline form opens at the bottom of the form — scroll it clear of
+        // the sticky Save bar (focus() alone leaves it underneath).
+        scrollSplitIntoView();
         return;
       }
       splitPeople.push({ personId: b.dataset.pid, amount: null });
@@ -4143,10 +4152,6 @@ $("#recordForm").addEventListener("submit", async (e) => {
     // the split, and only when debts.js has planSplitDebts (stale-cache guard).
     const payerId = typeof planSplitDebts === "function" &&
       splitPeople.some((r) => r.personId === splitPayerId) ? splitPayerId : null;
-    // Someone else paid and you took no share: there is nothing of yours to
-    // record (no expense, nothing owed) — unlike paying it all for others.
-    if (payerId && !(Math.round(mine * 100) > 0))
-      return ($("#modalError").textContent = "Your share is 0 — nothing to record");
     loadStore();
     const peopleById = {};
     for (const p of (store.settings.people || [])) peopleById[p.id] = p;
@@ -4163,6 +4168,12 @@ $("#recordForm").addEventListener("submit", async (e) => {
     if (diffCents !== 0)
       return ($("#modalError").textContent =
         "Shares must add up to the total (off by " + fmt(Math.abs(diffCents) / 100, payload.currency) + ")");
+    // Someone else paid and you took no share: there is nothing of yours to
+    // record (no expense, nothing owed) — unlike paying it all for others.
+    // Checked after the sum, so a blank own share that leaves the shares short
+    // gets the "off by" message instead.
+    if (payerId && !(Math.round(mine * 100) > 0))
+      return ($("#modalError").textContent = "Your share is 0 — nothing to record");
     const payerPart = payerId ? parts.find((p) => p.personId === payerId) : null;
     const breakdown =
       "Split bill — total " + fmt(payload.amount, payload.currency) + ": " +

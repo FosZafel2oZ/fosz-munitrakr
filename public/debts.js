@@ -433,8 +433,9 @@
   }
 
   // Which debts a split bill produces — the ONE rule (app.js only executes it).
-  // `payerId` null / "me" / missing = I paid: one { personId, amount } lend per
-  // entry of `parts`, amounts as given. Any other `payerId` = that participant
+  // `payerId` null / "me" / missing / blank / not a string = I paid: one
+  // { personId, amount } lend per entry of `parts`, amounts as given. Any other
+  // (non-blank string) `payerId` = that participant
   // paid: I owe them my share (`mine`) and nothing else — the others settle with
   // the payer, not with me — returned as { owe: { personId, amount } }, never
   // together with lends. The caller nets `owe` against the payer's balance via
@@ -444,7 +445,7 @@
   function planSplitDebts(input) {
     if (!input || typeof input !== "object") return { lends: [] };
     const payerId = input.payerId;
-    if (payerId != null && payerId !== "me") {
+    if (typeof payerId === "string" && payerId.trim() !== "" && payerId !== "me") {
       const mine = input.mine;
       if (typeof mine !== "number" || !Number.isFinite(mine)) return { lends: [] };
       return { owe: { personId: payerId, amount: mine } };

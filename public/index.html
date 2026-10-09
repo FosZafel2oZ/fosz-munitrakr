@@ -700,8 +700,9 @@
           </span>
         </label>
         <div id="splitBody" class="hidden">
-          <!-- Who paid the bill: you (default) or one of the participants; chips built by app.js -->
-          <div id="splitPayer" class="split-payer" role="radiogroup" aria-labelledby="splitPayerLbl">
+          <!-- Who paid the bill: you (default) or one of the participants; chips built by app.js,
+               which un-hides the row once a participant is added (stays hidden for an older app.js) -->
+          <div id="splitPayer" class="split-payer hidden" role="radiogroup" aria-labelledby="splitPayerLbl">
             <span class="split-payer-lbl" id="splitPayerLbl">Paid by</span>
             <div id="splitPayerChips" class="split-payer-chips"></div>
           </div>

@@ -1852,7 +1852,7 @@ body.theme-yoimiya .rn-menu{
   scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .split-payer-chips::-webkit-scrollbar { display: none; }
 .split-payer-chip { display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
-  max-width: 170px; padding: 5px 12px 5px 6px; border-radius: 999px;
+  min-height: 36px; max-width: 170px; padding: 5px 12px 5px 6px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--card); color: var(--muted);
   font-size: 13px; font-weight: 600; white-space: nowrap;
   -webkit-tap-highlight-color: transparent; transition: border-color .15s, background .15s; }
