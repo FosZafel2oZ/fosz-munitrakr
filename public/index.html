@@ -700,6 +700,11 @@
           </span>
         </label>
         <div id="splitBody" class="hidden">
+          <!-- Who paid the bill: you (default) or one of the participants; chips built by app.js -->
+          <div id="splitPayer" class="split-payer" role="radiogroup" aria-labelledby="splitPayerLbl">
+            <span class="split-payer-lbl" id="splitPayerLbl">Paid by</span>
+            <div id="splitPayerChips" class="split-payer-chips"></div>
+          </div>
           <div id="splitRows" class="split-rows"></div>
           <div class="split-actions">
             <div class="picker" id="splitPersonPicker">

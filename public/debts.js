@@ -432,6 +432,31 @@
     return String(notes || "").replace(/(?:^| · )Split bill — total .*$/, "");
   }
 
+  // Which debts a split bill produces — the ONE rule (app.js only executes it).
+  // `payerId` null / "me" / missing = I paid: one { personId, amount } lend per
+  // entry of `parts`, amounts as given. Any other `payerId` = that participant
+  // paid: I owe them my share (`mine`) and nothing else — the others settle with
+  // the payer, not with me — returned as { owe: { personId, amount } }, never
+  // together with lends. The caller nets `owe` against the payer's balance via
+  // planPaidBy. Invalid input (non-object, `parts` not an array on the lends
+  // path, `mine` not a finite number on the owe path) -> { lends: [] }. Never
+  // mutates its input; amounts are whatever the caller rounded them to.
+  function planSplitDebts(input) {
+    if (!input || typeof input !== "object") return { lends: [] };
+    const payerId = input.payerId;
+    if (payerId != null && payerId !== "me") {
+      const mine = input.mine;
+      if (typeof mine !== "number" || !Number.isFinite(mine)) return { lends: [] };
+      return { owe: { personId: payerId, amount: mine } };
+    }
+    if (!Array.isArray(input.parts)) return { lends: [] };
+    return {
+      lends: input.parts
+        .filter((p) => p && typeof p === "object")
+        .map((p) => ({ personId: p.personId, amount: p.amount })),
+    };
+  }
+
   // Plans the debt record(s) for a "paid by someone else" expense: the payer
   // fronted `entered.amount`, netted against whatever they already owed me.
   // `entered` is the user's intended record (no id/createdAt — caller stamps
@@ -503,5 +528,5 @@
     return ids.slice(top, tappedPos);
   }
 
-  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, balanceAfterRecord, planDebtReconversion, planSplit, wouldOvershoot, evenShares, fillBlanks, stripSplitBreakdown, planPaidBy, blockSelect };
+  return { personBalances, totalsAcrossPeople, annotateSettlements, balanceBefore, balanceAfterRecord, planDebtReconversion, planSplit, wouldOvershoot, evenShares, fillBlanks, stripSplitBreakdown, planSplitDebts, planPaidBy, blockSelect };
 });

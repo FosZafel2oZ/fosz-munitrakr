@@ -3,7 +3,7 @@
 /* ---------------- State ---------------- */
 const PREFS_KEY = "fin_prefs";
 const STORE_KEY = "fin_store"; // offline data lives here (this device only)
-const APP_VERSION = "v96"; // keep in step with sw.js CACHE
+const APP_VERSION = "v97"; // keep in step with sw.js CACHE
 // Label used as both the donut slice AND the list-filter key for records
 // without a subcategory — single constant so the two can't drift apart.
 const NO_SUB_LABEL = "No Sub-category";
@@ -3464,6 +3464,7 @@ function openModal(record, prefill) {
   splitPeople = [];
   splitMine = null;
   splitLastEdited = null;
+  splitPayerId = null;
   const splitToggleEl = document.getElementById("splitToggle");
   if (splitToggleEl) splitToggleEl.checked = false;
   const splitFormEl = document.getElementById("splitNewPersonForm");
@@ -3545,6 +3546,12 @@ function showColorPanel(items) {
 let splitPeople = []; // [{ personId, amount: number|null }] — null = blank
 let splitMine = null; // my share; null = blank
 let splitLastEdited = null; // "me" | personId — which side 2-person solve mirrors
+// Who paid the split bill: null = you (the default), else a participant's
+// personId. Resets to you on a fresh modal open, when the split is
+// force-hidden (recurring / paid-by on) and when the payer is removed from the
+// split; survives toggling the split off and on, like splitPeople.
+let splitPayerId = null;
+const SPLIT_PAID_TAG = '<span class="split-paid-tag">paid</span>'; // on the payer's share row
 let paidByPersonId = null; // person who fronted the money (paid-by-someone-else)
 
 function splitTotalAmount() {
@@ -3595,6 +3602,9 @@ function syncSplitSection() {
     splitMine = null;
     splitLastEdited = null;
   }
+  // Force-hidden (recurring or paid-by on, Edit, investment): the payer goes
+  // back to you even when the split was already toggled off.
+  if (!allowed) splitPayerId = null;
   // A total is required to START a split, but an already-on split must survive
   // a transiently-empty amount: a number input mid-edit ("1000.", backspaced
   // to retype) reports value "", and wiping here would silently discard every
@@ -3678,6 +3688,7 @@ function renderSplitRows() {
   // invisible row would otherwise block save with an unexplainable error.
   splitPeople = splitPeople.filter((r) => peopleById[r.personId]);
   const myName = (store.profile && store.profile.displayName) || "Me";
+  renderSplitPayer(peopleById, myName); // first: it may reset splitPayerId
   const mineNeg = splitMine != null && splitMine < 0;
   let html =
     '<div class="split-row split-row-me">' +
@@ -3690,7 +3701,8 @@ function renderSplitRows() {
     html +=
       '<div class="split-row" data-pid="' + p.id + '">' +
         '<span class="pick-ico" style="background:' + p.color + '">' + personIconSvg(p.icon || "person") + '</span>' +
-        '<span class="split-name">' + escapeHtml(p.name) + '</span>' +
+        '<span class="split-name split-name-p"><span class="split-name-txt">' + escapeHtml(p.name) + '</span>' +
+          (row.personId === splitPayerId ? SPLIT_PAID_TAG : "") + '</span>' +
         '<input type="number" class="split-amt" inputmode="decimal" step="0.01" min="0" placeholder="0.00" value="' + (row.amount != null ? Number(row.amount).toFixed(2) : "") + '" />' +
         '<button type="button" class="split-remove" aria-label="Remove">✕</button>' +
       '</div>';
@@ -3710,6 +3722,7 @@ function renderSplitRows() {
     rowEl.querySelector(".split-remove").addEventListener("click", () => {
       splitPeople = splitPeople.filter((r) => r.personId !== pid);
       if (splitLastEdited === pid) splitLastEdited = null;
+      if (splitPayerId === pid) splitPayerId = null; // payer left the split → you paid
       renderSplitRows();
     });
   });
@@ -3726,6 +3739,56 @@ function renderSplitRows() {
   // Auto button: only meaningful with 3+ participants (2-person solves live).
   const autoBtn = document.getElementById("splitAutoBtn");
   if (autoBtn) autoBtn.classList.toggle("hidden", splitPeople.length < 2);
+}
+
+// The "Paid by" chip row (#splitPayer): you first, then each participant in
+// the split's order. A tap updates state and the DOM directly (chips + the
+// share rows' "paid" tag) — no re-render. Stale-file guards: an older cached
+// index.html (no row) or debts.js (no planSplitDebts) keeps the payer as you,
+// and the row is hidden when the helper is missing.
+function renderSplitPayer(peopleById, myName) {
+  const row = document.getElementById("splitPayer");
+  const chips = document.getElementById("splitPayerChips");
+  const usable = !!(row && chips) && typeof planSplitDebts === "function";
+  if (row) row.classList.toggle("hidden", !usable);
+  if (!usable || !splitPeople.some((r) => r.personId === splitPayerId)) splitPayerId = null;
+  if (!usable) return;
+  const chip = (key, color, iconId, name) =>
+    '<button type="button" role="radio" class="split-payer-chip" data-payer="' + escapeHtml(key) + '">' +
+      '<span class="pick-ico" style="background:' + color + '">' + personIconSvg(iconId) + '</span>' +
+      '<span class="split-payer-name">' + escapeHtml(name) + '</span>' +
+    '</button>';
+  chips.innerHTML =
+    chip("", "var(--accent)", "person", myName) +
+    splitPeople.map((r) => {
+      const p = peopleById[r.personId];
+      return chip(p.id, p.color, p.icon || "person", p.name);
+    }).join("");
+  chips.querySelectorAll(".split-payer-chip").forEach((b) => {
+    b.addEventListener("click", () => {
+      splitPayerId = b.dataset.payer || null;
+      syncSplitPayerMarks();
+    });
+  });
+  syncSplitPayerMarks();
+}
+
+// Mirror splitPayerId onto the chips (selected + aria-checked) and the share
+// rows' "paid" tag (only on a participant's row — never on yours).
+function syncSplitPayerMarks() {
+  document.querySelectorAll("#splitPayerChips .split-payer-chip").forEach((b) => {
+    const on = (b.dataset.payer || null) === splitPayerId;
+    b.classList.toggle("selected", on);
+    b.setAttribute("aria-checked", on ? "true" : "false");
+  });
+  document.querySelectorAll("#splitRows .split-row[data-pid]").forEach((rowEl) => {
+    const name = rowEl.querySelector(".split-name");
+    if (!name) return;
+    const tag = name.querySelector(".split-paid-tag");
+    const want = rowEl.dataset.pid === splitPayerId;
+    if (want && !tag) name.insertAdjacentHTML("beforeend", SPLIT_PAID_TAG);
+    else if (!want && tag) tag.remove();
+  });
 }
 
 // Bring the bottom of the form (where the split section lives) into view.
@@ -3964,6 +4027,63 @@ function buildPaidByPersonMenu() {
   });
 }
 
+// Shared by "Paid by someone else" and a split bill paid by a participant:
+// both record that I owe `personId` money, netted against their balance.
+//
+// Pre-flight. Foreign-currency netting needs a rate BEFORE anything saves:
+// planSplit's halves are minted in the default
+// currency, so converting late (or never) would store wrong money with no
+// rateUnavailable flag left to repair it. No-netting saves stay allowed
+// offline — a plain borrow keeps its original currency and the flag, same as
+// the Add Debt modal. Returns the visible error message, or "" to go ahead.
+async function paidByPreflightError(personId, payload) {
+  loadStore();
+  const pbDefaultCurrency = store.settings.defaultCurrency || "THB";
+  if (payload.currency === pbDefaultCurrency) return "";
+  const probe = { amount: payload.amount, currency: payload.currency, date: payload.date };
+  let probeFailed = false;
+  try { await attachConversion(probe); } catch (_e) { probeFailed = true; }
+  if (probeFailed || probe.convertedAmount == null || probe.rateUnavailable) {
+    const sentinel = "__paidby_probe__";
+    const debtsForCalc = (store.debts || []).concat([{
+      id: sentinel, personId, date: payload.date,
+      amount: 0, currency: payload.currency,
+      createdAt: Date.now() + 1000000,
+    }]);
+    if (balanceBefore(debtsForCalc, sentinel, undefined, pbDefaultCurrency) > 0)
+      return "No exchange rate right now — can't deduct from what they owe you. Use " +
+        pbDefaultCurrency + " or try again online.";
+  }
+  return "";
+}
+
+// The save: `entered` = { personId, date, amount, currency, notes } (I owe
+// personId `amount`). Converts first, then plans via planPaidBy against the
+// balance as of the entered date and pushes the record(s) in ONE saveStore()
+// — same atomicity convention as split-bill lends.
+async function savePaidByDebts(entered) {
+  try { await attachConversion(entered); } catch (_e) { entered.rateUnavailable = true; }
+  loadStore();
+  // Sentinel construction mirrors the Add Debt ADD branch — a backdated
+  // expense's balance is computed as of its own date, not "now".
+  const sentinel = "__paidby_sentinel__";
+  const debtsForCalc = (store.debts || []).concat([Object.assign({}, entered, {
+    id: sentinel,
+    createdAt: Date.now() + 1000000, // ensures sentinel sorts last
+  })]);
+  const balanceBeforeSigned = balanceBefore(debtsForCalc, sentinel, undefined, store.settings.defaultCurrency || "THB");
+  const { records } = planPaidBy(
+    entered, balanceBeforeSigned, store.settings.defaultCurrency || "THB");
+  const base = Date.now();
+  records.forEach((r, i) => {
+    r.id = "debt_" + (base + i).toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+    r.createdAt = base + i;
+    r.updatedAt = base + i;
+    store.debts.push(r);
+  });
+  saveStore();
+}
+
 $("#recordForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#modalError").textContent = "";
@@ -4019,6 +4139,14 @@ $("#recordForm").addEventListener("submit", async (e) => {
     const mine = splitMyShare(); // blank = 0 (paying nothing yourself is fine)
     if (mine < 0)
       return ($("#modalError").textContent = "Shares exceed the total amount");
+    // Who paid: null = you. A participant payer only counts while they're in
+    // the split, and only when debts.js has planSplitDebts (stale-cache guard).
+    const payerId = typeof planSplitDebts === "function" &&
+      splitPeople.some((r) => r.personId === splitPayerId) ? splitPayerId : null;
+    // Someone else paid and you took no share: there is nothing of yours to
+    // record (no expense, nothing owed) — unlike paying it all for others.
+    if (payerId && !(Math.round(mine * 100) > 0))
+      return ($("#modalError").textContent = "Your share is 0 — nothing to record");
     loadStore();
     const peopleById = {};
     for (const p of (store.settings.people || [])) peopleById[p.id] = p;
@@ -4035,16 +4163,27 @@ $("#recordForm").addEventListener("submit", async (e) => {
     if (diffCents !== 0)
       return ($("#modalError").textContent =
         "Shares must add up to the total (off by " + fmt(Math.abs(diffCents) / 100, payload.currency) + ")");
+    const payerPart = payerId ? parts.find((p) => p.personId === payerId) : null;
     const breakdown =
       "Split bill — total " + fmt(payload.amount, payload.currency) + ": " +
       [myName + " " + fmt(mine, "")]
         .concat(parts.map((p) => p.name + " " + fmt(p.amount, "")))
-        .join(" · ");
-    splitPlan = { parts }; // only the participants' shares are needed downstream
+        .join(" · ") +
+      (payerPart ? " · paid by " + payerPart.name : "");
+    // Which debts the split makes — the rule lives in debts.js. Without it
+    // (older cached debts.js) payerId is null here: one lend per participant.
+    splitPlan = typeof planSplitDebts === "function"
+      ? planSplitDebts({ payerId, mine, parts })
+      : { lends: parts.map((p) => ({ personId: p.personId, amount: p.amount })) };
     payload.amount = mine; // expense records the user's share only
     // Middle dot, not a newline — the note reads as one line everywhere it's
     // shown (records list, debt rows, share card).
     payload.notes = (payload.notes ? payload.notes + " · " : "") + breakdown;
+    if (splitPlan.owe) {
+      // Same foreign-currency pre-flight as "Paid by someone else".
+      const preflightErr = await paidByPreflightError(splitPlan.owe.personId, payload);
+      if (preflightErr) return ($("#modalError").textContent = preflightErr);
+    }
   }
 
   // ----- Paid by someone else (Add flow only) -----
@@ -4057,29 +4196,8 @@ $("#recordForm").addEventListener("submit", async (e) => {
     loadStore();
     if (!(store.settings.people || []).some((p) => p.id === paidByPersonId))
       return ($("#modalError").textContent = "Choose who paid for you");
-    // Foreign-currency netting needs a rate BEFORE anything saves: planSplit's
-    // halves are minted in the default currency, so converting late (or never)
-    // would store wrong money with no rateUnavailable flag left to repair it.
-    // No-netting saves stay allowed offline — a plain borrow keeps its original
-    // currency and the flag, same as the Add Debt modal.
-    const pbDefaultCurrency = store.settings.defaultCurrency || "THB";
-    if (payload.currency !== pbDefaultCurrency) {
-      const probe = { amount: payload.amount, currency: payload.currency, date: payload.date };
-      let probeFailed = false;
-      try { await attachConversion(probe); } catch (_e) { probeFailed = true; }
-      if (probeFailed || probe.convertedAmount == null || probe.rateUnavailable) {
-        const sentinel = "__paidby_probe__";
-        const debtsForCalc = (store.debts || []).concat([{
-          id: sentinel, personId: paidByPersonId, date: payload.date,
-          amount: 0, currency: payload.currency,
-          createdAt: Date.now() + 1000000,
-        }]);
-        if (balanceBefore(debtsForCalc, sentinel, undefined, pbDefaultCurrency) > 0)
-          return ($("#modalError").textContent =
-            "No exchange rate right now — can't deduct from what they owe you. Use " +
-            pbDefaultCurrency + " or try again online.");
-      }
-    }
+    const preflightErr = await paidByPreflightError(paidByPersonId, payload);
+    if (preflightErr) return ($("#modalError").textContent = preflightErr);
   }
 
   // step 1: detect new category/sub and ask for colours
@@ -4104,12 +4222,23 @@ $("#recordForm").addEventListener("submit", async (e) => {
     let savedRecord = null;
     if (editingId) savedRecord = await api("/records/" + editingId, "PUT", payload);
     else savedRecord = await api("/records", "POST", payload);
-    // Split: one "lend" debt per participant (independent records — no links).
-    if (splitPlan) {
+    // Split paid by a participant: I owe the payer my share, netted against
+    // their balance exactly like "Paid by someone else"; nothing for the others.
+    if (splitPlan && splitPlan.owe) {
+      await savePaidByDebts({
+        personId: splitPlan.owe.personId,
+        date: payload.date,
+        amount: splitPlan.owe.amount,
+        currency: payload.currency,
+        notes: payload.notes, // same note as the expense
+      });
+    }
+    // Split paid by me: one "lend" debt per participant (independent records — no links).
+    if (splitPlan && splitPlan.lends) {
       // Convert everything first, then persist all debts in ONE saveStore()
       // so a mid-loop interruption can't leave a partial split behind.
       const newDebts = [];
-      for (const part of splitPlan.parts) {
+      for (const part of splitPlan.lends) {
         const d = {
           type: "lend",
           personId: part.personId,
@@ -4145,26 +4274,7 @@ $("#recordForm").addEventListener("submit", async (e) => {
         currency: payload.currency,
         notes: payload.notes ? payload.notes + " · " + autoTag : autoTag,
       };
-      try { await attachConversion(entered); } catch (_e) { entered.rateUnavailable = true; }
-      loadStore();
-      // Sentinel construction mirrors the Add Debt ADD branch — a backdated
-      // expense's balance is computed as of its own date, not "now".
-      const sentinel = "__paidby_sentinel__";
-      const debtsForCalc = (store.debts || []).concat([Object.assign({}, entered, {
-        id: sentinel,
-        createdAt: Date.now() + 1000000, // ensures sentinel sorts last
-      })]);
-      const balanceBeforeSigned = balanceBefore(debtsForCalc, sentinel, undefined, store.settings.defaultCurrency || "THB");
-      const { records } = planPaidBy(
-        entered, balanceBeforeSigned, store.settings.defaultCurrency || "THB");
-      const base = Date.now();
-      records.forEach((r, i) => {
-        r.id = "debt_" + (base + i).toString(36) + "_" + Math.random().toString(36).slice(2, 6);
-        r.createdAt = base + i;
-        r.updatedAt = base + i;
-        store.debts.push(r);
-      });
-      saveStore();
+      await savePaidByDebts(entered);
     }
     // "Make this recurring" — create a rule from the saved record.
     // Allowed when:

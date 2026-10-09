@@ -673,6 +673,78 @@ test("stripSplitBreakdown: user notes containing their own middle dots survive",
     "Dinner · Thonglor");
 });
 
+test("stripSplitBreakdown: the \"paid by\" suffix goes with the breakdown", () => {
+  assert.equal(
+    D.stripSplitBreakdown("Dinner · Split bill — total THB 1,000: Bill 500 · Brother 500 · paid by Brother"),
+    "Dinner");
+  assert.equal(
+    D.stripSplitBreakdown("Split bill — total THB 1,000: Bill 500 · Brother 500 · paid by Brother"),
+    "");
+});
+
+/* ---------------- planSplitDebts (Split the bill: who paid) ---------------- */
+
+function splitParts() {
+  return [
+    { personId: "b", name: "Brother", amount: 333.33 },
+    { personId: "p", name: "Ploy", amount: 333.33 },
+  ];
+}
+
+test("planSplitDebts: payer null -> one lend per part, amounts as given", () => {
+  const out = D.planSplitDebts({ payerId: null, mine: 333.34, parts: splitParts() });
+  assert.deepEqual(out, { lends: [
+    { personId: "b", amount: 333.33 },
+    { personId: "p", amount: 333.33 },
+  ] });
+});
+
+test("planSplitDebts: payer \"me\" (or missing) -> same lends as payer null", () => {
+  const want = { lends: [
+    { personId: "b", amount: 333.33 },
+    { personId: "p", amount: 333.33 },
+  ] };
+  assert.deepEqual(D.planSplitDebts({ payerId: "me", mine: 333.34, parts: splitParts() }), want);
+  assert.deepEqual(D.planSplitDebts({ mine: 333.34, parts: splitParts() }), want);
+});
+
+test("planSplitDebts: payer is a participant -> owe that person my share, no lends", () => {
+  const out = D.planSplitDebts({ payerId: "b", mine: 333.34, parts: splitParts() });
+  assert.deepEqual(out, { owe: { personId: "b", amount: 333.34 } });
+  assert.equal(out.lends, undefined);
+});
+
+test("planSplitDebts: payer not among the parts -> still owe (the UI prevents it)", () => {
+  const out = D.planSplitDebts({ payerId: "x", mine: 500, parts: splitParts() });
+  assert.deepEqual(out, { owe: { personId: "x", amount: 500 } });
+});
+
+test("planSplitDebts: never mutates its input", () => {
+  const parts = splitParts();
+  const input = { payerId: null, mine: 333.34, parts };
+  const snapshot = JSON.stringify(input);
+  const out = D.planSplitDebts(input);
+  assert.equal(JSON.stringify(input), snapshot);
+  assert.notEqual(out.lends[0], parts[0]); // fresh objects, not the caller's
+  out.lends[0].amount = 1;
+  assert.equal(parts[0].amount, 333.33);
+  const input2 = { payerId: "b", mine: 500, parts: splitParts() };
+  const snapshot2 = JSON.stringify(input2);
+  D.planSplitDebts(input2);
+  assert.equal(JSON.stringify(input2), snapshot2);
+});
+
+test("planSplitDebts: non-object or missing fields -> { lends: [] }", () => {
+  assert.deepEqual(D.planSplitDebts(null), { lends: [] });
+  assert.deepEqual(D.planSplitDebts(undefined), { lends: [] });
+  assert.deepEqual(D.planSplitDebts("x"), { lends: [] });
+  assert.deepEqual(D.planSplitDebts({}), { lends: [] });
+  assert.deepEqual(D.planSplitDebts({ payerId: null, mine: 10 }), { lends: [] });
+  assert.deepEqual(D.planSplitDebts({ payerId: null, mine: 10, parts: "nope" }), { lends: [] });
+  assert.deepEqual(D.planSplitDebts({ payerId: "b", parts: splitParts() }), { lends: [] });
+  assert.deepEqual(D.planSplitDebts({ payerId: "b", mine: "500", parts: splitParts() }), { lends: [] });
+});
+
 /* ---------------- blockSelect (no-gaps selection rule) ---------------- */
 
 const BLOCK_IDS = ["a", "b", "c", "d", "e"]; // a = newest, top

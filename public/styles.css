@@ -1843,6 +1843,27 @@ body.theme-yoimiya .rn-menu{
   cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; }
 .split-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .split-actions .picker { flex: 0 0 auto; }
+/* "Paid by" radio chips (you first, then each participant) above the share
+   rows; the chip strip scrolls sideways when the names don't fit. The payer's
+   share row (when it isn't you) gets a small "paid" tag after the name. */
+.split-payer { display: flex; align-items: center; gap: 10px; margin: 2px 0 8px; }
+.split-payer-lbl { font-size: 13px; font-weight: 600; color: var(--muted); flex: 0 0 auto; }
+.split-payer-chips { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.split-payer-chips::-webkit-scrollbar { display: none; }
+.split-payer-chip { display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  max-width: 170px; padding: 5px 12px 5px 6px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--muted);
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent; transition: border-color .15s, background .15s; }
+.split-payer-chip.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.split-payer-chip .pick-ico { width: 22px; height: 22px; border-radius: 7px; }
+.split-payer-chip .pick-ico svg { width: 13px; height: 13px; }
+.split-payer-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.split-name-p { display: flex; align-items: center; }
+.split-name-p .split-name-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.split-paid-tag { flex: 0 0 auto; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; line-height: 1.5; }
 /* Person menu opens UPWARD — the picker sits near the bottom of the form,
    so a drop-down would land off-screen and force extra scrolling. The
    shadow flips upward to match the new direction. */
